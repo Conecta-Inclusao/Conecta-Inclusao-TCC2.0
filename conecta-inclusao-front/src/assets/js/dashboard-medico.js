@@ -13,6 +13,13 @@ async function loadProfessionalInfo() {
             professionalData = profileResponse.data;
             console.log('Dados do profissional carregados:', professionalData);
 
+            if (professionalData.profile && professionalData.profile !== 'medico') {
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+                window.location.href = 'login-medico.html';
+                return;
+            }
+
             const displayName = professionalData.name || 'Nome nao informado';
             const registry = professionalData.crm || 'Registro';
             const unit = professionalData.unidade || 'Unidade não definida';

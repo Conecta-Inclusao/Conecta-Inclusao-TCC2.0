@@ -1,4 +1,4 @@
-// Rotas avanÃ§adas de autenticaÃ§Ã£o com suporte a CRM, CNPJ e CPF
+// Rotas avançadas de autenticação com suporte a CRM, CNPJ e CPF
 import { Router } from "express";
 import rateLimit from "express-rate-limit";
 import { pool } from "../db.js";
@@ -369,6 +369,44 @@ router.delete("/clinic/professionals/:id", authenticateToken, async (req, res, n
   }
 });
 
+// Reativar profissional (undo soft delete)
+router.put("/clinic/professionals/:id/activate", authenticateToken, async (req, res, next) => {
+  try {
+    if (req.user.profile !== 'clinica') {
+      return res.status(403).json({ message: 'Acesso negado. Apenas clinicas podem reativar profissionais.' });
+    }
+
+    const professionalId = Number(req.params.id);
+    const clinicId = Number(req.user.sub);
+
+    if (!Number.isInteger(professionalId) || professionalId <= 0) {
+      return res.status(400).json({ message: 'Profissional invalido.' });
+    }
+
+    const [result] = await pool.execute(
+      `UPDATE medicos
+       SET status = 'ativo',
+           failed_attempts = 0,
+           locked_until = NULL,
+           temporary_password_token = NULL,
+           temporary_password_expires_at = NULL,
+           password_reset_token = NULL,
+           password_reset_expires_at = NULL
+       WHERE id = ?
+         AND clinica_id = ?`,
+      [professionalId, clinicId]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: 'Profissional nao encontrado para esta clinica.' });
+    }
+
+    return res.status(200).json({ message: 'Profissional reativado com sucesso.' });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get("/clinic/dashboard-summary", authenticateToken, async (req, res, next) => {
   try {
     if (req.user.profile !== 'clinica') {
@@ -414,7 +452,7 @@ router.get("/clinic/dashboard-summary", authenticateToken, async (req, res, next
 router.get("/clinic/details", authenticateToken, async (req, res, next) => {
   try {
     if (req.user.profile !== 'clinica') {
-      return res.status(403).json({ message: 'Acesso negado. Apenas clÃ­nicas podem acessar este endpoint.' });
+      return res.status(403).json({ message: 'Acesso negado. Apenas clínicas podem acessar este endpoint.' });
     }
 
     const result = await getClinicDetails(req.user.sub);

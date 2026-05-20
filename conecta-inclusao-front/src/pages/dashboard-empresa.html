@@ -9,59 +9,59 @@
 </head>
 <body>
     <div class="dashboard-container">
-        <aside class="sidebar">
+        <aside class="sidebar" aria-label="Barra lateral">
             <div class="logo-section">
-                <i class="ph ph-building"></i>
+                <i class="ph ph-building" aria-hidden="true"></i>
                 <span id="companySidebarName">Carregando...</span>
             </div>
-            <nav>
-                <button class="nav-link active" data-tab="overview"><i class="ph ph-house"></i> Visão Geral</button>
-                <button class="nav-link" data-tab="register"><i class="ph ph-user-square"></i> Cadastrar Profissionais</button>
-                <button class="nav-link" data-tab="team"><i class="ph ph-users"></i> Equipe</button>
-                <button class="nav-link" data-tab="reports"><i class="ph ph-chart-line"></i> Relatórios</button>
-                <button class="nav-link" data-tab="settings"><i class="ph ph-gear"></i> Configurações</button>
+            <nav aria-label="Navegação principal">
+                <button type="button" class="nav-link active" data-tab="overview" role="tab" aria-controls="overview" aria-selected="true"><i class="ph ph-house" aria-hidden="true"></i> Visão Geral</button>
+                <button type="button" class="nav-link" data-tab="register" role="tab" aria-controls="register" aria-selected="false"><i class="ph ph-user-square" aria-hidden="true"></i> Cadastrar Profissionais</button>
+                <button type="button" class="nav-link" data-tab="team" role="tab" aria-controls="team" aria-selected="false"><i class="ph ph-users" aria-hidden="true"></i> Equipe</button>
+                <button type="button" class="nav-link" data-tab="reports" role="tab" aria-controls="reports" aria-selected="false"><i class="ph ph-chart-line" aria-hidden="true"></i> Relatórios</button>
+                <button type="button" class="nav-link" data-tab="settings" role="tab" aria-controls="settings" aria-selected="false"><i class="ph ph-gear" aria-hidden="true"></i> Configurações</button>
             </nav>
             <div class="sidebar-footer">
-                <button class="btn-logout" onclick="handleLogout()"><i class="ph ph-sign-out"></i> Sair</button>
+                <button type="button" class="btn-logout" onclick="handleLogout()"><i class="ph ph-sign-out" aria-hidden="true"></i> Sair</button>
             </div>
         </aside>
 
         <main class="main-content">
-            <header class="top-bar">
+            <header class="top-bar" role="banner">
                 <div class="top-bar-left"></div>
-                <div class="user-profile">
+                <div class="user-profile" aria-label="Perfil da empresa">
                     <div class="user-info">
                         <strong id="companyHeaderName">Carregando...</strong>
                         <span id="companyHeaderCnpj">CNPJ nao informado</span>
                     </div>
-                    <img id="companyAvatar" src="https://ui-avatars.com/api/?name=Conecta+Inclus%C3%A3o&background=0073e6&color=fff" alt="Avatar">
+                    <img id="companyAvatar" src="https://ui-avatars.com/api/?name=Conecta+Inclus%C3%A3o&background=0073e6&color=fff" alt="Avatar da empresa">
                 </div>
             </header>
 
-            <section class="tab-content active" id="overview">
+            <section class="tab-content active" id="overview" role="region" aria-labelledby="overviewHeading">
                 <div class="overview-header">
-                    <h1>Dashboard Corporativo</h1>
+                    <h1 id="overviewHeading">Dashboard Corporativo</h1>
                     <p>Visão completa dos profissionais e operações de saúde da empresa.</p>
                 </div>
                 <div class="overview-grid">
                     <div class="status-card active-card">
                         <div>
                             <span>Funcionários Ativos</span>
-                            <h2 id="activeCount">0</h2>
+                            <h2 id="activeCount" aria-live="polite">0</h2>
                         </div>
                         <i class="ph ph-check-circle"></i>
                     </div>
                     <div class="status-card working-card">
                         <div>
                             <span>Atualmente Trabalhando</span>
-                            <h2 id="workingCount">0</h2>
+                            <h2 id="workingCount" aria-live="polite">0</h2>
                         </div>
                         <i class="ph ph-briefcase"></i>
                     </div>
                     <div class="status-card break-card">
                         <div>
                             <span>Férias / Folga</span>
-                            <h2 id="breakCount">0</h2>
+                            <h2 id="breakCount" aria-live="polite">0</h2>
                         </div>
                         <i class="ph ph-beach-chair"></i>
                     </div>
@@ -73,9 +73,9 @@
                             <h2>Resumo Rápido</h2>
                             <p>Monitoramento em tempo real dos times de saúde.</p>
                         </div>
-                        <button class="btn-primary" id="btnAddProfessional">Novo Profissional</button>
+                        <button type="button" class="btn-primary" id="btnAddProfessional">Novo Profissional</button>
                     </div>
-                    <div class="summary-body">
+                    <div class="summary-body" aria-live="polite">
                         <div class="summary-item">
                             <span>Atendimentos previstos</span>
                             <strong id="upcomingAppointmentsCount">0</strong>
@@ -96,13 +96,14 @@
                         <h2>Equipe em Destaque</h2>
                         <span>Últimos 30 dias</span>
                     </div>
-                    <table class="team-table">
+                    <table class="team-table" aria-describedby="teamDescription">
+                        <caption id="teamDescription">Lista dos profissionais mais ativos dos últimos 30 dias</caption>
                         <thead>
                             <tr>
-                                <th>Nome</th>
-                                <th>Especialidade</th>
-                                <th>Status</th>
-                                <th>Local</th>
+                                <th scope="col">Nome</th>
+                                <th scope="col">Especialidade</th>
+                                <th scope="col">Status</th>
+                                <th scope="col">Local</th>
                             </tr>
                         </thead>
                         <tbody id="teamTableBody">

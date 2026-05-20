@@ -1,4 +1,4 @@
-﻿// ===== FUNÃ‡Ã•ES DO MODAL ESQUECEU A SENHA =====
+﻿// ===== FUNÇÕES DO MODAL ESQUECEU A SENHA =====
 function openForgotPasswordModal(event) {
     event.preventDefault();
     document.getElementById('forgotPasswordModal').style.display = 'flex';
@@ -68,13 +68,13 @@ async function loginEmpresaAPI(identifier, password) {
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ identifier, password })
+            body: JSON.stringify({ identifier, password, expectedProfile: 'clinica' })
         });
         const result = await response.json();
         return { ok: response.ok, data: result };
     } catch (error) {
-        console.error('Erro na requisiÃ§Ã£o:', error);
-        return { ok: false, data: { message: 'Erro de conexÃ£o' } };
+        console.error('Erro na requisição:', error);
+        return { ok: false, data: { message: 'Erro de conexão' } };
     }
 }
 
@@ -104,7 +104,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-// MÃ¡scara de CNPJ automÃ¡tica
+// Máscara de CNPJ automática
 document.addEventListener('DOMContentLoaded', function() {
     const cnpjInput = document.getElementById('cnpj');
     if (cnpjInput) {
@@ -121,7 +121,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // MÃ¡scara no input do modal tambÃ©m
+    // Máscara no input do modal também
     const forgotEmailInput = document.getElementById('forgotEmail');
     if (forgotEmailInput) {
         forgotEmailInput.addEventListener('input', function(e) {
@@ -149,14 +149,14 @@ document.addEventListener('DOMContentLoaded', function() {
             const cnpj = document.getElementById('cnpj').value;
             const password = document.getElementById('password').value;
 
-            if (cnpj.length < 18 || password.length < 6) {
-                showPopup("Por favor, informe um CNPJ valido e uma senha com no minimo 6 caracteres.");
+            if (cnpj.length < 18 || password.length < 8) {
+                showPopup("Por favor, informe um CNPJ valido e uma senha com no minimo 8 caracteres.");
                 return;
             }
 
             const cnpjDigits = formatCnpjDigits(cnpj);
             if (cnpjDigits.length !== 14) {
-                showPopup("Por favor, digite um CNPJ vÃ¡lido.");
+                showPopup("Por favor, digite um CNPJ válido.");
                 return;
             }
 
@@ -165,11 +165,11 @@ document.addEventListener('DOMContentLoaded', function() {
             const result = await loginEmpresaAPI(cnpjDigits, password);
 
             if (result.ok) {
-                // Salvar token e dados do usuÃ¡rio
+                // Salvar token e dados do usuário
                 localStorage.setItem('token', result.data.token);
                 localStorage.setItem('user', JSON.stringify(result.data.user));
 
-                // Salvar dados da empresa na sessÃ£o
+                // Salvar dados da empresa na sessão
                 sessionStorage.setItem('empresaNomeFantasia', result.data.user.name);
                 sessionStorage.setItem('empresaCnpj', formatCnpjDisplay(cnpjDigits));
                 sessionStorage.setItem('empresaRazaoSocial', result.data.user.razaoSocial || '');
@@ -179,14 +179,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     window.location.href = "dashboard-empresa.html";
                 }, 800);
             } else {
-                showPopup(result.data.message || "Credenciais invÃ¡lidas. Verifique seus dados.");
+                showPopup(result.data.message || "Credenciais inválidas. Verifique seus dados.");
                 setLoginButtonLoading(btn, false);
             }
         });
     }
 });
 
-// CSS para animaÃ§Ã£o
+// CSS para animação
 const style = document.createElement('style');
 style.innerHTML = `
     @keyframes spin {

@@ -1,4 +1,4 @@
-﻿// ===== FUNÃ‡Ã•ES DO MODAL ESQUECEU A SENHA =====
+﻿// ===== FUNÇÕES DO MODAL ESQUECEU A SENHA =====
 function openForgotPasswordModal(event) {
     event.preventDefault();
     document.getElementById('forgotPasswordModal').style.display = 'flex';
@@ -55,13 +55,13 @@ async function loginPacienteAPI(identifier, password) {
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ identifier, password })
+            body: JSON.stringify({ identifier, password, expectedProfile: 'paciente' })
         });
         const result = await response.json();
         return { ok: response.ok, data: result };
     } catch (error) {
-        console.error('Erro na requisiÃ§Ã£o:', error);
-        return { ok: false, data: { message: 'Erro de conexÃ£o' } };
+        console.error('Erro na requisição:', error);
+        return { ok: false, data: { message: 'Erro de conexão' } };
     }
 }
 
@@ -77,7 +77,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-// MÃ¡scara de CPF automÃ¡tica (Melhorada para performance)
+// Máscara de CPF automática (Melhorada para performance)
 document.addEventListener('DOMContentLoaded', function() {
     const cpfInput = document.getElementById('cpf');
     if (cpfInput) {
@@ -102,7 +102,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // MÃ¡scara no input do modal tambÃ©m
+    // Máscara no input do modal também
     const forgotEmailInput = document.getElementById('forgotEmail');
     if (forgotEmailInput) {
         forgotEmailInput.addEventListener('input', function(e) {
@@ -128,16 +128,16 @@ document.addEventListener('DOMContentLoaded', function() {
             const btn = e.target.querySelector('.btn-login');
             const originalText = btn.innerText;
 
-            // 1. ValidaÃ§Ã£o bÃ¡sica de seguranÃ§a
+            // 1. Validação básica de segurança
             const cpf = document.getElementById('cpf').value;
             const password = document.getElementById('password').value;
 
             if (cpf.length < 11 || password.length < 4) {
-                showPopup("Por favor, informe um CPF e uma senha com no mÃ­nimo 4 caracteres.");
+                showPopup("Por favor, informe um CPF e uma senha com no mínimo 4 caracteres.");
                 return;
             }
 
-            // 2. Efeito de "Carregando" no botÃ£o (Estilo Moderno)
+            // 2. Efeito de "Carregando" no botão (Estilo Moderno)
             btn.disabled = true;
             btn.innerHTML = '<i class="ph ph-circle-notch-bold" style="animation: spin 1s linear infinite;"></i> Acessando...';
             btn.style.opacity = "0.8";
@@ -167,7 +167,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-// Adicione este CSS via JS apenas para a animaÃ§Ã£o do Ã­cone de carregar
+// Adicione este CSS via JS apenas para a animação do ícone de carregar
 const style = document.createElement('style');
 style.innerHTML = `
     @keyframes spin {

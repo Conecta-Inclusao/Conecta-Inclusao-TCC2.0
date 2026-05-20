@@ -17,8 +17,8 @@ email: z
 password: z 
 // Deve ser uma string 
 .string() 
-// Mínimo de 6 caracteres 
-.min(6) 
+// Mínimo de 8 caracteres 
+.min(8) 
 // Máximo de 100 caracteres 
 .max(100) 
 }); 

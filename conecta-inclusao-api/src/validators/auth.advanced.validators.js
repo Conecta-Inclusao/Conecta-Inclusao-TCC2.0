@@ -22,8 +22,11 @@ export const universalLoginSchema = z.object({
     ),
   password: z
     .string()
-    .min(6, "Senha deve ter no mínimo 6 caracteres")
-    .max(100, "Senha muito longa")
+    .min(8, "Senha deve ter no mínimo 8 caracteres")
+    .max(100, "Senha muito longa"),
+  expectedProfile: z
+    .enum(["paciente", "medico", "clinica"])
+    .optional()
 });
 
 const strongPasswordSchema = z
@@ -210,6 +213,6 @@ export const loginSchema = z.object({
     .email(),
   password: z
     .string()
-    .min(6)
+    .min(8)
     .max(100)
 });

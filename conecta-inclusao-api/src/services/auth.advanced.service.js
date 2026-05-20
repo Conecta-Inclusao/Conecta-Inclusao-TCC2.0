@@ -175,7 +175,7 @@ export async function getUserProfile(user) {
       return { ok: false, statusCode: 404, message: "Usuario nao encontrado." };
     }
 
-    return { ok: true, data: rows[0] };
+    return { ok: true, data: { ...rows[0], profile: user.profile } };
   } catch (err) {
     console.error("Erro em getUserProfile:", err);
     return { ok: false, statusCode: 500, message: "Erro interno do servidor." };
@@ -329,7 +329,7 @@ async function validatePassword(record, password, expectedProfile = null) {
   };
 }
 
-export async function loginUniversal({ identifier, password }) {
+export async function loginUniversal({ identifier, password, expectedProfile = null }) {
   if (!identifier || !password) {
     return { ok: false, statusCode: 400, message: "Identificador e senha sao obrigatorios." };
   }
@@ -339,18 +339,29 @@ export async function loginUniversal({ identifier, password }) {
     return { ok: false, statusCode: 400, message: "Formato de identificador invalido." };
   }
 
+  const identifierTypeByProfile = {
+    paciente: "cpf",
+    clinica: "cnpj",
+    medico: "crm"
+  };
+  const expectedIdentifierType = identifierTypeByProfile[expectedProfile];
+
+  if (expectedIdentifierType && identifierInfo.type !== expectedIdentifierType) {
+    return { ok: false, statusCode: 401, message: "Credenciais invalidas." };
+  }
+
   const record = await findAuthRecord(identifierInfo);
   if (!record) {
     return { ok: false, statusCode: 401, message: "Credenciais invalidas." };
   }
 
-  const expectedProfile = {
+  const profileByIdentifierType = {
     cpf: "paciente",
     cnpj: "clinica",
     crm: "medico"
   }[identifierInfo.type] || null;
 
-  return validatePassword(record, password, expectedProfile);
+  return validatePassword(record, password, expectedProfile || profileByIdentifierType);
 }
 
 export async function resetTemporaryProfessionalPassword({ resetToken, newPassword }) {

@@ -1,5 +1,12 @@
 function loadCompanyInfo() {
     const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
+    if (storedUser.profile && storedUser.profile !== 'clinica') {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.href = 'login-empresa.html';
+        return;
+    }
+
     const fantasyName = storedUser.name || storedUser.nome || sessionStorage.getItem('empresaNomeFantasia') || 'Empresa';
     const companyCnpj = storedUser.cnpj || sessionStorage.getItem('empresaCnpj') || '';
     const companyHeaderName = document.getElementById('companyHeaderName');

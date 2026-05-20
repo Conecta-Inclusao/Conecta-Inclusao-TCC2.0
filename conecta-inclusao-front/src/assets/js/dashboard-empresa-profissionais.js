@@ -10,6 +10,10 @@ async function loadAPI() {
     return api;
 }
 
+function getClinicAuthToken() {
+    return localStorage.getItem('token');
+}
+
 // Máscara de CRM automática
 function applyCRMMask(value) {
     let v = value.toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -110,8 +114,7 @@ async function handleRegisterProfessional(event) {
 // Buscar ID da clínica pelo ID do usuário
 async function getClinicaIdByUserId(userId) {
     try {
-        const apiModule = await loadAPI();
-        const token = apiModule.getToken();
+        const token = getClinicAuthToken();
         
         if (!token) return null;
         
@@ -136,11 +139,10 @@ async function getClinicaIdByUserId(userId) {
 // Carregar lista de profissionais
 async function loadProfessionalsList() {
     try {
-        const apiModule = await loadAPI();
-        const token = apiModule.getToken();
+        const token = getClinicAuthToken();
         
         if (!token) {
-            console.log('UsuÃ¡rio não autenticado');
+            console.log('Usuário não autenticado');
             return;
         }
         
@@ -184,7 +186,10 @@ function displayProfessionalsList(professionals) {
     
     teamBody.innerHTML = professionals.map(prof => `
         <tr>
-            <td>${prof.name || 'N/A'}</td>
+            <td>
+                ${prof.name || 'N/A'}
+                ${normalizeStatus(prof.status) === 'inativo' ? '<div class="inactive-warning">Profissional desativado</div>' : ''}
+            </td>
             <td>${prof.especialidade || 'Médico'}</td>
             <td>${prof.crm || 'N/A'}</td>
             <td><span class="status-dot ${getStatusClass(prof.status)}">${formatProfessionalStatus(prof.status)}</span></td>
@@ -198,8 +203,8 @@ function displayProfessionalsList(professionals) {
                         <i class="ph ph-user-minus"></i> Inativar
                     </button>
                 ` : `
-                    <button disabled style="background: none; border: none; color: #94a3b8; cursor: not-allowed; margin: 0 4px;">
-                        <i class="ph ph-user-minus"></i> Inativado
+                    <button onclick="activateProfessional(${prof.id})" style="background: none; border: none; color: #0f4dbf; cursor: pointer; margin: 0 4px;">
+                        <i class="ph ph-user-plus"></i> Ativar
                     </button>
                 `}
             </td>
@@ -209,7 +214,10 @@ function displayProfessionalsList(professionals) {
     if (overviewBody) {
         overviewBody.innerHTML = professionals.slice(0, 3).map(prof => `
             <tr>
-                <td>${prof.name || 'N/A'}</td>
+                <td>
+                    ${prof.name || 'N/A'}
+                    ${normalizeStatus(prof.status) === 'inativo' ? '<div class="inactive-warning">Profissional desativado</div>' : ''}
+                </td>
                 <td>${prof.especialidade || 'Médico'}</td>
                 <td><span class="status-dot ${getStatusClass(prof.status)}">${formatProfessionalStatus(prof.status)}</span></td>
                 <td>${prof.unidade || 'N/A'}</td>
@@ -275,8 +283,7 @@ function getStatusClass(status) {
 
 async function loadCompanyDashboardSummary() {
     try {
-        const apiModule = await loadAPI();
-        const token = apiModule.getToken();
+        const token = getClinicAuthToken();
 
         if (!token) return;
 
@@ -353,11 +360,10 @@ async function inactivateProfessional(id) {
     if (!confirm('Tem certeza que deseja inativar este profissional? Ele nao podera mais fazer login como medico.')) return;
     
     try {
-        const apiModule = await loadAPI();
-        const token = apiModule.getToken();
+        const token = getClinicAuthToken();
         
         if (!token) {
-            showPopup('Você precisa estar autenticado');
+            showPopup('Faça login como empresa para inativar profissionais.');
             return;
         }
         
@@ -374,11 +380,52 @@ async function inactivateProfessional(id) {
             loadProfessionalsList();
         } else {
             const data = await response.json().catch(() => ({}));
+            if (response.status === 401 || response.status === 403) {
+                showPopup(data.message || 'Apenas empresas podem inativar profissionais.');
+                return;
+            }
             showPopup(data.message || 'Erro ao inativar profissional');
         }
     } catch (error) {
         console.error('Erro:', error);
         showPopup('Erro ao inativar profissional');
+    }
+}
+
+// Reativar profissional
+async function activateProfessional(id) {
+    if (!confirm('Deseja reativar este profissional?')) return;
+
+    try {
+        const token = getClinicAuthToken();
+
+        if (!token) {
+            showPopup('Faça login como empresa para ativar profissionais.');
+            return;
+        }
+
+        const response = await fetch(`${AUTH_API_BASE}/clinic/professionals/${id}/activate`, {
+            method: 'PUT',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (response.ok) {
+            showPopup('Profissional reativado com sucesso');
+            loadProfessionalsList();
+        } else {
+            const data = await response.json().catch(() => ({}));
+            if (response.status === 401 || response.status === 403) {
+                showPopup(data.message || 'Apenas empresas podem ativar profissionais.');
+                return;
+            }
+            showPopup(data.message || 'Erro ao reativar profissional');
+        }
+    } catch (error) {
+        console.error('Erro:', error);
+        showPopup('Erro ao reativar profissional');
     }
 }
 
