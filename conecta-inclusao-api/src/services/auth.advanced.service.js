@@ -569,9 +569,9 @@ export async function registerUser({ identifier, password, name, profile, userDa
 
     if (profile === "paciente") {
       [result] = await pool.execute(
-        `INSERT INTO pacientes (nome_paciente, cpf, email, nome_responsavel, tipo_deficiencia, data_nascimento, senha, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE')`,
-        [name, identifierInfo.value, userData?.email || null, userData?.nomeResponsavel || null, userData?.tipoDeficiencia || null, userData?.dataNascimento || null, passwordHash]
+        `INSERT INTO pacientes (nome_paciente, cpf, email, tipo_deficiencia, data_nascimento, senha, status)
+         VALUES (?, ?, ?, ?, ?, ?, 'ACTIVE')`,
+        [name, identifierInfo.value, userData?.email || null, userData?.tipoDeficiencia || null, userData?.dataNascimento || null, passwordHash]
       );
     } else if (profile === "medico") {
       [result] = await pool.execute(

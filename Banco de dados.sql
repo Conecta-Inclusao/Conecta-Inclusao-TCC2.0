@@ -80,7 +80,25 @@ CREATE TABLE agendamentos (
     FOREIGN KEY (medico_id) REFERENCES medicos(id) ON DELETE CASCADE
 );
 
--- 6. Tabela de Relatórios Médicos (Histórico e Registros)
+-- 6. Tabela de Responsáveis e vínculo com pacientes
+CREATE TABLE responsavel (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nome VARCHAR(100) NOT NULL,
+    email VARCHAR(100) UNIQUE NOT NULL,
+    senha VARCHAR(255) NOT NULL COMMENT 'Hash bcrypt da senha',
+    status VARCHAR(20) DEFAULT 'ACTIVE'
+);
+
+CREATE TABLE paciente_responsavel (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    id_paciente INT NOT NULL,
+    id_responsavel INT NOT NULL,
+    parentesco VARCHAR(100) NOT NULL,
+    FOREIGN KEY (id_paciente) REFERENCES pacientes(id) ON DELETE CASCADE,
+    FOREIGN KEY (id_responsavel) REFERENCES responsavel(id) ON DELETE CASCADE
+);
+
+-- 7. Tabela de Relatórios Médicos (Histórico e Registros)
 CREATE TABLE relatorios (
     id INT AUTO_INCREMENT PRIMARY KEY,
     agendamento_id INT NOT NULL,

@@ -1,3 +1,5 @@
+let guardianData = null;
+
 function applyMask(input, maskFn) {
     input.addEventListener('input', function(event) {
         event.target.value = maskFn(event.target.value);
@@ -13,16 +15,76 @@ function cpfMask(value) {
     return v;
 }
 
+function calculateAge(dateString) {
+    if (!dateString) return null;
+    const birth = new Date(dateString);
+    if (isNaN(birth.getTime())) return null;
+
+    const today = new Date();
+    let age = today.getFullYear() - birth.getFullYear();
+    const monthDiff = today.getMonth() - birth.getMonth();
+    const dayDiff = today.getDate() - birth.getDate();
+
+    if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
+        age -= 1;
+    }
+
+    return age;
+}
+
+function updateGuardianSummary() {
+    const summaryText = document.getElementById('guardianSummaryText');
+    const hiddenName = document.getElementById('nomeResponsavel');
+
+    if (!guardianData) {
+        summaryText.textContent = 'Nenhum responsável adicionado.';
+        hiddenName.value = '';
+        return;
+    }
+
+    const parts = [guardianData.name];
+    if (guardianData.relationship) parts.push(`(${guardianData.relationship})`);
+    if (guardianData.email) parts.push(guardianData.email);
+    summaryText.textContent = parts.join(' ');
+    hiddenName.value = guardianData.name;
+}
+
+function updateGuardianSection() {
+    const birthDate = document.getElementById('dataNascimento').value;
+    const age = calculateAge(birthDate);
+    const guardianAdvice = document.getElementById('guardianAdvice');
+    const guardianSummary = document.getElementById('guardianSummary');
+
+    const openModalBtn = document.getElementById('openGuardianModalButton');
+
+    if (age !== null && age < 18) {
+        guardianAdvice.textContent = 'Paciente menor de idade exige responsável. Preencha os dados do responsável.';
+        guardianSummary.style.display = 'block';
+        if (openModalBtn) openModalBtn.innerText = 'Adicionar responsável';
+    } else if (age !== null && age >= 18) {
+        guardianAdvice.textContent = 'Paciente maior de idade. Adicionar responsável é opcional.';
+        guardianSummary.style.display = 'block';
+        if (openModalBtn) openModalBtn.innerText = 'Adicionar responsável (opcional)';
+    } else {
+        guardianAdvice.textContent = 'Preencha a data de nascimento para verificar se responsável é necessário.';
+        guardianSummary.style.display = 'none';
+    }
+
+    // Atualiza o texto do resumo conforme os dados do responsável
+    updateGuardianSummary();
+}
+
 function validatePatientForm() {
     const cpf = document.getElementById('cpf').value.trim();
     const name = document.getElementById('name').value.trim();
     const dataNascimento = document.getElementById('dataNascimento').value;
     const tipoDeficiencia = document.getElementById('tipoDeficiencia').value.trim();
-    const nomeResponsavel = document.getElementById('nomeResponsavel').value.trim();
     const password = document.getElementById('password').value;
     const confirmPassword = document.getElementById('confirmPassword').value;
+    const age = calculateAge(dataNascimento);
+    const isMinor = age !== null && age < 18;
 
-    if (!cpf || !name || !dataNascimento || !tipoDeficiencia || !nomeResponsavel || !password || !confirmPassword) {
+    if (!cpf || !name || !dataNascimento || !tipoDeficiencia || !password || !confirmPassword) {
         showPopup('Preencha todos os campos obrigatórios.');
         return false;
     }
@@ -39,6 +101,11 @@ function validatePatientForm() {
 
     if (password !== confirmPassword) {
         showPopup('As senhas não coincidem.');
+        return false;
+    }
+
+    if (isMinor && !guardianData) {
+        showPopup('Paciente menor de idade deve cadastrar um responsável.');
         return false;
     }
 
@@ -62,7 +129,78 @@ async function registerPatientAPI(data) {
     }
 }
 
-function handlePatientRegistration(event) {
+function openGuardianModal() {
+    const modal = document.getElementById('guardianModal');
+    if (!modal) return;
+
+    const guardianName = document.getElementById('guardianName');
+    const guardianRelationship = document.getElementById('guardianRelationship');
+    const guardianEmail = document.getElementById('guardianEmail');
+    const guardianPassword = document.getElementById('guardianPassword');
+
+    if (guardianData) {
+        guardianName.value = guardianData.name;
+        guardianRelationship.value = guardianData.relationship;
+        guardianEmail.value = guardianData.email;
+        guardianPassword.value = guardianData.password;
+    } else {
+        guardianName.value = '';
+        guardianRelationship.value = '';
+        guardianEmail.value = '';
+        guardianPassword.value = '';
+    }
+
+    modal.classList.add('active');
+    modal.setAttribute('aria-hidden', 'false');
+}
+
+function closeGuardianModal() {
+    const modal = document.getElementById('guardianModal');
+    if (modal) {
+        modal.classList.remove('active');
+        modal.setAttribute('aria-hidden', 'true');
+    }
+}
+
+function validateGuardianModalForm() {
+    const guardianName = document.getElementById('guardianName').value.trim();
+    const guardianRelationship = document.getElementById('guardianRelationship').value.trim();
+    const guardianEmail = document.getElementById('guardianEmail').value.trim();
+    const guardianPassword = document.getElementById('guardianPassword').value;
+
+    if (!guardianName || !guardianRelationship || !guardianEmail || !guardianPassword) {
+        showPopup('Preencha todos os campos do responsável.');
+        return false;
+    }
+
+    if (guardianPassword.length < 6) {
+        showPopup('A senha do responsável deve ter ao menos 6 caracteres.');
+        return false;
+    }
+
+    return true;
+}
+
+function handleGuardianModalSubmit(event) {
+    event.preventDefault();
+
+    if (!validateGuardianModalForm()) {
+        return;
+    }
+
+    guardianData = {
+        name: document.getElementById('guardianName').value.trim(),
+        relationship: document.getElementById('guardianRelationship').value.trim(),
+        email: document.getElementById('guardianEmail').value.trim(),
+        password: document.getElementById('guardianPassword').value
+    };
+
+    updateGuardianSummary();
+    closeGuardianModal();
+    showPopup('Responsável salvo. Continue com o cadastro do paciente.');
+}
+
+async function handlePatientRegistration(event) {
     event.preventDefault();
     const submitButton = document.querySelector('.btn-submit');
 
@@ -75,7 +213,8 @@ function handlePatientRegistration(event) {
     const email = document.getElementById('email').value.trim();
     const dataNascimento = document.getElementById('dataNascimento').value;
     const tipoDeficiencia = document.getElementById('tipoDeficiencia').value.trim();
-    const nomeResponsavel = document.getElementById('nomeResponsavel').value.trim();
+    const age = calculateAge(document.getElementById('dataNascimento').value);
+    const isMinor = age !== null && age < 18;
     const password = document.getElementById('password').value;
 
     showPopup('Deseja confirmar o cadastro?', 'confirm').then(async (confirmed) => {
@@ -90,18 +229,29 @@ function handlePatientRegistration(event) {
             password: password,
             name: name,
             email: email || null,
-            nomeResponsavel: nomeResponsavel,
+            nomeResponsavel: guardianData?.name || null,
             tipoDeficiencia: tipoDeficiencia,
             dataNascimento: dataNascimento
         };
+
+        if (guardianData) {
+            registrationData.responsavel = {
+                nome: guardianData.name,
+                parentesco: guardianData.relationship,
+                email: guardianData.email,
+                password: guardianData.password
+            };
+        }
 
         const result = await registerPatientAPI(registrationData);
 
         if (result.ok) {
             showPopup('Cadastro realizado com sucesso! Você pode fazer login agora.');
             document.getElementById('registerPatientForm').reset();
+            guardianData = null;
+            updateGuardianSummary();
+            updateGuardianSection();
             
-            // Pré-preencher CPF no login
             localStorage.setItem('lastCPF', cpf);
             localStorage.setItem('lastRegisteredCPF', cpfDigits);
             
@@ -120,9 +270,31 @@ function handlePatientRegistration(event) {
 document.addEventListener('DOMContentLoaded', function() {
     const cpfInput = document.getElementById('cpf');
     const form = document.getElementById('registerPatientForm');
+    const birthInput = document.getElementById('dataNascimento');
+    const openModalButton = document.getElementById('openGuardianModalButton');
+    const closeModalButton = document.getElementById('closeGuardianModalButton');
+    const cancelGuardianButton = document.getElementById('cancelGuardianButton');
+    const guardianForm = document.getElementById('guardianModalForm');
+    const modal = document.getElementById('guardianModal');
 
     if (cpfInput) applyMask(cpfInput, cpfMask);
     if (form) form.addEventListener('submit', handlePatientRegistration);
+    if (birthInput) birthInput.addEventListener('change', updateGuardianSection);
+    if (openModalButton) openModalButton.addEventListener('click', openGuardianModal);
+    if (closeModalButton) closeModalButton.addEventListener('click', closeGuardianModal);
+    if (cancelGuardianButton) cancelGuardianButton.addEventListener('click', closeGuardianModal);
+    if (guardianForm) guardianForm.addEventListener('submit', handleGuardianModalSubmit);
+
+    if (modal) {
+        modal.addEventListener('click', event => {
+            if (event.target === modal) {
+                closeGuardianModal();
+            }
+        });
+    }
+
+    updateGuardianSummary();
+    updateGuardianSection();
 
     const style = document.createElement('style');
     style.innerHTML = `

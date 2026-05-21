@@ -133,6 +133,17 @@
                     </button>
                 </div>
 
+                <div class="appointments-filter-bar">
+                    <div class="appointments-filter-group">
+                        <button id="appointmentsPrevMonth" class="btn-secondary" type="button" aria-label="Mês anterior">◀</button>
+                        <input id="appointmentsMonthPicker" type="month" aria-label="Selecionar mês e ano" />
+                        <button id="appointmentsNextMonth" class="btn-secondary" type="button" aria-label="Próximo mês">▶</button>
+                    </div>
+                    <div class="appointments-filter-info">
+                        <span id="appointmentsMonthLabel">Mês selecionado</span>
+                    </div>
+                </div>
+
                 <div id="appointmentsList" class="cards-container"></div>
             </section>
 
@@ -376,8 +387,8 @@
                     </select>
                 </div>
                 <div class="input-group">
-                    <label for="guardianPhone">Telefone</label>
-                    <input type="tel" id="guardianPhone" required placeholder="(00) 00000-0000">
+                    <label for="guardianPassword">Senha de acesso</label>
+                    <input type="password" id="guardianPassword" required placeholder="Digite uma senha de acesso">
                 </div>
                 <div class="input-group">
                     <label for="guardianEmail">E-mail</label>
