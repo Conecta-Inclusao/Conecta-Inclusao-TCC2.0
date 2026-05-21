@@ -169,13 +169,19 @@ async function loadProfessionalsList() {
 // Exibir lista de profissionais
 function displayProfessionalsList(professionals) {
     const teamBody = document.getElementById('teamFullTableBody');
+    const cardsContainer = document.getElementById('cardsView');
     const overviewBody = document.getElementById('teamTableBody');
     const unitFilter = document.getElementById('unitFilterSelect');
     
-    if (!teamBody) return;
+    if (!teamBody && !cardsContainer) return;
     
     if (!professionals || professionals.length === 0) {
-        teamBody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #999; padding: 1rem;">Por enquanto não há nenhum profissional cadastrado.</td></tr>';
+        if (teamBody) {
+            teamBody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #999; padding: 1rem;">Por enquanto não há nenhum profissional cadastrado.</td></tr>';
+        }
+        if (cardsContainer) {
+            cardsContainer.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: #999; padding: 2rem;">Por enquanto não há nenhum profissional cadastrado.</div>';
+        }
         if (overviewBody) {
             overviewBody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #999; padding: 1rem;">Por enquanto não há nenhum profissional cadastrado.</td></tr>';
         }
@@ -184,32 +190,90 @@ function displayProfessionalsList(professionals) {
         return;
     }
     
-    teamBody.innerHTML = professionals.map(prof => `
-        <tr>
-            <td>
-                ${prof.name || 'N/A'}
-                ${normalizeStatus(prof.status) === 'inativo' ? '<div class="inactive-warning">Profissional desativado</div>' : ''}
-            </td>
-            <td>${prof.especialidade || 'Médico'}</td>
-            <td>${prof.crm || 'N/A'}</td>
-            <td><span class="status-dot ${getStatusClass(prof.status)}">${formatProfessionalStatus(prof.status)}</span></td>
-            <td>${prof.unidade || 'N/A'}</td>
-            <td>
-                <button onclick="editProfessional(${prof.id})" style="background: none; border: none; color: #667eea; cursor: pointer; margin: 0 4px;">
-                    <i class="ph ph-pencil"></i> Editar
-                </button>
-                ${isActiveStatus(prof.status) ? `
-                    <button onclick="inactivateProfessional(${prof.id})" style="background: none; border: none; color: #f44336; cursor: pointer; margin: 0 4px;">
-                        <i class="ph ph-user-minus"></i> Inativar
+    // Renderizar tabela
+    if (teamBody) {
+        teamBody.innerHTML = professionals.map(prof => `
+            <tr>
+                <td>
+                    ${prof.name || 'N/A'}
+                    ${normalizeStatus(prof.status) === 'inativo' ? '<div class="inactive-warning">Profissional desativado</div>' : ''}
+                </td>
+                <td>${prof.especialidade || 'Médico'}</td>
+                <td>${prof.crm || 'N/A'}</td>
+                <td><span class="status-dot ${getStatusClass(prof.status)}">${formatProfessionalStatus(prof.status)}</span></td>
+                <td>${prof.unidade || 'N/A'}</td>
+                <td>
+                    <button onclick="editProfessional(${prof.id})" style="background: none; border: none; color: #667eea; cursor: pointer; margin: 0 4px;">
+                        <i class="ph ph-pencil"></i> Editar
                     </button>
-                ` : `
-                    <button onclick="activateProfessional(${prof.id})" style="background: none; border: none; color: #0f4dbf; cursor: pointer; margin: 0 4px;">
-                        <i class="ph ph-user-plus"></i> Ativar
+                    ${isActiveStatus(prof.status) ? `
+                        <button onclick="inactivateProfessional(${prof.id})" style="background: none; border: none; color: #f44336; cursor: pointer; margin: 0 4px;">
+                            <i class="ph ph-user-minus"></i> Inativar
+                        </button>
+                    ` : `
+                        <button onclick="activateProfessional(${prof.id})" style="background: none; border: none; color: #0f4dbf; cursor: pointer; margin: 0 4px;">
+                            <i class="ph ph-user-plus"></i> Ativar
+                        </button>
+                    `}
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    // Renderizar cards
+    if (cardsContainer) {
+        cardsContainer.innerHTML = professionals.map(prof => `
+            <div class="professional-card">
+                <div class="professional-card-header">
+                    <div class="professional-avatar">
+                        ${prof.name ? prof.name.charAt(0).toUpperCase() : '?'}
+                    </div>
+                    <h3>${prof.name || 'N/A'}</h3>
+                    <span>${prof.crm || 'Sem CRM'}</span>
+                </div>
+                <div class="professional-card-body">
+                    <div class="professional-info-item">
+                        <i class="ph ph-briefcase"></i>
+                        <div class="professional-info-content">
+                            <span class="professional-info-label">Especialidade</span>
+                            <span class="professional-info-value">${prof.especialidade || 'Médico'}</span>
+                        </div>
+                    </div>
+                    <div class="professional-info-item">
+                        <i class="ph ph-map-pin"></i>
+                        <div class="professional-info-content">
+                            <span class="professional-info-label">Unidade</span>
+                            <span class="professional-info-value">${prof.unidade || 'N/A'}</span>
+                        </div>
+                    </div>
+                    <div class="professional-info-item">
+                        <i class="ph ph-clock"></i>
+                        <div class="professional-info-content">
+                            <span class="professional-info-label">Status</span>
+                            <span class="professional-status ${getStatusClass(prof.status)}">
+                                <i class="ph ${getStatusIcon(prof.status)}"></i>
+                                ${formatProfessionalStatus(prof.status)}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                <div class="professional-card-footer">
+                    <button class="btn-edit" onclick="editProfessional(${prof.id})">
+                        <i class="ph ph-pencil"></i> Editar
                     </button>
-                `}
-            </td>
-        </tr>
-    `).join('');
+                    ${isActiveStatus(prof.status) ? `
+                        <button class="btn-delete" onclick="inactivateProfessional(${prof.id})">
+                            <i class="ph ph-user-minus"></i>
+                        </button>
+                    ` : `
+                        <button class="btn-edit" onclick="activateProfessional(${prof.id})" style="flex: 0.5; background: #047857;">
+                            <i class="ph ph-user-plus"></i>
+                        </button>
+                    `}
+                </div>
+            </div>
+        `).join('');
+    }
 
     if (overviewBody) {
         overviewBody.innerHTML = professionals.slice(0, 3).map(prof => `
@@ -227,6 +291,14 @@ function displayProfessionalsList(professionals) {
     
     updateTeamSummary(professionals);
     updateUnitFilterOptions(professionals);
+}
+
+function getStatusIcon(status) {
+    const normalized = normalizeStatus(status);
+    if (normalized === 'inativo') return 'ph-x-circle';
+    if (normalized === 'trabalhando') return 'ph-check-circle';
+    if (['ferias', 'férias', 'folga', 'licenca', 'licença'].includes(normalized)) return 'ph-sun';
+    return 'ph-check-circle';
 }
 
 function updateTeamSummary(professionals) {
@@ -448,6 +520,30 @@ document.addEventListener('DOMContentLoaded', function() {
     if (filterButton) {
         filterButton.addEventListener('click', applyUnitFilter);
     }
+
+    // Toggle de visualização (Cards vs Tabela)
+    const viewButtons = document.querySelectorAll('.view-btn');
+    const cardsView = document.getElementById('cardsView');
+    const tableView = document.getElementById('tableView');
+
+    viewButtons.forEach(btn => {
+        btn.addEventListener('click', function() {
+            const viewType = this.dataset.view;
+            
+            // Atualizar botões ativos
+            viewButtons.forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            
+            // Mostrar/ocultar vistas
+            if (viewType === 'cards' && cardsView && tableView) {
+                cardsView.style.display = 'grid';
+                tableView.style.display = 'none';
+            } else if (viewType === 'table' && cardsView && tableView) {
+                cardsView.style.display = 'none';
+                tableView.style.display = 'block';
+            }
+        });
+    });
     
     // Carregar lista de profissionais
     loadProfessionalsList();

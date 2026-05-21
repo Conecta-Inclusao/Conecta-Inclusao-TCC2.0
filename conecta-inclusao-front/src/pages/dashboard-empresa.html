@@ -45,21 +45,21 @@
                 </div>
                 <div class="overview-grid">
                     <div class="status-card active-card">
-                        <div>
+                        <div class="status-card-content">
                             <span>Funcionários Ativos</span>
                             <h2 id="activeCount" aria-live="polite">0</h2>
                         </div>
                         <i class="ph ph-check-circle"></i>
                     </div>
                     <div class="status-card working-card">
-                        <div>
+                        <div class="status-card-content">
                             <span>Atualmente Trabalhando</span>
                             <h2 id="workingCount" aria-live="polite">0</h2>
                         </div>
                         <i class="ph ph-briefcase"></i>
                     </div>
                     <div class="status-card break-card">
-                        <div>
+                        <div class="status-card-content">
                             <span>Férias / Folga</span>
                             <h2 id="breakCount" aria-live="polite">0</h2>
                         </div>
@@ -122,7 +122,11 @@
                         <p>Adicione um novo médico à sua clínica. A senha temporária será gerada automaticamente.</p>
                     </div>
                 </div>
-                <form id="registerProfessionalForm" class="professional-form">
+                <form id="registerProfessionalForm" class="professional-form register-form">
+                    <div class="form-header">
+                        <i class="ph ph-user-plus"></i>
+                        <h3>Dados do Profissional</h3>
+                    </div>
                     <div class="form-grid">
                         <div class="input-group">
                             <label for="professionalName">Nome Completo <span style="color: #e74c3c;">*</span></label>
@@ -175,9 +179,13 @@
                             <textarea id="professionalBio" placeholder="Descreva suas qualificações e experiência..." style="min-height: 100px;"></textarea>
                         </div>
                     </div>
-                    <div style="margin-top: 2rem; display: flex; gap: 1rem;">
-                        <button type="submit" class="btn-primary">Cadastrar Médico</button>
-                        <button type="reset" class="btn-secondary" style="background-color: #95a5a6; color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 8px; cursor: pointer;">Limpar</button>
+                    <div class="form-actions">
+                        <button type="submit" class="btn-primary">
+                            <i class="ph ph-check"></i> Cadastrar Médico
+                        </button>
+                        <button type="reset" class="btn-secondary">
+                            <i class="ph ph-arrow-clockwise"></i> Limpar
+                        </button>
                     </div>
                 </form>
             </section>
@@ -189,41 +197,79 @@
                         <p>Veja o quadro completo de funcionários e suas situações atuais.</p>
                     </div>
                 </div>
-                <div class="team-filter-bar">
-                    <label for="unitFilterSelect">Filtrar por unidade:</label>
-                    <select id="unitFilterSelect">
-                        <option value="Todas">Todas</option>
-                    </select>
-                    <button class="btn-secondary" id="btnApplyUnitFilter">Filtrar</button>
+
+                <!-- Status Cards com Ícones -->
+                <div class="team-status-cards">
+                    <div class="team-status-card active-status">
+                        <div class="status-card-header">
+                            <i class="ph ph-check-circle"></i>
+                            <span>Ativos</span>
+                        </div>
+                        <div class="status-card-value" id="cardActiveCount">0</div>
+                    </div>
+                    <div class="team-status-card working-status">
+                        <div class="status-card-header">
+                            <i class="ph ph-briefcase"></i>
+                            <span>Trabalhando</span>
+                        </div>
+                        <div class="status-card-value" id="cardWorkingCount">0</div>
+                    </div>
+                    <div class="team-status-card break-status">
+                        <div class="status-card-header">
+                            <i class="ph ph-beach-chair"></i>
+                            <span>Férias / Folga</span>
+                        </div>
+                        <div class="status-card-value" id="cardBreakCount">0</div>
+                    </div>
                 </div>
-                <div class="status-grid">
-                    <div class="status-box">
-                        <h3>Ativos</h3>
-                        <p id="cardActiveCount">0</p>
+
+                <!-- Filtros -->
+                <div class="team-filters-section">
+                    <div class="filter-group">
+                        <label for="unitFilterSelect">
+                            <i class="ph ph-funnel"></i> Filtrar por unidade:
+                        </label>
+                        <select id="unitFilterSelect">
+                            <option value="Todas">Todas</option>
+                        </select>
                     </div>
-                    <div class="status-box">
-                        <h3>Trabalhando</h3>
-                        <p id="cardWorkingCount">0</p>
-                    </div>
-                    <div class="status-box">
-                        <h3>Férias / Folga</h3>
-                        <p id="cardBreakCount">0</p>
-                    </div>
+                    <button class="btn-primary" id="btnApplyUnitFilter">
+                        <i class="ph ph-magnifying-glass"></i> Aplicar Filtro
+                    </button>
                 </div>
-                <table class="team-full-table">
-                    <thead>
-                        <tr>
-                            <th>Nome</th>
-                            <th>Função</th>
-                            <th>Registro</th>
-                            <th>Status</th>
-                            <th>Unidade</th>
-                            <th>Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody id="teamFullTableBody">
-                    </tbody>
-                </table>
+
+                <!-- Vista de Cards -->
+                <div class="team-view-toggle">
+                    <button class="view-btn active" data-view="cards" title="Visualizar como cards">
+                        <i class="ph ph-card-vertical"></i> Cards
+                    </button>
+                    <button class="view-btn" data-view="table" title="Visualizar como tabela">
+                        <i class="ph ph-list"></i> Tabela
+                    </button>
+                </div>
+
+                <!-- Cards View -->
+                <div id="cardsView" class="team-cards-container">
+                    <!-- Cards serão inseridos aqui -->
+                </div>
+
+                <!-- Table View -->
+                <div id="tableView" class="team-table-wrapper" style="display: none;">
+                    <table class="team-full-table">
+                        <thead>
+                            <tr>
+                                <th>Nome</th>
+                                <th>Função</th>
+                                <th>Registro</th>
+                                <th>Status</th>
+                                <th>Unidade</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="teamFullTableBody">
+                        </tbody>
+                    </table>
+                </div>
             </section>
 
             <section class="tab-content" id="reports">
@@ -235,16 +281,28 @@
                 </div>
                 <div class="reports-grid">
                     <div class="report-card">
+                        <div class="report-card-icon">
+                            <i class="ph ph-users-three"></i>
+                        </div>
                         <h3>Profissionais ativos</h3>
                         <p>Resumo por unidade, especialidade e vínculo.</p>
+                        <a href="#" class="report-link">Ver relatório</a>
                     </div>
                     <div class="report-card">
+                        <div class="report-card-icon">
+                            <i class="ph ph-clipboard-text"></i>
+                        </div>
                         <h3>Solicitações em aberto</h3>
                         <p>Acompanhamento de exames e validações.</p>
+                        <a href="#" class="report-link">Ver relatório</a>
                     </div>
                     <div class="report-card">
+                        <div class="report-card-icon">
+                            <i class="ph ph-check-circle"></i>
+                        </div>
                         <h3>Compliance</h3>
                         <p>Documentação e certificações pendentes.</p>
+                        <a href="#" class="report-link">Ver relatório</a>
                     </div>
                 </div>
             </section>
@@ -256,13 +314,23 @@
                         <p>Personalize as regras do dashboard e preferências da empresa.</p>
                     </div>
                 </div>
-                <div class="settings-card">
-                    <h3>Preferências de notificação</h3>
-                    <p>Receber alertas sobre validade de registro e férias dos profissionais.</p>
-                </div>
-                <div class="settings-card">
-                    <h3>Gestão de acessos</h3>
-                    <p>Controle quais profissionais podem acessar o portal e alterar agendamentos.</p>
+                <div class="settings-grid">
+                    <div class="settings-card">
+                        <div class="settings-card-icon">
+                            <i class="ph ph-bell"></i>
+                        </div>
+                        <h3>Preferências de notificação</h3>
+                        <p>Receber alertas sobre validade de registro e férias dos profissionais.</p>
+                        <button class="btn-setting">Configurar</button>
+                    </div>
+                    <div class="settings-card">
+                        <div class="settings-card-icon">
+                            <i class="ph ph-lock"></i>
+                        </div>
+                        <h3>Gestão de acessos</h3>
+                        <p>Controle quais profissionais podem acessar o portal e alterar agendamentos.</p>
+                        <button class="btn-setting">Configurar</button>
+                    </div>
                 </div>
             </section>
         </main>
