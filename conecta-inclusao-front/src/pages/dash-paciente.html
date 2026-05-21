@@ -35,10 +35,10 @@
                 </div>
                 <div class="user-profile">
                     <div class="user-info">
-                        <strong id="patientHeaderName">Carregando...</strong>
+                        <strong id="patientHeaderName">Paciente</strong>
                         <span id="patientHeaderSubtitle">Paciente ativo</span>
                     </div>
-                    <img id="patientAvatar" src="https://ui-avatars.com/api/?name=Paciente&background=0073e6&color=fff" alt="Avatar do paciente">
+                    <img id="patientAvatar" src="" alt="Avatar do paciente">
                 </div>
             </header>
 
@@ -52,7 +52,7 @@
                     <div class="status-card primary-card">
                         <div>
                             <span>Consultas agendadas</span>
-                            <h3 id="totalAppointments">0</h3>
+                            <h3 id="totalAppointments">--</h3>
                         </div>
                         <i class="ph ph-calendar-check"></i>
                     </div>
@@ -66,7 +66,7 @@
                     <div class="status-card accent-card">
                         <div>
                             <span>Especialidades ativas</span>
-                            <h3 id="specialtyCount">0</h3>
+                            <h3 id="specialtyCount">--</h3>
                         </div>
                         <i class="ph ph-heartbeat"></i>
                     </div>
@@ -85,15 +85,15 @@
                     <div class="summary-body">
                         <div class="summary-item">
                             <span>Hospital frequente</span>
-                            <strong id="favoriteHospital">Carregando...</strong>
+                            <strong id="favoriteHospital">--</strong>
                         </div>
                         <div class="summary-item">
                             <span>Plano atual</span>
-                            <strong id="currentPlan">Carregando...</strong>
+                            <strong id="favoritePlan">--</strong>
                         </div>
                         <div class="summary-item">
                             <span>Status cadastral</span>
-                            <strong>Atualizado</strong>
+                            <strong id="registrationStatus">--</strong>
                         </div>
                     </div>
                 </article>
@@ -131,6 +131,17 @@
                     <button class="btn-primary" type="button" onclick="openModal()">
                         <i class="ph ph-plus"></i> Novo Agendamento
                     </button>
+                </div>
+
+                <div class="appointments-filter-bar">
+                    <div class="appointments-filter-group">
+                        <button id="appointmentsPrevMonth" class="btn-secondary" type="button" aria-label="Mês anterior">◀</button>
+                        <input id="appointmentsMonthPicker" type="month" aria-label="Selecionar mês e ano" />
+                        <button id="appointmentsNextMonth" class="btn-secondary" type="button" aria-label="Próximo mês">▶</button>
+                    </div>
+                    <div class="appointments-filter-info">
+                        <span id="appointmentsMonthLabel">Mês selecionado</span>
+                    </div>
                 </div>
 
                 <div id="appointmentsList" class="cards-container"></div>
@@ -272,11 +283,11 @@
                         <div class="profile-list">
                             <div>
                                 <span>Paciente</span>
-                                <strong id="profilePatientName">Marcos Oliveira</strong>
+                                <strong id="profilePatientName">Paciente</strong>
                             </div>
                             <div>
                                 <span>CPF</span>
-                                <strong id="profilePatientCPF">000.000.000-00</strong>
+                                <strong id="profilePatientCPF">--</strong>
                             </div>
                             <div>
                                 <span>Data de nascimento</span>
@@ -284,7 +295,7 @@
                             </div>
                             <div>
                                 <span>Responsavel</span>
-                                <strong id="profilePatientResponsible">Ana Oliveira</strong>
+                                <strong id="profilePatientResponsible">--</strong>
                             </div>
                         </div>
                     </article>
@@ -386,8 +397,8 @@
                     </select>
                 </div>
                 <div class="input-group">
-                    <label for="guardianPhone">Telefone</label>
-                    <input type="tel" id="guardianPhone" required placeholder="(00) 00000-0000">
+                    <label for="guardianPassword">Senha de acesso</label>
+                    <input type="password" id="guardianPassword" required placeholder="Digite uma senha de acesso">
                 </div>
                 <div class="input-group">
                     <label for="guardianEmail">E-mail</label>

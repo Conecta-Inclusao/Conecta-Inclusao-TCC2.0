@@ -19,177 +19,137 @@ const CHATBOT_QUICK_ACTIONS = [
 ];
 let activeChatContactKey = CHATBOT_CONTACT.key;
 let chatbotScheduleDraft = null;
-let userProfile = null;
 let patientAppointments = [];
-let availableDoctors = [];
+let patientAppointmentsLoaded = false;
+let availableProfessionals = [];
+let appointmentsMonthFilter = '';
 
-// Função para carregar informações do usuário
-async function loadUserInfo() {
+function getCurrentMonthValue() {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function formatMonthLabel(monthValue) {
+    if (!monthValue) return '--';
+    const [year, month] = monthValue.split('-').map(Number);
+    const date = new Date(year, month - 1, 1);
+    return date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+}
+
+function applyAppointmentsMonthFilter(appointments) {
+    if (!appointmentsMonthFilter) return appointments;
+    return appointments.filter(appointment => String(appointment.date).slice(0, 7) === appointmentsMonthFilter);
+}
+
+function updateAppointmentsMonthPicker(value) {
+    appointmentsMonthFilter = value || '';
+    const picker = document.getElementById('appointmentsMonthPicker');
+    if (picker) {
+        picker.value = appointmentsMonthFilter;
+    }
+    const label = document.getElementById('appointmentsMonthLabel');
+    if (label) {
+        label.textContent = appointmentsMonthFilter ? formatMonthLabel(appointmentsMonthFilter) : 'Mês selecionado';
+    }
+    refreshDashboard();
+}
+
+function changeAppointmentsMonth(delta) {
+    const current = appointmentsMonthFilter || getCurrentMonthValue();
+    const [year, month] = current.split('-').map(Number);
+    const newDate = new Date(year, month - 1 + delta, 1);
+    const newValue = `${newDate.getFullYear()}-${String(newDate.getMonth() + 1).padStart(2, '0')}`;
+    updateAppointmentsMonthPicker(newValue);
+}
+
+function getToken() {
+    return localStorage.getItem('token');
+}
+
+async function fetchAvailableProfessionals() {
+    const token = getToken();
+    if (!token) {
+        availableProfessionals = [];
+        return [];
+    }
+
     try {
-        const profileResponse = await getUserProfile();
-        if (profileResponse.ok) {
-            userProfile = profileResponse.data;
-            updateUserInterface();
-        } else {
-            console.error('Erro ao carregar perfil:', profileResponse.data);
-            userProfile = null;
-        }
-
-        if (userProfile && userProfile.id) {
-            const appointmentsResponse = await getPatientAppointments(userProfile.id);
-            if (appointmentsResponse.ok) {
-                patientAppointments = appointmentsResponse.data.data || [];
-            } else {
-                console.error('Erro ao carregar agendamentos:', appointmentsResponse.data);
-                patientAppointments = [];
+        const response = await fetch('http://localhost:3000/auth/professionals', {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
             }
-        } else {
-            patientAppointments = [];
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+            console.error('Falha ao carregar profissionais do servidor:', data);
+            availableProfessionals = [];
+            return [];
         }
 
-        // Carregar médicos disponíveis
-        const doctorsResponse = await getAvailableDoctors();
-        if (doctorsResponse.ok) {
-            availableDoctors = doctorsResponse.data || [];
-        } else {
-            console.error('Erro ao carregar médicos:', doctorsResponse.data);
-            availableDoctors = [];
-        }
+        availableProfessionals = Array.isArray(data) ? data.map(professional => ({
+            id: professional.id,
+            name: professional.name || '',
+            registry: professional.crm || '',
+            role: professional.especialidade || professional.role || '',
+            unit: professional.unidade || professional.unit || '',
+            status: professional.status || '',
+            bio: professional.bio || ''
+        })) : [];
 
-        // Sempre atualizar o dashboard após carregar tudo
-        updateDashboardData();
+        return availableProfessionals;
     } catch (error) {
-        console.error('Erro ao carregar dados do usuário:', error);
-        userProfile = null;
-        patientAppointments = [];
-        availableDoctors = [];
-        updateDashboardData();
+        console.error('Erro ao carregar profissionais do servidor:', error);
+        availableProfessionals = [];
+        return [];
     }
 }
 
-// Função para atualizar a interface com dados do usuário
-function updateUserInterface() {
-    if (!userProfile) return;
-
-    const patientHeaderName = document.getElementById('patientHeaderName');
-    if (patientHeaderName) {
-        patientHeaderName.textContent = userProfile.name || 'Paciente';
-    }
-
-    const patientHeaderSubtitle = document.getElementById('patientHeaderSubtitle');
-    if (patientHeaderSubtitle) {
-        patientHeaderSubtitle.textContent = 'Paciente ativo';
-    }
-
-    const patientAvatar = document.getElementById('patientAvatar');
-    if (patientAvatar) {
-        patientAvatar.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(userProfile.name || 'Paciente')}&background=0073e6&color=fff`;
-    }
-
-    // Atualizar perfil
-    const profilePatientName = document.getElementById('profilePatientName');
-    if (profilePatientName) {
-        profilePatientName.textContent = userProfile.name || '';
-    }
-
-    const profilePatientCPF = document.getElementById('profilePatientCPF');
-    if (profilePatientCPF && userProfile.cpf) {
-        const cpfFormatted = userProfile.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
-        profilePatientCPF.textContent = cpfFormatted;
-    }
-
-    const profileBirthDate = document.getElementById('profileBirthDate');
-    if (profileBirthDate && userProfile.data_nascimento) {
-        const date = new Date(userProfile.data_nascimento);
-        const formattedDate = date.toLocaleDateString('pt-BR');
-        profileBirthDate.textContent = formattedDate;
-    }
-
-    const profilePatientResponsible = document.getElementById('profilePatientResponsible');
-    if (profilePatientResponsible) {
-        profilePatientResponsible.textContent = userProfile.nome_responsavel || 'Não informado';
-    }
-
-    const profileDisabilityType = document.getElementById('profileDisabilityType');
-    if (profileDisabilityType) {
-        profileDisabilityType.textContent = userProfile.tipo_deficiencia || 'Não informado';
-    }
-
-    const profilePlan = document.getElementById('profilePlan');
-    if (profilePlan) {
-        profilePlan.textContent = userProfile.plano_atual || 'Não informado';
-    }
-
-    const profilePreferredUnit = document.getElementById('profilePreferredUnit');
-    if (profilePreferredUnit) {
-        // Por enquanto mantém o valor padrão, pode ser implementado depois
-        profilePreferredUnit.textContent = 'Hospital Central';
-    }
+function getAvailableProfessionals() {
+    return availableProfessionals;
 }
 
-// Função para atualizar dados do dashboard
-function updateDashboardData() {
-    const totalAppointments = document.getElementById('totalAppointments');
-    if (totalAppointments) {
-        totalAppointments.textContent = patientAppointments.length;
+async function fetchPatientAppointments() {
+    const token = getToken();
+    if (!token) {
+        patientAppointmentsLoaded = true;
+        return [];
     }
 
-    const nextAppointmentDate = document.getElementById('nextAppointmentDate');
-    if (nextAppointmentDate) {
-        if (patientAppointments.length > 0) {
-            const nextAppointment = patientAppointments[0]; // Já ordenado por data
-            nextAppointmentDate.textContent = formatDateTime(nextAppointment.data_agendamento);
-        } else {
-            nextAppointmentDate.textContent = '--';
-        }
-    }
-
-    const specialtyCount = document.getElementById('specialtyCount');
-    if (specialtyCount) {
-        const uniqueSpecialties = new Set(patientAppointments.map(app => app.profissional_especialidade).filter(Boolean));
-        specialtyCount.textContent = uniqueSpecialties.size;
-    }
-
-    // Atualizar hospital frequente
-    const favoriteHospital = document.getElementById('favoriteHospital');
-    if (favoriteHospital) {
-        console.log('Atualizando hospital frequente. Agendamentos:', patientAppointments.length);
-        if (patientAppointments && patientAppointments.length > 0) {
-            const hospitalCounts = {};
-            patientAppointments.forEach(app => {
-                const hospital = app.clinica_nome;
-                console.log('Hospital do agendamento:', hospital);
-                if (hospital) {
-                    hospitalCounts[hospital] = (hospitalCounts[hospital] || 0) + 1;
-                }
-            });
-
-            console.log('Contagem de hospitais:', hospitalCounts);
-
-            if (Object.keys(hospitalCounts).length > 0) {
-                const mostFrequent = Object.keys(hospitalCounts).reduce((a, b) =>
-                    hospitalCounts[a] > hospitalCounts[b] ? a : b
-                );
-                console.log('Hospital mais frequente:', mostFrequent);
-                favoriteHospital.textContent = mostFrequent;
-            } else {
-                favoriteHospital.textContent = 'Nenhum';
+    try {
+        const response = await fetch('http://localhost:3000/auth/patient/appointments', {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
             }
-        } else {
-            favoriteHospital.textContent = 'Nenhum';
-        }
-        console.log('Hospital frequente final:', favoriteHospital.textContent);
-    }
+        });
+        const data = await response.json();
 
-    // Atualizar plano atual
-    const currentPlan = document.getElementById('currentPlan');
-    console.log('Atualizando plano atual. userProfile:', userProfile);
-    if (currentPlan && userProfile) {
-        const planValue = userProfile.plano_atual || 'Não informado';
-        console.log('Plano atual:', planValue);
-        currentPlan.textContent = planValue;
-    } else {
-        console.log('Elemento currentPlan ou userProfile não encontrado');
+        if (!response.ok) {
+            console.error('Falha ao carregar agendamentos do paciente:', data);
+            patientAppointments = [];
+            patientAppointmentsLoaded = true;
+            return [];
+        }
+
+        patientAppointments = Array.isArray(data) ? data.map(appointment => ({
+            id: appointment.id || `local-${Date.now()}`,
+            specialty: appointment.specialty || appointment.especialty || '',
+            doctor: appointment.doctorName || appointment.name || '',
+            hospital: appointment.unit || appointment.clinicName || '',
+            date: appointment.appointmentDate || appointment.data_agendamento || appointment.date || '',
+            status: appointment.status || ''
+        })) : [];
+        patientAppointmentsLoaded = true;
+        return patientAppointments;
+    } catch (error) {
+        console.error('Erro ao carregar agendamentos do paciente:', error);
+        patientAppointments = [];
+        patientAppointmentsLoaded = true;
+        return [];
     }
 }
 
@@ -198,6 +158,7 @@ function openGuardianModal() {
     const modal = document.getElementById('guardianModal');
     if (modal) {
         modal.style.display = 'flex';
+        if (typeof setupPasswordVisibilityToggles === 'function') setupPasswordVisibilityToggles();
     }
 }
 
@@ -234,21 +195,57 @@ function renderGuardians() {
     const guardiansList = document.getElementById('guardiansList');
     if (!guardiansList) return;
 
-    const guardians = loadGuardians();
+    guardiansList.innerHTML = '<div class="guardians-empty"><i class="ph ph-spinner-gap"></i><p>Carregando...</p></div>';
 
-    if (guardians.length === 0) {
-        guardiansList.innerHTML = `
-            <div class="guardians-empty">
-                <i class="ph ph-users-three"></i>
-                <p>Nenhum responsável cadastrado ainda.</p>
-            </div>
-        `;
-        return;
-    }
+    const token = localStorage.getItem('token');
 
-    guardiansList.innerHTML = '';
+    (async () => {
+        let guardians = [];
+        if (token) {
+            try {
+                const resp = await fetch('http://localhost:3000/auth/patient/guardians', {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                if (resp.ok) {
+                    const data = await resp.json();
+                    guardians = Array.isArray(data) ? data.map(g => ({
+                        id: g.id,
+                        name: g.name || g.nome,
+                        relationship: g.relationship || g.parentesco,
+                        email: g.email || '',
+                        dateAdded: g.createdAt || ''
+                    })) : [];
+                    // cache locally for offline fallback
+                    saveGuardians(guardians);
+                } else {
+                    // fallback to local storage
+                    guardians = loadGuardians();
+                }
+            } catch (err) {
+                console.error('Erro ao carregar responsáveis do servidor:', err);
+                guardians = loadGuardians();
+            }
+        } else {
+            guardians = loadGuardians();
+        }
 
-    guardians.forEach((guardian, index) => {
+        if (!guardians || guardians.length === 0) {
+            guardiansList.innerHTML = `
+                <div class="guardians-empty">
+                    <i class="ph ph-users-three"></i>
+                    <p>Nenhum responsável cadastrado ainda.</p>
+                </div>
+            `;
+            return;
+        }
+
+        guardiansList.innerHTML = '';
+
+        guardians.forEach((guardian, index) => {
         const permissionsText = (guardian.permissions || [])
             .map(p => {
                 const permissionMap = {
@@ -267,7 +264,6 @@ function renderGuardians() {
                 <div class="guardian-info">
                     <strong>${guardian.name}</strong>
                     <span>${guardian.relationship}</span>
-                    <span>${guardian.phone}</span>
                 </div>
                 <div class="guardian-actions">
                     <button class="btn-secondary" type="button" onclick="editGuardian(${index})">
@@ -296,19 +292,20 @@ function renderGuardians() {
             </div>
         `;
         guardiansList.appendChild(card);
-    });
+        });
+    })();
 }
 
 // Remover responsável
 function removeGuardian(index) {
-    const guardians = loadGuardians();
-    if (index >= 0 && index < guardians.length) {
-        const guardian = guardians[index];
-        guardians.splice(index, 1);
-        saveGuardians(guardians);
-        renderGuardians();
-        showPopup(`Responsável ${guardian.name} removido com sucesso.`);
-    }
+        const guardians = loadGuardians();
+        if (index >= 0 && index < guardians.length) {
+            const guardian = guardians[index];
+            guardians.splice(index, 1);
+            saveGuardians(guardians);
+            renderGuardians();
+            showPopup(`Responsável ${guardian.name} removido com sucesso.`);
+        }
 }
 
 // Editar responsável
@@ -320,7 +317,7 @@ function editGuardian(index) {
         // Preencher o formulário com os dados do responsável
         document.getElementById('guardianName').value = guardian.name;
         document.getElementById('guardianRelationship').value = guardian.relationship;
-        document.getElementById('guardianPhone').value = guardian.phone;
+        document.getElementById('guardianPassword').value = guardian.password || '';
         document.getElementById('guardianEmail').value = guardian.email;
 
         // Selecionar as permissões
@@ -399,7 +396,7 @@ function scrollToSpecialty(specialty) {
         const professionals = availableDoctors;
         const prof = professionals.find(p => p.especialidade === specialty);
         if (prof) {
-            select.value = prof.crm;
+            select.value = prof.id;
             updateSelectedProfessionalDetails();
             openModal();
         }
@@ -407,6 +404,14 @@ function scrollToSpecialty(specialty) {
 }
 
 function openModal() {
+    const modalDate = document.getElementById('modalDate');
+    if (modalDate) {
+        modalDate.min = getTodayInputValue();
+        if (!modalDate.value || modalDate.value < modalDate.min) {
+            modalDate.value = modalDate.min;
+        }
+    }
+
     populateProfessionalOptions();
     const modal = document.getElementById('appointmentModal');
     if (modal) {
@@ -419,6 +424,16 @@ function closeModal() {
     if (modal) {
         modal.style.display = 'none';
     }
+    const form = document.getElementById('formNewAppointment');
+    if (form) {
+        delete form.dataset.editAppointmentId;
+        form.reset();
+        const header = document.querySelector('#appointmentModal .modal-header div h3');
+        if (header) header.textContent = 'Novo Agendamento';
+        const submitBtn = form.querySelector('button[type="submit"]');
+        if (submitBtn) submitBtn.textContent = 'Agendar';
+        updateSelectedProfessionalDetails();
+    }
 }
 
 function switchTab(tabKey) {
@@ -430,25 +445,47 @@ function switchTab(tabKey) {
 }
 
 function parseAppointmentDate(dateString) {
-    const date = new Date(dateString);
-    if (!Number.isNaN(date.getTime())) {
-        return date;
+    if (!dateString) {
+        return new Date(NaN);
     }
 
-    const normalized = dateString.replace(' ', 'T');
-    return new Date(normalized);
+    const normalized = String(dateString).replace(' ', 'T');
+    const datePart = normalized.split('T')[0];
+    const [year, month, day] = datePart.split('-').map(Number);
+    return new Date(year, month - 1, day);
 }
 
 function formatDate(dateString) {
-    const date = parseAppointmentDate(dateString);
-    if (Number.isNaN(date.getTime())) {
-        return dateString;
-    }
-    return date.toLocaleDateString('pt-BR');
+    if (!dateString) return '--';
+    const normalized = String(dateString).replace(' ', 'T');
+    const datePart = normalized.split('T')[0];
+    const [year, month, day] = datePart.split('-');
+    return `${day}/${month}/${year}`;
 }
 
-function combineDateTime(date, time) {
-    return `${date}T${time}:00`;
+function getAppointmentDateChunks(dateString) {
+    const date = parseAppointmentDate(dateString);
+    if (Number.isNaN(date.getTime())) {
+        return { day: '--', month: '--' };
+    }
+
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = date.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '');
+    return { day, month };
+}
+
+function getAppointmentTime(dateString) {
+    if (!dateString) return '--:--';
+    const str = String(dateString);
+    // Try ISO format with time
+    const timeMatch = str.match(/T?(\d{2}:\d{2})(:?\d{2})?/);
+    if (timeMatch) {
+        return timeMatch[1];
+    }
+    // Try space separated datetime
+    const parts = str.split(' ');
+    if (parts.length > 1 && parts[1].match(/\d{2}:\d{2}/)) return parts[1].slice(0,5);
+    return '--:--';
 }
 
 function formatProfessionalListForChat(professionals) {
@@ -510,8 +547,30 @@ function getAppointmentCards() {
     return Array.from(document.querySelectorAll('.appointment-card'));
 }
 
-function getProfessionalByRegistry(crm) {
-    return availableDoctors.find(doctor => doctor.crm === crm) || null;
+function loadRegisteredProfessionals() {
+    return getAvailableProfessionals().filter(isAvailableRegisteredDoctor);
+}
+
+function isAvailableRegisteredDoctor(professional) {
+    if (!professional || !professional.name || !professional.role || !professional.registry) {
+        return false;
+    }
+
+    const registry = String(professional.registry).trim().toUpperCase();
+    const isDemoProfessional = DEMO_PROFESSIONAL_REGISTRIES.includes(registry);
+    const normalizedRegistry = registry.replace(/^CRM\s*/i, '').replace(/[\s-]/g, '');
+    const isDoctorRegistry = registry.includes('CRM') || /^[A-Z0-9]{4,7}$/.test(normalizedRegistry);
+    const status = String(professional.status || '').toLowerCase();
+    const isAvailable = ['ativo', 'trabalhando', 'active'].includes(status);
+
+    return isDoctorRegistry && isAvailable && !isDemoProfessional;
+}
+
+function getProfessionalByRegistry(registryOrId) {
+    const normalized = String(registryOrId || '').trim();
+    return loadRegisteredProfessionals().find(professional => 
+        String(professional.id) === normalized || professional.registry === normalized
+    ) || null;
 }
 
 function updateSelectedProfessionalDetails() {
@@ -525,6 +584,23 @@ function updateSelectedProfessionalDetails() {
 
     specialtyInput.value = selectedProfessional?.especialidade || '';
     unitInput.value = selectedProfessional?.unidade || '';
+}
+
+function getTodayInputValue() {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+function isPastDate(dateValue) {
+    if (!dateValue) return false;
+    const selectedDate = new Date(dateValue);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    selectedDate.setHours(0, 0, 0, 0);
+    return selectedDate < today;
 }
 
 function populateProfessionalOptions() {
@@ -548,12 +624,12 @@ function populateProfessionalOptions() {
 
     professionals.forEach(professional => {
         const option = document.createElement('option');
-        option.value = professional.crm;
-        option.textContent = `${professional.name} - ${professional.especialidade} (${professional.unidade || 'Unidade não informada'})`;
+        option.value = professional.id;
+        option.textContent = `${professional.name} - ${professional.role}`;
         professionalSelect.appendChild(option);
     });
 
-    if (professionals.some(professional => professional.crm === currentValue)) {
+    if (professionals.some(professional => String(professional.id) === currentValue)) {
         professionalSelect.value = currentValue;
     }
 
@@ -587,15 +663,13 @@ function populateSearchFilters() {
 }
 
 function getAppointmentData() {
-    return patientAppointments.map(app => ({
-        specialty: app.profissional_especialidade || '',
-        doctor: app.profissional_nome || '',
-        crm: app.profissional_crm || '',
-        hospital: app.clinica_nome || '',
-        date: app.data_agendamento || '',
-        status: app.status || '',
-        id: app.id
-    })).sort((a, b) => new Date(a.date) - new Date(b.date));
+    if (!patientAppointmentsLoaded) {
+        return [];
+    }
+
+    return patientAppointments
+        .slice()
+        .sort((first, second) => parseAppointmentDate(first.date) - parseAppointmentDate(second.date));
 }
 
 function getPatientName() {
@@ -1032,10 +1106,10 @@ function renderOverviewAppointments() {
     appointments.slice(0, 4).forEach(appointment => {
         const row = document.createElement('tr');
         row.innerHTML = `
-            <td>${appointment.specialty}</td>
-            <td>${appointment.doctor}${appointment.crm ? ` (CRM: ${appointment.crm})` : ''}</td>
-            <td>${appointment.hospital}</td>
-            <td>${formatDateTime(appointment.date)}</td>
+            <td>${escapeHTML(appointment.specialty)}</td>
+            <td>${escapeHTML(appointment.doctor)}</td>
+            <td>${escapeHTML(appointment.hospital)}</td>
+            <td>${escapeHTML(formatDate(appointment.date))}</td>
         `;
         tableBody.appendChild(row);
     });
@@ -1065,78 +1139,368 @@ function updateOverviewCards() {
     }
 }
 
-function renderPatientAppointments() {
-    const appointmentsList = document.getElementById('appointmentsList');
-    if (!appointmentsList) return;
+function getDayName(dateString) {
+    const date = parseAppointmentDate(dateString);
+    if (Number.isNaN(date.getTime())) return '--';
+    return date.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '').toUpperCase();
+}
 
-    // Limpar agendamentos locais (se houver)
-    const existingCards = appointmentsList.querySelectorAll('.appointment-card');
-    existingCards.forEach(card => card.remove());
-
-    // Renderizar agendamentos da API
-    patientAppointments.forEach(appointment => {
-        const appointmentCard = document.createElement('div');
-        appointmentCard.className = 'appointment-card';
-        appointmentCard.dataset.id = appointment.id;
-        appointmentCard.dataset.date = appointment.data_agendamento;
-        appointmentCard.dataset.status = appointment.status;
-
-        const statusClass = appointment.status === 'confirmado' ? 'status-confirmed' :
-                           appointment.status === 'cancelado' ? 'status-cancelled' :
-                           appointment.status === 'realizado' ? 'status-completed' : 'status-pending';
-
-        appointmentCard.innerHTML = `
-            <div class="card-top">
-                <span class="specialty-badge">${escapeHTML(appointment.profissional_especialidade || 'Especialidade não informada')}</span>
-                <span class="date-tag ${statusClass}">${formatDateTime(appointment.data_agendamento)}</span>
+function createAppointmentCardElement(appointment) {
+    const { day, month } = getAppointmentDateChunks(appointment.date);
+    const timeStr = getAppointmentTime(appointment.date);
+    const doctorLabel = appointment.doctor || '';
+    const card = document.createElement('div');
+    card.className = 'appointment-card appointment-item';
+    card.dataset.id = appointment.id;
+    card.dataset.date = appointment.date;
+    card.dataset.specialty = appointment.specialty;
+    card.dataset.doctor = appointment.doctor;
+    card.dataset.hospital = appointment.hospital;
+    card.innerHTML = `
+        <div class="appointment-time-block">
+            <span class="time-hour">${escapeHTML(timeStr)}</span>
+            <span class="time-sub">${escapeHTML(doctorLabel)}</span>
+        </div>
+        <div class="appointment-info">
+            <div class="appointment-headline">
+                <strong>${escapeHTML(appointment.doctor)}</strong>
+                <span class="specialty-badge">${escapeHTML(appointment.specialty)}</span>
             </div>
-            <div class="card-body">
-                <strong>${escapeHTML(appointment.profissional_nome || 'Médico não informado')}</strong>
-                ${appointment.profissional_crm ? `<span>CRM: ${appointment.profissional_crm}</span>` : ''}
-                <span>${escapeHTML(appointment.clinica_nome || 'Clínica não informada')}</span>
-                <span class="appointment-status">Status: ${appointment.status || 'Pendente'}</span>
+            <div class="appointment-details">
+                <span>${escapeHTML(appointment.hospital)}</span>
+                <span class="date-label">${escapeHTML(formatDate(appointment.date))}</span>
             </div>
             <div class="card-actions">
-                <button class="btn-secondary" type="button" onclick="switchTab('messages')">Enviar mensagem</button>
-                ${appointment.status === 'confirmado' ? '<button class="btn-danger" type="button" onclick="cancelAppointmentApi(this)">Desmarcar</button>' : ''}
+                <button class="btn-secondary btn-reschedule" type="button">Buscar outro horario</button>
+                <button class="btn-danger btn-cancel" type="button">Desmarcar</button>
             </div>
-        `;
+        </div>
+    `;
 
-        appointmentsList.appendChild(appointmentCard);
+    // Attach event listeners instead of inline onclick to enable reschedule behavior
+    const rescheduleBtn = card.querySelector('.btn-reschedule');
+    if (rescheduleBtn) {
+        rescheduleBtn.addEventListener('click', () => openRescheduleModal(appointment.id));
+    }
+
+    const cancelBtn = card.querySelector('.btn-cancel');
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', () => cancelAppointment(cancelBtn));
+    }
+    return card;
+}
+
+function openRescheduleModal(appointmentId) {
+    const appointment = (patientAppointments || []).find(a => String(a.id) === String(appointmentId));
+    const form = document.getElementById('formNewAppointment');
+    if (!form) return;
+
+    // Preencher campos do modal com dados do agendamento selecionado
+    document.getElementById('modalSpec').value = appointment?.specialty || '';
+    document.getElementById('modalUnit').value = appointment?.hospital || '';
+    document.getElementById('modalDate').value = appointment?.date ? String(appointment.date).slice(0,10) : '';
+    // Reset profissional para permitir trocar se desejar
+    document.getElementById('modalProfessional').value = '';
+
+    form.dataset.editAppointmentId = appointmentId;
+    const header = document.querySelector('#appointmentModal .modal-header div h3');
+    if (header) header.textContent = 'Remarcar Agendamento';
+    const submitBtn = form.querySelector('button[type="submit"]');
+    if (submitBtn) submitBtn.textContent = 'Remarcar';
+
+    openModal();
+}
+
+function renderAppointmentsList() {
+    const list = document.getElementById('appointmentsList');
+    if (!list) return;
+
+    list.innerHTML = '';
+    const appointments = applyAppointmentsMonthFilter(getAppointmentData());
+
+    if (!appointments.length) {
+        const monthLabel = appointmentsMonthFilter ? formatMonthLabel(appointmentsMonthFilter) : 'mês selecionado';
+        const message = document.createElement('div');
+        message.className = 'empty-state';
+        message.innerHTML = `
+            <i class="ph ph-calendar-x"></i>
+            <p>Voce nao possui consultas agendadas para ${escapeHTML(monthLabel)}.</p>
+        `;
+        list.appendChild(message);
+        return;
+    }
+
+    // Group appointments by ISO date key YYYY-MM-DD
+    const groupedAppointments = appointments.reduce((groups, appointment) => {
+        const dateKey = String(appointment.date || '').split('T')[0] || 'unknown';
+        if (!groups[dateKey]) groups[dateKey] = [];
+        groups[dateKey].push(appointment);
+        return groups;
+    }, {});
+
+    // Build a full month calendar based on the month picker
+    const monthValue = appointmentsMonthFilter || getCurrentMonthValue();
+    const [calYear, calMonth] = monthValue.split('-').map(Number);
+    const firstOfMonth = new Date(calYear, calMonth - 1, 1);
+    const firstWeekday = firstOfMonth.getDay(); // 0 (Sun) - 6 (Sat)
+    const totalDays = new Date(calYear, calMonth, 0).getDate();
+
+    const monthCalendar = document.createElement('div');
+    monthCalendar.className = 'month-calendar';
+
+    const monthTitle = document.createElement('div');
+    monthTitle.className = 'month-title';
+    monthTitle.textContent = formatMonthLabel(monthValue);
+    monthCalendar.appendChild(monthTitle);
+
+    const weekdays = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
+    const header = document.createElement('div');
+    header.className = 'calendar-header';
+    weekdays.forEach(w => {
+        const el = document.createElement('div');
+        el.className = 'weekday';
+        el.textContent = w;
+        header.appendChild(el);
+    });
+    monthCalendar.appendChild(header);
+
+    const grid = document.createElement('div');
+    grid.className = 'calendar-grid';
+
+    // Leading empty cells
+    for (let i = 0; i < firstWeekday; i++) {
+        const cell = document.createElement('div');
+        cell.className = 'calendar-cell empty';
+        grid.appendChild(cell);
+    }
+
+    // Day cells
+    for (let day = 1; day <= totalDays; day++) {
+        const dayStr = String(day).padStart(2, '0');
+        const monthStr = String(calMonth).padStart(2, '0');
+        const dateKey = `${calYear}-${monthStr}-${dayStr}`;
+        const appts = groupedAppointments[dateKey] || [];
+
+        const cell = document.createElement('div');
+        cell.className = 'calendar-cell';
+
+        const dayNum = document.createElement('div');
+        dayNum.className = 'calendar-day-number';
+        dayNum.textContent = day;
+        cell.appendChild(dayNum);
+
+        // Add up to 3 appointment items for compact view
+        appts.slice(0, 4).forEach(appointment => {
+            const ap = document.createElement('div');
+            ap.className = 'calendar-appointment';
+            ap.dataset.id = appointment.id || '';
+            ap.dataset.date = appointment.date || '';
+
+            const tspan = document.createElement('div');
+            tspan.className = 'appt-time';
+            tspan.textContent = getAppointmentTime(appointment.date);
+
+            const title = document.createElement('div');
+            title.className = 'appt-title';
+            title.textContent = appointment.doctor || appointment.name || '';
+
+            ap.appendChild(tspan);
+            ap.appendChild(title);
+
+            // Click opens detail popup with actions
+            ap.addEventListener('click', (e) => {
+                e.stopPropagation();
+                showAppointmentDetail(appointment);
+            });
+
+            cell.appendChild(ap);
+        });
+
+        if (appts.length > 4) {
+            const more = document.createElement('div');
+            more.className = 'calendar-more';
+            more.textContent = `+${appts.length - 4} mais`;
+            cell.appendChild(more);
+        }
+
+        grid.appendChild(cell);
+    }
+
+    monthCalendar.appendChild(grid);
+
+    const dayColumn = document.createElement('div');
+    dayColumn.className = 'schedule-day-column';
+    dayColumn.appendChild(monthCalendar);
+
+    list.appendChild(dayColumn);
+}
+
+function showAppointmentDetail(appointment) {
+    if (!appointment) return;
+    const modal = document.createElement('div');
+    modal.className = 'popup-modal';
+    modal.style.position = 'fixed';
+    modal.style.top = '0';
+    modal.style.left = '0';
+    modal.style.width = '100%';
+    modal.style.height = '100%';
+    modal.style.backgroundColor = 'rgba(0,0,0,0.5)';
+    modal.style.display = 'flex';
+    modal.style.justifyContent = 'center';
+    modal.style.alignItems = 'center';
+    modal.style.zIndex = '3000';
+
+    const content = document.createElement('div');
+    content.className = 'popup-content';
+    content.style.backgroundColor = 'white';
+    content.style.padding = '18px';
+    content.style.borderRadius = '8px';
+    content.style.textAlign = 'left';
+    content.style.maxWidth = '420px';
+    modal.appendChild(content);
+
+    const title = document.createElement('h3');
+    title.textContent = appointment.doctor || 'Profissional';
+    title.style.margin = '0 0 6px 0';
+    content.appendChild(title);
+
+    const p1 = document.createElement('p');
+    p1.textContent = `${getAppointmentTime(appointment.date)} — ${appointment.hospital || ''}`;
+    p1.style.margin = '0 0 8px 0';
+    content.appendChild(p1);
+
+    const p2 = document.createElement('p');
+    p2.textContent = appointment.specialty || '';
+    p2.style.margin = '0 0 12px 0';
+    p2.style.color = '#64748b';
+    content.appendChild(p2);
+
+    const btns = document.createElement('div');
+    btns.style.display = 'flex';
+    btns.style.gap = '8px';
+    btns.style.justifyContent = 'flex-end';
+
+    const resBtn = document.createElement('button');
+    resBtn.className = 'btn-secondary';
+    resBtn.type = 'button';
+    resBtn.textContent = 'Remarcar';
+    resBtn.addEventListener('click', () => {
+        document.body.removeChild(modal);
+        openRescheduleModal(appointment.id);
     });
 
-    // Atualizar estado vazio se necessário
-    renderAppointmentsState();
+    const delBtn = document.createElement('button');
+    delBtn.className = 'btn-danger';
+    delBtn.type = 'button';
+    delBtn.textContent = 'Desmarcar';
+    delBtn.addEventListener('click', async () => {
+        document.body.removeChild(modal);
+        await cancelAppointmentById(appointment.id, appointment.date);
+    });
+
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'btn-secondary';
+    closeBtn.type = 'button';
+    closeBtn.textContent = 'Fechar';
+    closeBtn.addEventListener('click', () => {
+        document.body.removeChild(modal);
+    });
+
+    btns.appendChild(resBtn);
+    btns.appendChild(delBtn);
+    btns.appendChild(closeBtn);
+    content.appendChild(btns);
+
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            if (document.body.contains(modal)) document.body.removeChild(modal);
+        }
+    });
+
+    document.body.appendChild(modal);
+}
+
+async function cancelAppointmentById(appointmentId, dateString) {
+    if (!appointmentId) return;
+
+    const appointmentDate = parseAppointmentDate(dateString);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const diffInTime = appointmentDate.getTime() - today.getTime();
+    const diffInDays = Math.ceil(diffInTime / (1000 * 3600 * 24));
+
+    if (diffInDays < 14) {
+        await showPopup('Atencao: cancelamentos devem ser feitos com no minimo 2 semanas de antecedencia.');
+        return;
+    }
+
+    const result = await showPopup('Tem certeza que deseja desmarcar esta consulta?', 'confirm');
+    if (!result) return;
+
+    const token = localStorage.getItem('token');
+    if (!token) {
+        await showPopup('Voce precisa estar autenticado para desmarcar esta consulta. Faça login novamente.');
+        return;
+    }
+
+    if (!String(appointmentId).startsWith('local-')) {
+        try {
+            const response = await fetch(`http://localhost:3000/auth/patient/appointments/${encodeURIComponent(appointmentId)}`, {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (!response.ok) {
+                const body = await response.json();
+                await showPopup(body.message || 'Erro ao desmarcar a consulta.');
+                return;
+            }
+        } catch (error) {
+            console.error('Erro ao desmarcar agendamento:', error);
+            await showPopup('Erro de conexao ao desmarcar a consulta.');
+            return;
+        }
+    }
+
+    if (patientAppointmentsLoaded) {
+        patientAppointments = patientAppointments.filter(item => String(item.id) !== String(appointmentId));
+    }
+    refreshDashboard();
+    await showPopup('Consulta removida com sucesso.');
 }
 
 function addAppointmentToDashboard(selectedProfessional, date) {
     const appointmentsList = document.getElementById('appointmentsList');
     if (!appointmentsList || !selectedProfessional || !date) return false;
 
-    const specialty = selectedProfessional.especialidade;
-    const unit = selectedProfessional.unidade || 'Unidade a confirmar';
-    const appointmentCard = document.createElement('div');
-    appointmentCard.className = 'appointment-card';
-    appointmentCard.dataset.date = date;
-    appointmentCard.dataset.specialty = specialty;
-    appointmentCard.dataset.doctor = selectedProfessional.name;
-    appointmentCard.dataset.hospital = unit;
-    appointmentCard.innerHTML = `
-        <div class="card-top">
-            <span class="specialty-badge">${escapeHTML(specialty)}</span>
-            <span class="date-tag">${formatDateTime(date)}</span>
-        </div>
-        <div class="card-body">
-            <strong>${escapeHTML(selectedProfessional.name)}</strong>
-            <span>${escapeHTML(unit)}</span>
-        </div>
-        <div class="card-actions">
-            <button class="btn-secondary" type="button" onclick="switchTab('search')">Buscar outro horario</button>
-            <button class="btn-danger" type="button" onclick="cancelAppointment(this)">Desmarcar</button>
-        </div>
-    `;
+    const specialty = selectedProfessional.role;
+    const unit = selectedProfessional.unit || 'Unidade a confirmar';
+    const newAppointment = {
+        id: `local-${Date.now()}`,
+        specialty,
+        doctor: selectedProfessional.name,
+        hospital: unit,
+        date,
+        status: 'pendente'
+    };
+
+    const appointmentCard = createAppointmentCardElement(newAppointment);
+    appointmentCard.dataset.id = newAppointment.id;
+    appointmentCard.dataset.date = newAppointment.date;
+    appointmentCard.dataset.specialty = newAppointment.specialty;
+    appointmentCard.dataset.doctor = newAppointment.doctor;
+    appointmentCard.dataset.hospital = newAppointment.hospital;
 
     appointmentsList.prepend(appointmentCard);
+
+    if (patientAppointmentsLoaded) {
+        patientAppointments.unshift(newAppointment);
+    }
+
     refreshDashboard();
     switchTab('appointments');
     return true;
@@ -1146,8 +1510,7 @@ function refreshDashboard() {
     populateSearchFilters();
     updateOverviewCards();
     renderOverviewAppointments();
-    renderAppointmentsState();
-    renderPatientAppointments();
+    renderAppointmentsList();
     renderMessageContacts();
     renderActiveConversation();
     renderGuardians();
@@ -1204,11 +1567,48 @@ async function cancelAppointment(button) {
     }
 
     const result = await showPopup('Tem certeza que deseja desmarcar esta consulta?', 'confirm');
-    if (result) {
-        card.remove();
-        refreshDashboard();
-        await showPopup('Consulta removida com sucesso.');
+    if (!result) return;
+
+    const appointmentId = card.dataset.id;
+    if (!appointmentId) {
+        await showPopup('ID do agendamento nao encontrado.');
+        return;
     }
+
+    const token = localStorage.getItem('token');
+    if (!token) {
+        await showPopup('Voce precisa estar autenticado para desmarcar esta consulta. Faça login novamente.');
+        return;
+    }
+
+    if (!String(appointmentId).startsWith('local-')) {
+        try {
+            const response = await fetch(`http://localhost:3000/auth/patient/appointments/${encodeURIComponent(appointmentId)}`, {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (!response.ok) {
+                const body = await response.json();
+                await showPopup(body.message || 'Erro ao desmarcar a consulta.');
+                return;
+            }
+        } catch (error) {
+            console.error('Erro ao desmarcar agendamento:', error);
+            await showPopup('Erro de conexao ao desmarcar a consulta.');
+            return;
+        }
+    }
+
+    if (patientAppointmentsLoaded && appointmentId) {
+        patientAppointments = patientAppointments.filter(item => String(item.id) !== String(appointmentId));
+    }
+    card.remove();
+    refreshDashboard();
+    await showPopup('Consulta removida com sucesso.');
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -1228,18 +1628,35 @@ document.addEventListener('DOMContentLoaded', async () => {
         appointmentsButton.addEventListener('click', () => switchTab('appointments'));
     }
 
+    const appointmentsPrevMonth = document.getElementById('appointmentsPrevMonth');
+    const appointmentsNextMonth = document.getElementById('appointmentsNextMonth');
+    const appointmentsMonthPicker = document.getElementById('appointmentsMonthPicker');
+
+    if (appointmentsPrevMonth) {
+        appointmentsPrevMonth.addEventListener('click', () => changeAppointmentsMonth(-1));
+    }
+    if (appointmentsNextMonth) {
+        appointmentsNextMonth.addEventListener('click', () => changeAppointmentsMonth(1));
+    }
+    if (appointmentsMonthPicker) {
+        appointmentsMonthPicker.addEventListener('change', event => {
+            updateAppointmentsMonthPicker(event.target.value);
+        });
+    }
+
     const appointmentForm = document.getElementById('formNewAppointment');
     if (appointmentForm) {
         appointmentForm.addEventListener('submit', async event => {
             event.preventDefault();
-
             const date = document.getElementById('modalDate')?.value;
-            const time = document.getElementById('modalTime')?.value;
-            const professionalRegistry = document.getElementById('modalProfessional')?.value;
-            const selectedProfessional = getProfessionalByRegistry(professionalRegistry);
+            const professionalId = document.getElementById('modalProfessional')?.value;
+            const specialty = document.getElementById('modalSpec')?.value;
+            const unit = document.getElementById('modalUnit')?.value;
+            const selectedProfessional = getProfessionalByRegistry(professionalId);
+            const professionalCrm = String(selectedProfessional?.registry || '').trim();
 
-            if (!selectedProfessional) {
-                await showPopup('Selecione um profissional que esteja cadastrado no sistema.');
+            if (isPastDate(date)) {
+                await showPopup('Não é possível agendar ou remarcar para uma data no passado. Escolha uma data atual ou futura.');
                 return;
             }
 
@@ -1248,12 +1665,102 @@ document.addEventListener('DOMContentLoaded', async () => {
                 return;
             }
 
-            const dateTime = combineDateTime(date, time);
-            addAppointmentToDashboard(selectedProfessional, dateTime);
-            appointmentForm.reset();
-            updateSelectedProfessionalDetails();
-            closeModal();
-            await showPopup(`Sucesso! Consulta com ${selectedProfessional.name} agendada para ${formatDateTime(dateTime)}.`);
+            // Tentar criar ou atualizar agendamento no backend
+            const token = localStorage.getItem('token');
+            if (!token) {
+                await showPopup('Voce precisa estar autenticado para agendar/remarcar. Faça login novamente.');
+                return;
+            }
+
+            const editId = appointmentForm.dataset.editAppointmentId;
+            try {
+                if (editId) {
+                    // Remarcar (atualizar) um agendamento existente
+                    const url = `http://localhost:3000/auth/patient/appointments/${encodeURIComponent(editId)}`;
+                    const bodyData = { date };
+                    if (professionalCrm) bodyData.med_crm = professionalCrm;
+
+                    const resp = await fetch(url, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify(bodyData)
+                    });
+
+                    const body = await resp.json();
+                    if (!resp.ok) {
+                        await showPopup(body.message || 'Erro ao remarcar agendamento no servidor.');
+                        return;
+                    }
+
+                    const updated = body || {
+                        id: editId,
+                        specialty,
+                        doctor: selectedProfessional?.name || 'Profissional',
+                        hospital: unit,
+                        date,
+                        status: 'pendente'
+                    };
+
+                    // Atualizar localmente
+                    const idx = patientAppointments.findIndex(a => String(a.id) === String(editId));
+                    if (idx >= 0) {
+                        patientAppointments[idx] = updated;
+                    } else {
+                        patientAppointments.unshift(updated);
+                    }
+
+                    delete appointmentForm.dataset.editAppointmentId;
+                    appointmentForm.reset();
+                    updateSelectedProfessionalDetails();
+                    closeModal();
+                    refreshDashboard();
+                    await showPopup(`Remarcacao realizada para ${formatDate(updated.date)}.`);
+                } else {
+                    // Criar novo agendamento
+                    if (!selectedProfessional) {
+                        await showPopup('Selecione um profissional que esteja cadastrado no sistema.');
+                        return;
+                    }
+
+                    const resp = await fetch('http://localhost:3000/auth/patient/appointments', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({ med_crm: professionalCrm, date })
+                    });
+
+                    const body = await resp.json();
+                    if (!resp.ok) {
+                        await showPopup(body.message || 'Erro ao criar agendamento no servidor.');
+                        return;
+                    }
+
+                    // Atualizar lista local com o registro retornado pelo servidor
+                    const created = {
+                        id: body.id || `remote-${Date.now()}`,
+                        specialty: body.specialty || body.especialty || specialty,
+                        doctor: body.doctorName || selectedProfessional.name,
+                        hospital: body.unit || body.clinicName || unit,
+                        date: body.appointmentDate || date,
+                        status: body.status || 'pendente'
+                    };
+
+                    patientAppointments.unshift(created);
+                    appointmentForm.reset();
+                    updateSelectedProfessionalDetails();
+                    closeModal();
+                    refreshDashboard();
+                    await showPopup(`Sucesso! Consulta com ${created.doctor} agendada para ${formatDate(created.date)}.`);
+                }
+            } catch (err) {
+                console.error('Erro ao criar/remarcar agendamento:', err);
+                await showPopup('Erro de conexao ao processar agendamento.');
+            }
         });
     }
 
@@ -1300,16 +1807,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         guardianForm.addEventListener('submit', async event => {
             event.preventDefault();
 
-            const name = document.getElementById('guardianName')?.value.trim();
-            const relationship = document.getElementById('guardianRelationship')?.value;
-            const phone = document.getElementById('guardianPhone')?.value.trim();
-            const email = document.getElementById('guardianEmail')?.value.trim();
+                const name = document.getElementById('guardianName')?.value.trim();
+                const relationship = document.getElementById('guardianRelationship')?.value;
+                const email = document.getElementById('guardianEmail')?.value.trim();
+                const password = document.getElementById('guardianPassword')?.value.trim();
+                if (!password || password.length < 6) {
+                    await showPopup('A senha deve ter pelo menos 6 caracteres.');
+                    return;
+                }
 
-            if (!name || !relationship || !phone || !email) {
-                await showPopup('Por favor, preencha todos os campos obrigatórios.');
-                return;
-            }
-
+                if (!name || !relationship || !email || !password) {
+                    await showPopup('Por favor, preencha todos os campos obrigatórios.');
+                    return;
+                }
             const permissions = Array.from(document.querySelectorAll('input[name="permissions"]:checked'))
                 .map(checkbox => checkbox.value);
 
@@ -1326,7 +1836,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 guardians[parseInt(editIndex)] = {
                     name,
                     relationship,
-                    phone,
+                    password,
                     email,
                     permissions,
                     dateAdded: guardians[parseInt(editIndex)].dateAdded
@@ -1335,14 +1845,42 @@ document.addEventListener('DOMContentLoaded', async () => {
             } else {
                 // Adicionar novo responsável
                 const today = new Date().toLocaleDateString('pt-BR');
-                guardians.push({
+                const newGuardian = {
                     name,
                     relationship,
-                    phone,
+                    password,
                     email,
                     permissions,
                     dateAdded: today
-                });
+                };
+
+                // If user is authenticated, try to persist on server
+                const token = localStorage.getItem('token');
+                if (token) {
+                    try {
+                        const resp = await fetch('http://localhost:3000/auth/patient/guardians', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${token}`
+                            },
+                            body: JSON.stringify({ name, relationship, email, password })
+                        });
+
+                        const body = await resp.json();
+                        if (!resp.ok) {
+                            await showPopup(body.message || 'Erro ao salvar responsável no servidor.');
+                        } else {
+                            // attach server id
+                            newGuardian.id = body.id;
+                        }
+                    } catch (err) {
+                        console.error('Erro ao salvar responsavel no servidor:', err);
+                        await showPopup('Erro de conexão ao salvar responsável no servidor.');
+                    }
+                }
+
+                guardians.push(newGuardian);
                 await showPopup(`Responsável ${name} adicionado com sucesso.`);
             }
 
@@ -1368,59 +1906,33 @@ function renderAppointmentsState() {
         if (emptyState) {
             emptyState.remove();
         }
-        return;
-    }
-
-    if (!emptyState) {
-        const message = document.createElement('div');
-        message.className = 'empty-state';
-        message.innerHTML = `
-            <i class="ph ph-calendar-x"></i>
-            <p>Voce ainda nao possui consultas agendadas.</p>
-        `;
-        list.appendChild(message);
-    }
-}
-
-async function cancelAppointmentApi(button) {
-    const card = button.closest('.appointment-card');
-    if (!card) return;
-
-    const appointmentId = card.dataset.id;
-    if (!appointmentId) return;
-
-    const result = await showPopup('Tem certeza que deseja cancelar este agendamento?', 'confirm');
-    if (!result) return;
-
-    try {
-        const response = await fetch(`${API_BASE_URL}/agendamentos/${appointmentId}`, {
-            method: 'DELETE',
-            headers: {
-                'Authorization': `Bearer ${localStorage.getItem('token')}`,
-                'Content-Type': 'application/json'
+        
+        // Atualizar avatar do paciente (gera avatar via ui-avatars quando houver nome)
+        const patientAvatar = document.getElementById('patientAvatar');
+        if (patientAvatar) {
+            if (user.name) {
+                const encoded = encodeURIComponent(user.name);
+                patientAvatar.src = `https://ui-avatars.com/api/?name=${encoded}&background=0073e6&color=fff`;
+            } else {
+                patientAvatar.removeAttribute('src');
             }
-        });
-
-        if (response.ok) {
-            await showPopup('Agendamento cancelado com sucesso!');
-            // Recarregar agendamentos
-            await loadPatientAppointments();
-            renderPatientAppointments();
-            updateOverviewCards();
-            renderOverviewAppointments();
-        } else {
-            const errorData = await response.json();
-            await showPopup(`Erro ao cancelar agendamento: ${errorData.message || 'Erro desconhecido'}`);
         }
-    } catch (error) {
-        console.error('Erro ao cancelar agendamento:', error);
-        await showPopup('Erro ao cancelar agendamento. Tente novamente.');
-    }
-}
 
-    populateProfessionalOptions();
-    refreshDashboard();
-});
+        // Atualizar responsável exibido no perfil quando disponível
+        const profilePatientResponsible = document.getElementById('profilePatientResponsible');
+        const responsible = user.responsible || localStorage.getItem('patientResponsible') || '';
+        if (profilePatientResponsible) {
+            profilePatientResponsible.textContent = responsible || '--';
+        }
+    }
+
+    loadPatientData();
+    updateAppointmentsMonthPicker(getCurrentMonthValue());
+    Promise.all([fetchPatientAppointments(), fetchAvailableProfessionals()]).finally(() => {
+        populateProfessionalOptions();
+        refreshDashboard();
+    });
+};
 
 window.openModal = openModal;
 window.closeModal = closeModal;
@@ -1434,3 +1946,4 @@ window.removeGuardian = removeGuardian;
 window.editGuardian = editGuardian;
 window.renderGuardians = renderGuardians;
 window.scrollToSpecialty = scrollToSpecialty;
+window.openRescheduleModal = openRescheduleModal;

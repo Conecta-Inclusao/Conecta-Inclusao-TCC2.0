@@ -1,4 +1,6 @@
 // Importa o framework Express para criar a aplicação web 
+import path from "path";
+import { fileURLToPath } from "url";
 import express from "express"; 
 // Importa o Helmet, que adiciona headers de segurança HTTP à aplicação 
 import helmet from "helmet"; 
@@ -53,6 +55,14 @@ windowMs: 60 * 1000,
 // Permite até 300 requisições por IP a cada 60 segundos 
 limit: 300 
 })); 
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const frontendSrcPath = path.join(__dirname, "../conecta-inclusao-front/src");
+app.use(express.static(frontendSrcPath));
+app.get('/reset-password.html', (req, res) => {
+  res.sendFile(path.join(frontendSrcPath, 'pages', 'reset-password.html'));
+});
 // ============================================ 
 // ROTAS DA API 
 // ============================================ 

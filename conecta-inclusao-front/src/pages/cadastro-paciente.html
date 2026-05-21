@@ -82,9 +82,18 @@
                 <h3 class="section-title">Informações do Responsável</h3>
 
                 <div class="form-group">
-                    <label for="nomeResponsavel">Nome do Responsável <span class="required">*</span></label>
-                    <input type="text" id="nomeResponsavel" name="nomeResponsavel" placeholder="Nome do responsável" required>
+                    <p id="guardianAdvice" class="field-note">Preencha a data de nascimento para verificar se responsável é necessário.</p>
                 </div>
+
+                <div class="form-group" id="guardianSummary" style="display:none;">
+                    <label>Responsável</label>
+                    <div class="guardian-summary-box">
+                        <p id="guardianSummaryText">Nenhum responsável adicionado.</p>
+                        <button type="button" class="btn btn-cancel" id="openGuardianModalButton">Adicionar responsável</button>
+                    </div>
+                </div>
+
+                <input type="hidden" id="nomeResponsavel" name="nomeResponsavel">
 
                 <h3 class="section-title">Acesso</h3>
 
@@ -104,6 +113,40 @@
                     <button type="button" class="btn btn-cancel" onclick="window.history.back()">Cancelar</button>
                 </div>
             </form>
+
+            <div id="guardianModal" class="modal" aria-hidden="true">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <div>
+                            <h3>Cadastrar responsável</h3>
+                            <p>Preencha os dados do responsável do paciente.</p>
+                        </div>
+                        <button type="button" id="closeGuardianModalButton" class="btn btn-cancel modal-close-btn">Fechar</button>
+                    </div>
+                    <form id="guardianModalForm">
+                        <div class="form-group">
+                            <label for="guardianName">Nome completo</label>
+                            <input type="text" id="guardianName" placeholder="Nome do responsável">
+                        </div>
+                        <div class="form-group">
+                            <label for="guardianRelationship">Parentesco</label>
+                            <input type="text" id="guardianRelationship" placeholder="Ex: Mãe, Pai, Tutor">
+                        </div>
+                        <div class="form-group">
+                            <label for="guardianEmail">E-mail</label>
+                            <input type="email" id="guardianEmail" placeholder="email@exemplo.com">
+                        </div>
+                        <div class="form-group">
+                            <label for="guardianPassword">Senha de acesso</label>
+                            <input type="password" id="guardianPassword" placeholder="Senha para acesso">
+                        </div>
+                        <div class="form-actions" style="justify-content:flex-end; gap:12px; margin-top:18px;">
+                            <button type="button" class="btn btn-cancel" id="cancelGuardianButton">Cancelar</button>
+                            <button type="submit" class="btn btn-submit">Salvar responsável</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
         </div>
     </main>
 

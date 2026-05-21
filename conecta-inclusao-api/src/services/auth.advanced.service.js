@@ -97,7 +97,7 @@ function normalizeIdentifierByType(type, identifier) {
 }
 
 function buildResetUrl(token) {
-  const baseUrl = process.env.FRONTEND_BASE_URL || "http://localhost:5500/conecta-inclusao-front/src/pages";
+  const baseUrl = process.env.FRONTEND_BASE_URL || process.env.SMTP_FRONTEND_URL || "http://localhost:3000";
   return `${baseUrl.replace(/\/$/, "")}/reset-password.html?token=${encodeURIComponent(token)}`;
 }
 
@@ -627,18 +627,9 @@ export async function registerUser({ identifier, password, name, profile, userDa
 
     if (profile === "paciente") {
       [result] = await pool.execute(
-        `INSERT INTO pacientes (nome_paciente, cpf, email, nome_responsavel, tipo_deficiencia, plano_atual, data_nascimento, senha, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE')`,
-        [
-          name,
-          identifierInfo.value,
-          userData?.email || null,
-          userData?.nomeResponsavel || null,
-          userData?.tipoDeficiencia || null,
-          userData?.planoAtual || null,
-          userData?.dataNascimento || null,
-          passwordHash
-        ]
+        `INSERT INTO pacientes (nome_paciente, cpf, email, tipo_deficiencia, data_nascimento, senha, status)
+         VALUES (?, ?, ?, ?, ?, ?, 'ACTIVE')`,
+        [name, identifierInfo.value, userData?.email || null, userData?.tipoDeficiencia || null, userData?.dataNascimento || null, passwordHash]
       );
     } else if (profile === "medico") {
       [result] = await pool.execute(
