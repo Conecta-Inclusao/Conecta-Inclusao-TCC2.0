@@ -2,15 +2,20 @@
 CREATE DATABASE IF NOT EXISTS conecta_inclusao;
 USE conecta_inclusao;
 
+CREATE TABLE responsavel (
+   id int primary key AUTO_INCREMENT not null,
+   nome varchar (100) not null, 
+   email varchar (100) not null unique,
+   senha VARCHAR(255) NOT NULL COMMENT 'Hash bcrypt da senha'
+);
+
 -- 2. Tabela de Pacientes (Informações do responsável e PCD)
 CREATE TABLE pacientes (
     id INT AUTO_INCREMENT PRIMARY KEY,
     nome_paciente VARCHAR(100) NOT NULL,
     cpf VARCHAR(14) UNIQUE NOT NULL,
     email VARCHAR(100) UNIQUE,
-    nome_responsavel VARCHAR(100),
     tipo_deficiencia VARCHAR(100),
-    plano_atual VARCHAR(100),
     data_nascimento DATE,
     senha VARCHAR(255) NOT NULL COMMENT 'Hash bcrypt da senha',
     status VARCHAR(20) DEFAULT 'ACTIVE',
@@ -63,7 +68,7 @@ CREATE TABLE medicos (
     password_reset_token VARCHAR(255) NULL,
     password_reset_expires_at DATETIME NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (clinica_id) REFERENCES clinicas(id) ON DELETE SET NULL
+    CONSTRAINT fk_clinica_id FOREIGN KEY (clinica_id) REFERENCES clinicas(id) ON DELETE SET NULL
 );
 
 -- 5. Tabela de Agendamentos (Consultas)
@@ -72,7 +77,7 @@ CREATE TABLE agendamentos (
     clinica_id INT NOT NULL,
     paciente_id INT NOT NULL,
     medico_id INT NOT NULL,
-    data_agendamento DATETIME NOT NULL,
+    data_hora DATETIME NOT NULL,
     status ENUM('pendente', 'confirmado', 'cancelado', 'realizado') DEFAULT 'pendente',
     link_reuniao VARCHAR(255), -- Para a consulta online
     FOREIGN KEY (clinica_id) REFERENCES clinicas(id) ON DELETE CASCADE,
@@ -80,25 +85,7 @@ CREATE TABLE agendamentos (
     FOREIGN KEY (medico_id) REFERENCES medicos(id) ON DELETE CASCADE
 );
 
--- 6. Tabela de Responsáveis e vínculo com pacientes
-CREATE TABLE responsavel (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    nome VARCHAR(100) NOT NULL,
-    email VARCHAR(100) UNIQUE NOT NULL,
-    senha VARCHAR(255) NOT NULL COMMENT 'Hash bcrypt da senha',
-    status VARCHAR(20) DEFAULT 'ACTIVE'
-);
-
-CREATE TABLE paciente_responsavel (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    id_paciente INT NOT NULL,
-    id_responsavel INT NOT NULL,
-    parentesco VARCHAR(100) NOT NULL,
-    FOREIGN KEY (id_paciente) REFERENCES pacientes(id) ON DELETE CASCADE,
-    FOREIGN KEY (id_responsavel) REFERENCES responsavel(id) ON DELETE CASCADE
-);
-
--- 7. Tabela de Relatórios Médicos (Histórico e Registros)
+-- 6. Tabela de Relatórios Médicos (Histórico e Registros)
 CREATE TABLE relatorios (
     id INT AUTO_INCREMENT PRIMARY KEY,
     agendamento_id INT NOT NULL,
@@ -131,3 +118,26 @@ CREATE TABLE mensagens (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (agendamento_id) REFERENCES agendamentos(id) ON DELETE CASCADE
 );
+
+create table paciente_responsavel(
+	id_paciente int not null,
+	id_responsavel int not null,
+    primary key (id_paciente,id_responsavel),
+    FOREIGN KEY (id_paciente) REFERENCES pacientes(id) ON DELETE CASCADE,
+    FOREIGN KEY (id_responsavel) REFERENCES responsavel(id) ON DELETE CASCADE,
+    parentesco varchar (255) 
+    );
+
+ALTER TABLE paciente_responsavel add column created_at DATETIME DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE paciente_responsavel drop column created_at;
+
+ALTER TABLE pacientes
+ADD COLUMN id_responsavel INT,
+ADD CONSTRAINT fk_pacientes_responsavel 
+    FOREIGN KEY (id_responsavel) REFERENCES responsavel(id) 
+    ON DELETE CASCADE;
+
+ALTER TABLE agendamentos
+CHANGE data_hora data_agendamento DATETIME NOT NULL;
+
+select * from responsavel;

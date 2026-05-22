@@ -145,7 +145,7 @@ export async function getUserProfile(user) {
 
     if (user.profile === 'paciente') {
       query = `
-        SELECT p.id, p.nome_paciente AS name, p.email, p.cpf, p.data_nascimento, p.tipo_deficiencia, p.plano_atual, p.nome_responsavel, p.status
+        SELECT p.id, p.nome_paciente AS name, p.email, p.cpf, p.data_nascimento, p.tipo_deficiencia, p.status
         FROM pacientes p
         WHERE p.id = ?
       `;
@@ -626,11 +626,55 @@ export async function registerUser({ identifier, password, name, profile, userDa
     let result;
 
     if (profile === "paciente") {
-      [result] = await pool.execute(
-        `INSERT INTO pacientes (nome_paciente, cpf, email, tipo_deficiencia, data_nascimento, senha, status)
-         VALUES (?, ?, ?, ?, ?, ?, 'ACTIVE')`,
-        [name, identifierInfo.value, userData?.email || null, userData?.tipoDeficiencia || null, userData?.dataNascimento || null, passwordHash]
-      );
+      const connection = await pool.getConnection();
+      try {
+        await connection.beginTransaction();
+
+        let responsavelId = null;
+        if (userData?.responsavel) {
+          const guardianPasswordHash = await bcrypt.hash(String(userData.responsavel.password).trim(), SALT_ROUNDS);
+          const [insertedGuardian] = await connection.execute(
+            `INSERT INTO responsavel (nome, email, senha, status)
+             VALUES (?, ?, ?, 'ACTIVE')`,
+            [
+              userData.responsavel.name,
+              userData.responsavel.email,
+              guardianPasswordHash
+            ]
+          );
+          responsavelId = insertedGuardian.insertId;
+        }
+
+        const [insertedPatient] = await connection.execute(
+          `INSERT INTO pacientes (nome_paciente, cpf, email, tipo_deficiencia, data_nascimento, senha, id_responsavel, status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE')`,
+          [
+            name,
+            identifierInfo.value,
+            userData?.email || null,
+            userData?.tipoDeficiencia || null,
+            userData?.dataNascimento || null,
+            passwordHash,
+            responsavelId
+          ]
+        );
+
+        if (responsavelId) {
+          await connection.execute(
+            `INSERT INTO paciente_responsavel (id_paciente, id_responsavel, parentesco)
+             VALUES (?, ?, ?)`,
+            [insertedPatient.insertId, responsavelId, userData.responsavel.relationship]
+          );
+        }
+
+        await connection.commit();
+        result = insertedPatient;
+      } catch (err) {
+        await connection.rollback();
+        throw err;
+      } finally {
+        connection.release();
+      }
     } else if (profile === "medico") {
       [result] = await pool.execute(
         `INSERT INTO medicos (name, crm, email, especialidade, clinica_id, bio, unidade, senha, status)

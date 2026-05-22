@@ -144,7 +144,6 @@ export async function listAgendamentosByClinica(clinica_id, limit = 10, offset =
                     p.status AS paciente_status,
                     p.data_nascimento AS paciente_data_nascimento,
                     p.tipo_deficiencia AS paciente_tipo_deficiencia,
-                    p.plano_atual AS paciente_plano_atual,
                     m.name AS profissional_nome,
                     m.crm AS profissional_crm
              FROM agendamentos a
@@ -189,7 +188,6 @@ export async function listAgendamentosByProfissional(profissional_id, limit = 10
                     p.status AS paciente_status,
                     p.data_nascimento AS paciente_data_nascimento,
                     p.tipo_deficiencia AS paciente_tipo_deficiencia,
-                    p.plano_atual AS paciente_plano_atual,
                     c.razao_social AS clinica_nome,
                     m.especialidade AS profissional_especialidade
              FROM agendamentos a

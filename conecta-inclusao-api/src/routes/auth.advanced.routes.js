@@ -117,10 +117,9 @@ router.post("/register/patient", registerLimiter, async (req, res, next) => {
       profile: 'paciente',
       userData: {
         email: parsed.data.email,
-        nomeResponsavel: parsed.data.nomeResponsavel,
         tipoDeficiencia: parsed.data.tipoDeficiencia,
-        planoAtual: parsed.data.planoAtual,
-        dataNascimento: parsed.data.dataNascimento
+        dataNascimento: parsed.data.dataNascimento,
+        responsavel: parsed.data.responsavel
       }
     });
 
@@ -660,6 +659,11 @@ router.post("/patient/guardians", authenticateToken, async (req, res, next) => {
       await conn.execute(
         `INSERT INTO paciente_responsavel (id_paciente, id_responsavel, parentesco) VALUES (?, ?, ?)`,
         [pacienteId, responsavelId, relationship]
+      );
+
+      await conn.execute(
+        `UPDATE pacientes SET id_responsavel = ? WHERE id = ?`,
+        [responsavelId, pacienteId]
       );
 
       await conn.commit();

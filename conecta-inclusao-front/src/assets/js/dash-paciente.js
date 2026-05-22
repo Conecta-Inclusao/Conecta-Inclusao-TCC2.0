@@ -23,6 +23,85 @@ let patientAppointments = [];
 let patientAppointmentsLoaded = false;
 let availableProfessionals = [];
 let appointmentsMonthFilter = '';
+let user = null;
+
+async function loadUserInfo() {
+    const profileResult = await getUserProfile();
+    if (profileResult.ok && profileResult.data) {
+        user = profileResult.data;
+        if (user.id) {
+            localStorage.setItem('patientId', String(user.id));
+        }
+    } else {
+        console.error('Falha ao carregar perfil do paciente:', profileResult);
+        user = {};
+    }
+
+    const patientId = user?.id || localStorage.getItem('patientId');
+    if (patientId) {
+        const appointmentsResult = await getPatientAppointments(patientId);
+        if (appointmentsResult.ok && Array.isArray(appointmentsResult.data)) {
+            patientAppointments = appointmentsResult.data;
+        } else {
+            console.error('Falha ao carregar agendamentos do paciente:', appointmentsResult);
+            patientAppointments = [];
+        }
+        patientAppointmentsLoaded = true;
+    }
+
+    await fetchAvailableProfessionals();
+    renderGuardians();
+    loadPatientData();
+    refreshDashboard();
+}
+
+function loadPatientData() {
+    const patientHeaderName = document.getElementById('patientHeaderName');
+    const patientHeaderSubtitle = document.getElementById('patientHeaderSubtitle');
+    const profilePatientName = document.getElementById('profilePatientName');
+    const profilePatientCPF = document.getElementById('profilePatientCPF');
+    const profileBirthDate = document.getElementById('profileBirthDate');
+    const profilePatientResponsible = document.getElementById('profilePatientResponsible');
+    const profileDisabilityType = document.getElementById('profileDisabilityType');
+    const profilePlan = document.getElementById('profilePlan');
+    const profilePreferredUnit = document.getElementById('profilePreferredUnit');
+
+    const name = user?.name || 'Paciente';
+    const cpf = user?.cpf || '--';
+    const birthDate = user?.data_nascimento ? formatDate(user.data_nascimento) : '--';
+    const responsible = user?.responsible || localStorage.getItem('patientResponsible') || '--';
+    const disabilityType = user?.tipo_deficiencia || '--';
+    const plan = user?.plan || '--';
+    const preferredUnit = user?.unidade || user?.unit || '--';
+
+    if (patientHeaderName) {
+        patientHeaderName.textContent = name;
+    }
+    if (patientHeaderSubtitle) {
+        patientHeaderSubtitle.textContent = `Olá, ${name}`;
+    }
+    if (profilePatientName) {
+        profilePatientName.textContent = name;
+    }
+    if (profilePatientCPF) {
+        profilePatientCPF.textContent = cpf;
+    }
+    if (profileBirthDate) {
+        profileBirthDate.textContent = birthDate;
+    }
+    if (profilePatientResponsible) {
+        profilePatientResponsible.textContent = responsible;
+    }
+    if (profileDisabilityType) {
+        profileDisabilityType.textContent = disabilityType;
+    }
+    if (profilePlan) {
+        profilePlan.textContent = plan;
+    }
+    if (profilePreferredUnit) {
+        profilePreferredUnit.textContent = preferredUnit;
+    }
+}
 
 function getCurrentMonthValue() {
     const now = new Date();
@@ -340,7 +419,7 @@ function renderSuggestions() {
     const suggestionGrid = document.getElementById('suggestionGrid');
     if (!suggestionGrid) return;
 
-    const professionals = availableDoctors;
+    const professionals = availableProfessionals;
     const specialtiesMap = new Map();
 
     // Agrupar profissionais por especialidade
@@ -393,7 +472,7 @@ function scrollToSpecialty(specialty) {
     const select = document.getElementById('modalProfessional');
     if (select) {
         // Encontrar a opção correspondente
-        const professionals = availableDoctors;
+        const professionals = availableProfessionals;
         const prof = professionals.find(p => p.especialidade === specialty);
         if (prof) {
             select.value = prof.id;
@@ -607,7 +686,7 @@ function populateProfessionalOptions() {
     const professionalSelect = document.getElementById('modalProfessional');
     if (!professionalSelect) return;
 
-    const professionals = availableDoctors;
+const professionals = availableProfessionals;
     const currentValue = professionalSelect.value;
 
     professionalSelect.innerHTML = '<option value="">Selecione um profissional...</option>';
@@ -641,7 +720,7 @@ function populateSearchFilters() {
     const unitSelect = document.getElementById('searchHospital');
     if (!specialtySelect || !unitSelect) return;
 
-    const professionals = availableDoctors;
+    const professionals = availableProfessionals;
     const specialties = Array.from(new Set(professionals.map(professional => professional.especialidade).filter(Boolean))).sort();
     const units = Array.from(new Set(professionals.map(professional => professional.unidade).filter(Boolean))).sort();
 
@@ -795,7 +874,7 @@ function buildAiReply(contact, userMessage) {
 }
 
 function handleChatbotScheduling(userMessage) {
-    const professionals = availableDoctors;
+    const professionals = availableProfessionals;
     const normalizedMessage = normalizeText(userMessage);
 
     if (!chatbotScheduleDraft && !isScheduleIntent(userMessage)) {
@@ -866,7 +945,7 @@ function handleChatbotScheduling(userMessage) {
 function buildChatbotReply(userMessage) {
     const normalizedMessage = normalizeText(userMessage);
     const appointments = getAppointmentData();
-    const professionals = availableDoctors;
+    const professionals = availableProfessionals;
 
     const schedulingReply = handleChatbotScheduling(userMessage);
     if (schedulingReply) {
@@ -1653,6 +1732,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const professionalId = document.getElementById('modalProfessional')?.value;
             const specialty = document.getElementById('modalSpec')?.value;
             const unit = document.getElementById('modalUnit')?.value;
+            const time = document.getElementById('modalTime')?.value;
             const selectedProfessional = getProfessionalByRegistry(professionalId);
             const professionalCrm = String(selectedProfessional?.registry || '').trim();
 

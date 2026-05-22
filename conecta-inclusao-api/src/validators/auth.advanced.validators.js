@@ -82,10 +82,13 @@ export const registerPatientSchema = z.object({
     .string()
     .email("Email inválido")
     .optional(),
-  nomeResponsavel: z
-    .string()
-    .trim()
-    .max(100)
+  responsavel: z
+    .object({
+      name: z.string().trim().min(3, "Nome do responsável muito curto").max(100),
+      relationship: z.string().trim().min(2, "Parentesco muito curto").max(100),
+      email: z.string().email("Email inválido"),
+      password: strongPasswordSchema
+    })
     .optional(),
   tipoDeficiencia: z
     .string()
@@ -98,11 +101,6 @@ export const registerPatientSchema = z.object({
       (date) => !isNaN(Date.parse(date)),
       "Data inválida"
     )
-    .optional(),
-  planoAtual: z
-    .string()
-    .trim()
-    .max(100, "Plano atual muito longo")
     .optional()
 });
 
