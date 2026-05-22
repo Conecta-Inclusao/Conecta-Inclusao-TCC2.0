@@ -427,11 +427,215 @@ if (document.readyState === 'loading') {
         setupPasswordVisibilityToggles();
         setupProtectedPasswordInputs();
         setupPasswordRuleFeedback();
+        initializeDebugPanel();
     });
 } else {
     setupPasswordVisibilityToggles();
     setupProtectedPasswordInputs();
     setupPasswordRuleFeedback();
+    initializeDebugPanel();
+}
+
+function formatDebugString(value, maxLength = 120) {
+    if (value === null || value === undefined) {
+        return String(value);
+    }
+    const text = String(value);
+    return text.length > maxLength ? `${text.slice(0, maxLength)}…` : text;
+}
+
+function createDebugPanelEntry(label, value) {
+    const row = document.createElement('div');
+    row.className = 'debug-entry';
+
+    const labelEl = document.createElement('span');
+    labelEl.className = 'debug-entry-label';
+    labelEl.textContent = label;
+
+    const valueEl = document.createElement('pre');
+    valueEl.className = 'debug-entry-value';
+    valueEl.textContent = formatDebugString(value, 1000);
+
+    row.appendChild(labelEl);
+    row.appendChild(valueEl);
+    return row;
+}
+
+function buildDebugPanelContent() {
+    const content = document.createElement('div');
+    content.className = 'debug-panel-content';
+
+    const title = document.createElement('h4');
+    title.textContent = 'Debug';
+    content.appendChild(title);
+
+    const pageInfo = document.createElement('div');
+    pageInfo.className = 'debug-section';
+    pageInfo.appendChild(createDebugPanelEntry('Página', document.title || document.location.pathname));
+    pageInfo.appendChild(createDebugPanelEntry('URL', window.location.href));
+    pageInfo.appendChild(createDebugPanelEntry('Host', window.location.host));
+    content.appendChild(pageInfo);
+
+    const storageSection = document.createElement('div');
+    storageSection.className = 'debug-section';
+    const storageTitle = document.createElement('strong');
+    storageTitle.textContent = 'LocalStorage';
+    storageSection.appendChild(storageTitle);
+
+    if (localStorage.length === 0) {
+        storageSection.appendChild(createDebugPanelEntry('LocalStorage', 'vazio'));
+    } else {
+        for (let i = 0; i < localStorage.length; i += 1) {
+            const key = localStorage.key(i);
+            storageSection.appendChild(createDebugPanelEntry(key, localStorage.getItem(key)));
+        }
+    }
+    content.appendChild(storageSection);
+
+    const sessionSection = document.createElement('div');
+    sessionSection.className = 'debug-section';
+    const sessionTitle = document.createElement('strong');
+    sessionTitle.textContent = 'SessionStorage';
+    sessionSection.appendChild(sessionTitle);
+
+    if (sessionStorage.length === 0) {
+        sessionSection.appendChild(createDebugPanelEntry('SessionStorage', 'vazio'));
+    } else {
+        for (let i = 0; i < sessionStorage.length; i += 1) {
+            const key = sessionStorage.key(i);
+            sessionSection.appendChild(createDebugPanelEntry(key, sessionStorage.getItem(key)));
+        }
+    }
+    content.appendChild(sessionSection);
+
+    return content;
+}
+
+function initializeDebugPanel() {
+    if (document.getElementById('debugPanelWrapper')) {
+        return;
+    }
+
+    const wrapper = document.createElement('div');
+    wrapper.id = 'debugPanelWrapper';
+    wrapper.className = 'debug-panel-wrapper';
+
+    const button = document.createElement('button');
+    button.id = 'debugPanelToggle';
+    button.type = 'button';
+    button.textContent = 'DEBUG';
+    button.title = 'Abrir painel de debug';
+    button.className = 'debug-panel-toggle';
+    wrapper.appendChild(button);
+
+    const panel = document.createElement('div');
+    panel.id = 'debugPanel';
+    panel.className = 'debug-panel';
+    panel.appendChild(buildDebugPanelContent());
+    wrapper.appendChild(panel);
+
+    const closeButton = document.createElement('button');
+    closeButton.type = 'button';
+    closeButton.className = 'debug-panel-close';
+    closeButton.textContent = '×';
+    panel.insertBefore(closeButton, panel.firstChild);
+
+    button.addEventListener('click', () => {
+        panel.classList.toggle('debug-panel-visible');
+    });
+
+    closeButton.addEventListener('click', () => {
+        panel.classList.remove('debug-panel-visible');
+    });
+
+    document.body.appendChild(wrapper);
+    appendDebugPanelStyles();
+}
+
+function appendDebugPanelStyles() {
+    if (document.getElementById('debugPanelStyles')) return;
+
+    const style = document.createElement('style');
+    style.id = 'debugPanelStyles';
+    style.textContent = `
+        .debug-panel-wrapper {
+            position: fixed;
+            right: 1rem;
+            bottom: 1rem;
+            z-index: 6000;
+            font-family: Arial, sans-serif;
+        }
+        .debug-panel-toggle {
+            border: none;
+            background: #111827;
+            color: #fff;
+            padding: 0.6rem 1rem;
+            border-radius: 999px;
+            cursor: pointer;
+            box-shadow: 0 12px 24px rgba(0,0,0,0.18);
+            letter-spacing: 0.04em;
+            font-weight: 700;
+        }
+        .debug-panel {
+            display: none;
+            width: min(420px, calc(100vw - 2rem));
+            max-height: min(70vh, 520px);
+            overflow: auto;
+            margin-top: 0.75rem;
+            border-radius: 1rem;
+            background: rgba(15, 23, 42, 0.96);
+            color: #f8fafc;
+            box-shadow: 0 30px 60px rgba(15,23,42,0.35);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.08);
+            padding: 1rem;
+            position: relative;
+        }
+        .debug-panel-visible {
+            display: block;
+        }
+        .debug-panel h4 {
+            margin: 0 0 0.75rem;
+            font-size: 1rem;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            color: #60a5fa;
+        }
+        .debug-panel-close {
+            position: absolute;
+            right: 0.75rem;
+            top: 0.75rem;
+            border: none;
+            background: transparent;
+            color: #f8fafc;
+            font-size: 1.2rem;
+            cursor: pointer;
+        }
+        .debug-section {
+            margin-bottom: 0.85rem;
+            padding: 0.75rem 0.75rem 0.5rem;
+            background: rgba(255,255,255,0.04);
+            border-radius: 0.75rem;
+        }
+        .debug-entry {
+            margin-bottom: 0.55rem;
+        }
+        .debug-entry-label {
+            display: block;
+            font-size: 0.72rem;
+            color: #93c5fd;
+            margin-bottom: 0.35rem;
+        }
+        .debug-entry-value {
+            margin: 0;
+            white-space: pre-wrap;
+            word-break: break-word;
+            font-size: 0.78rem;
+            line-height: 1.35;
+            color: #e2e8f0;
+        }
+    `;
+    document.head.appendChild(style);
 }
 
 // Função para validar CPF

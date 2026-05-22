@@ -173,7 +173,9 @@ async function fetchAvailableProfessionals() {
             name: professional.name || '',
             registry: professional.crm || '',
             role: professional.especialidade || professional.role || '',
+            especialidade: professional.especialidade || professional.role || '',
             unit: professional.unidade || professional.unit || '',
+            unidade: professional.unidade || professional.unit || '',
             status: professional.status || '',
             bio: professional.bio || ''
         })) : [];
@@ -661,8 +663,8 @@ function updateSelectedProfessionalDetails() {
 
     const selectedProfessional = getProfessionalByRegistry(professionalSelect.value);
 
-    specialtyInput.value = selectedProfessional?.especialidade || '';
-    unitInput.value = selectedProfessional?.unidade || '';
+    specialtyInput.value = selectedProfessional?.role || selectedProfessional?.especialidade || '';
+    unitInput.value = selectedProfessional?.unit || selectedProfessional?.unidade || '';
 }
 
 function getTodayInputValue() {
@@ -686,7 +688,7 @@ function populateProfessionalOptions() {
     const professionalSelect = document.getElementById('modalProfessional');
     if (!professionalSelect) return;
 
-const professionals = availableProfessionals;
+    const professionals = loadRegisteredProfessionals();
     const currentValue = professionalSelect.value;
 
     professionalSelect.innerHTML = '<option value="">Selecione um profissional...</option>';
@@ -704,7 +706,7 @@ const professionals = availableProfessionals;
     professionals.forEach(professional => {
         const option = document.createElement('option');
         option.value = professional.id;
-        option.textContent = `${professional.name} - ${professional.role}`;
+        option.textContent = professional.name;
         professionalSelect.appendChild(option);
     });
 
