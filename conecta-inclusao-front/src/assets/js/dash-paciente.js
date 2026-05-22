@@ -1643,6 +1643,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             updateAppointmentsMonthPicker(event.target.value);
         });
     }
+});
 
     const appointmentForm = document.getElementById('formNewAppointment');
     if (appointmentForm) {
@@ -1932,7 +1933,7 @@ function renderAppointmentsState() {
         populateProfessionalOptions();
         refreshDashboard();
     });
-};
+}
 
 window.openModal = openModal;
 window.closeModal = closeModal;
