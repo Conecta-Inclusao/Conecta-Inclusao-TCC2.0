@@ -141,3 +141,6 @@ ALTER TABLE agendamentos
 CHANGE data_hora data_agendamento DATETIME NOT NULL;
 
 select * from responsavel;
+
+ALTER TABLE agendamentos
+DROP COLUMN link_reuniao;

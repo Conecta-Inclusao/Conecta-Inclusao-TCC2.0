@@ -61,6 +61,22 @@ function formatCnpjDisplay(value) {
     return v;
 }
 
+function getLastRegisteredCnpj() {
+    const storedDigits = localStorage.getItem('lastRegisteredCNPJ') || '';
+    const storedDisplay = localStorage.getItem('lastCNPJ') || '';
+    return formatCnpjDigits(storedDigits || storedDisplay);
+}
+
+function fillLastRegisteredCnpj() {
+    const cnpjInput = document.getElementById('cnpj');
+    if (!cnpjInput || cnpjInput.value.trim()) return;
+
+    const cnpjDigits = getLastRegisteredCnpj();
+    if (cnpjDigits.length === 14) {
+        cnpjInput.value = formatCnpjDisplay(cnpjDigits);
+    }
+}
+
 async function loginEmpresaAPI(identifier, password) {
     try {
         const response = await fetch('http://localhost:3000/auth/login/universal', {
@@ -108,6 +124,8 @@ document.addEventListener('DOMContentLoaded', function() {
 document.addEventListener('DOMContentLoaded', function() {
     const cnpjInput = document.getElementById('cnpj');
     if (cnpjInput) {
+        fillLastRegisteredCnpj();
+
         cnpjInput.addEventListener('input', function(e) {
             let v = e.target.value.replace(/\D/g, "");
             if (v.length > 14) v = v.slice(0, 14);

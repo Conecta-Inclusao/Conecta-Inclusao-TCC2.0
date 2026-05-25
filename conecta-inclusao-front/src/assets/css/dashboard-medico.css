@@ -223,6 +223,11 @@ body {
     cursor: not-allowed;
 }
 
+.action-unavailable {
+    color: #64748b;
+    font-size: 0.85rem;
+}
+
 /* Responsividade */
 @media (max-width: 1024px) {
     .sidebar {

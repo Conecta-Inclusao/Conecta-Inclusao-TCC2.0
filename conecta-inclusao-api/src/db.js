@@ -25,5 +25,7 @@ database: process.env.DB_NAME,
 waitForConnections: true, 
 // Número máximo de conexões simultâneas que o pool pode manter 
 // Valor 10 significa até 10 conexões abertas simultaneamente 
-connectionLimit: 10 
+connectionLimit: 10,
+// Mantem DATETIME como texto para evitar conversao de fuso horario no JSON.
+dateStrings: true
 });

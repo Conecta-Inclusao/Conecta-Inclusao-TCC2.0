@@ -1,4 +1,4 @@
-import { getUserProfile, getPatientAppointments, getAvailableDoctors } from './api.js';
+import { getUserProfile, getAvailableDoctors } from './api.js';
 
 const PROFESSIONALS_STORAGE_KEY = 'companyProfessionals';
 const PATIENT_MESSAGES_STORAGE_KEY = 'patientProfessionalMessages';
@@ -37,17 +37,7 @@ async function loadUserInfo() {
         user = {};
     }
 
-    const patientId = user?.id || localStorage.getItem('patientId');
-    if (patientId) {
-        const appointmentsResult = await getPatientAppointments(patientId);
-        if (appointmentsResult.ok && Array.isArray(appointmentsResult.data)) {
-            patientAppointments = appointmentsResult.data;
-        } else {
-            console.error('Falha ao carregar agendamentos do paciente:', appointmentsResult);
-            patientAppointments = [];
-        }
-        patientAppointmentsLoaded = true;
-    }
+    await fetchPatientAppointments();
 
     await fetchAvailableProfessionals();
     renderGuardians();
@@ -106,6 +96,12 @@ function loadPatientData() {
 function getCurrentMonthValue() {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function getDefaultAppointmentsMonth() {
+    const appointments = getAppointmentData();
+    const nextAppointment = appointments.find(appointment => appointment.date);
+    return nextAppointment?.date ? String(nextAppointment.date).slice(0, 7) : getCurrentMonthValue();
 }
 
 function formatMonthLabel(monthValue) {
@@ -214,14 +210,19 @@ async function fetchPatientAppointments() {
             return [];
         }
 
-        patientAppointments = Array.isArray(data) ? data.map(appointment => ({
-            id: appointment.id || `local-${Date.now()}`,
-            specialty: appointment.specialty || appointment.especialty || '',
-            doctor: appointment.doctorName || appointment.name || '',
-            hospital: appointment.unit || appointment.clinicName || '',
-            date: appointment.appointmentDate || appointment.data_agendamento || appointment.date || '',
-            status: appointment.status || ''
-        })) : [];
+        patientAppointments = Array.isArray(data) ? data.map(appointment => {
+            const appointmentDate = appointment.appointmentDate || appointment.data_agendamento || appointment.date || '';
+            const appointmentTime = appointment.appointmentTime || appointment.hora_agendamento || '';
+
+            return {
+                id: appointment.id || `local-${Date.now()}`,
+                specialty: appointment.specialty || appointment.especialty || '',
+                doctor: appointment.doctorName || appointment.name || '',
+                hospital: appointment.unit || appointment.clinicName || '',
+                date: mergeAppointmentDateAndTime(appointmentDate, appointmentTime),
+                status: appointment.status || ''
+            };
+        }) : [];
         patientAppointmentsLoaded = true;
         return patientAppointments;
     } catch (error) {
@@ -523,6 +524,20 @@ function switchTab(tabKey) {
     buttons.forEach(button => button.classList.toggle('active', button.dataset.tab === tabKey));
 }
 
+async function openAppointmentsTab({ resetMonth = false } = {}) {
+    switchTab('appointments');
+    await fetchPatientAppointments();
+
+    if (resetMonth || !appointmentsMonthFilter) {
+        updateAppointmentsMonthPicker(getDefaultAppointmentsMonth());
+    } else {
+        renderAppointmentsList();
+    }
+
+    updateOverviewCards();
+    renderOverviewAppointments();
+}
+
 function parseAppointmentDate(dateString) {
     if (!dateString) {
         return new Date(NaN);
@@ -565,6 +580,20 @@ function getAppointmentTime(dateString) {
     const parts = str.split(' ');
     if (parts.length > 1 && parts[1].match(/\d{2}:\d{2}/)) return parts[1].slice(0,5);
     return '--:--';
+}
+
+function buildAppointmentDateTime(date, time) {
+    if (!date || !time) return '';
+    return `${date} ${String(time).slice(0, 5)}:00`;
+}
+
+function mergeAppointmentDateAndTime(dateValue, timeValue) {
+    if (!dateValue) return '';
+
+    const datePart = String(dateValue).split(/[T ]/)[0];
+    if (!timeValue) return String(dateValue);
+
+    return `${datePart} ${String(timeValue).slice(0, 5)}:00`;
 }
 
 function formatProfessionalListForChat(professionals) {
@@ -673,13 +702,26 @@ function getTodayInputValue() {
     return `${year}-${month}-${day}`;
 }
 
-function isPastDate(dateValue) {
-    if (!dateValue) return false;
-    const selectedDate = new Date(dateValue);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    selectedDate.setHours(0, 0, 0, 0);
-    return selectedDate < today;
+function parseLocalDateTimeInput(dateValue, timeValue = '00:00') {
+    if (!dateValue) return new Date(NaN);
+
+    const [year, month, day] = String(dateValue).split('-').map(Number);
+    const [hour = 0, minute = 0] = String(timeValue || '00:00').split(':').map(Number);
+
+    return new Date(year, month - 1, day, hour, minute, 0, 0);
+}
+
+function isPastAppointmentDateTime(dateValue, timeValue) {
+    const selectedDateTime = parseLocalDateTimeInput(dateValue, timeValue);
+    if (Number.isNaN(selectedDateTime.getTime())) return false;
+
+    return selectedDateTime < new Date();
+}
+
+function isValidThirtyMinuteSlot(timeValue) {
+    if (!timeValue) return false;
+    const [, minute = 0] = String(timeValue).split(':').map(Number);
+    return minute === 0 || minute === 30;
 }
 
 function populateProfessionalOptions() {
@@ -752,7 +794,7 @@ function getAppointmentData() {
 }
 
 function getPatientName() {
-    return userProfile ? userProfile.name : 'Paciente';
+    return user?.name || 'Paciente';
 }
 
 function loadStoredConversations() {
@@ -1278,6 +1320,7 @@ function openRescheduleModal(appointmentId) {
     document.getElementById('modalSpec').value = appointment?.specialty || '';
     document.getElementById('modalUnit').value = appointment?.hospital || '';
     document.getElementById('modalDate').value = appointment?.date ? String(appointment.date).slice(0,10) : '';
+    document.getElementById('modalTime').value = appointment?.date ? getAppointmentTime(appointment.date) : '';
     // Reset profissional para permitir trocar se desejar
     document.getElementById('modalProfessional').value = '';
 
@@ -1297,21 +1340,9 @@ function renderAppointmentsList() {
     list.innerHTML = '';
     const appointments = applyAppointmentsMonthFilter(getAppointmentData());
 
-    if (!appointments.length) {
-        const monthLabel = appointmentsMonthFilter ? formatMonthLabel(appointmentsMonthFilter) : 'mês selecionado';
-        const message = document.createElement('div');
-        message.className = 'empty-state';
-        message.innerHTML = `
-            <i class="ph ph-calendar-x"></i>
-            <p>Voce nao possui consultas agendadas para ${escapeHTML(monthLabel)}.</p>
-        `;
-        list.appendChild(message);
-        return;
-    }
-
     // Group appointments by ISO date key YYYY-MM-DD
     const groupedAppointments = appointments.reduce((groups, appointment) => {
-        const dateKey = String(appointment.date || '').split('T')[0] || 'unknown';
+        const dateKey = String(appointment.date || '').split(/[T ]/)[0] || 'unknown';
         if (!groups[dateKey]) groups[dateKey] = [];
         groups[dateKey].push(appointment);
         return groups;
@@ -1412,6 +1443,17 @@ function renderAppointmentsList() {
     dayColumn.appendChild(monthCalendar);
 
     list.appendChild(dayColumn);
+
+    if (!appointments.length) {
+        const monthLabel = appointmentsMonthFilter ? formatMonthLabel(appointmentsMonthFilter) : 'mês selecionado';
+        const message = document.createElement('div');
+        message.className = 'empty-state';
+        message.innerHTML = `
+            <i class="ph ph-calendar-x"></i>
+            <p>Voce nao possui consultas agendadas para ${escapeHTML(monthLabel)}.</p>
+        `;
+        list.appendChild(message);
+    }
 }
 
 function showAppointmentDetail(appointment) {
@@ -1581,7 +1623,7 @@ function addAppointmentToDashboard(selectedProfessional, date) {
     }
 
     refreshDashboard();
-    switchTab('appointments');
+    openAppointmentsTab({ resetMonth: true });
     return true;
 }
 
@@ -1694,7 +1736,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadUserInfo();
     const navButtons = document.querySelectorAll('.nav-link');
     navButtons.forEach(button => {
-        button.addEventListener('click', () => switchTab(button.dataset.tab));
+        button.addEventListener('click', () => {
+            if (button.dataset.tab === 'appointments') {
+                openAppointmentsTab({ resetMonth: true });
+                return;
+            }
+
+            switchTab(button.dataset.tab);
+        });
     });
 
     const overviewButton = document.getElementById('btnOverviewNewAppointment');
@@ -1704,7 +1753,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const appointmentsButton = document.getElementById('btnGoAppointments');
     if (appointmentsButton) {
-        appointmentsButton.addEventListener('click', () => switchTab('appointments'));
+        appointmentsButton.addEventListener('click', () => openAppointmentsTab({ resetMonth: true }));
     }
 
     const appointmentsPrevMonth = document.getElementById('appointmentsPrevMonth');
@@ -1733,16 +1782,22 @@ document.addEventListener('DOMContentLoaded', async () => {
             const specialty = document.getElementById('modalSpec')?.value;
             const unit = document.getElementById('modalUnit')?.value;
             const time = document.getElementById('modalTime')?.value;
+            const appointmentDateTime = buildAppointmentDateTime(date, time);
             const selectedProfessional = getProfessionalByRegistry(professionalId);
             const professionalCrm = String(selectedProfessional?.registry || '').trim();
 
-            if (isPastDate(date)) {
-                await showPopup('Não é possível agendar ou remarcar para uma data no passado. Escolha uma data atual ou futura.');
+            if (!date || !time) {
+                await showPopup('Informe a data e o horário do agendamento.');
                 return;
             }
 
-            if (!date || !time) {
-                await showPopup('Informe a data e o horário do agendamento.');
+            if (!isValidThirtyMinuteSlot(time)) {
+                await showPopup('Escolha um horário em intervalos de 30 minutos, como 16:00 ou 16:30.');
+                return;
+            }
+
+            if (isPastAppointmentDateTime(date, time)) {
+                await showPopup('Não é possível agendar ou remarcar para uma data ou horário no passado. Escolha um horário atual ou futuro.');
                 return;
             }
 
@@ -1758,7 +1813,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (editId) {
                     // Remarcar (atualizar) um agendamento existente
                     const url = `http://localhost:3000/auth/patient/appointments/${encodeURIComponent(editId)}`;
-                    const bodyData = { date };
+                    const bodyData = { date: appointmentDateTime, time };
                     if (professionalCrm) bodyData.med_crm = professionalCrm;
 
                     const resp = await fetch(url, {
@@ -1781,7 +1836,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         specialty,
                         doctor: selectedProfessional?.name || 'Profissional',
                         hospital: unit,
-                        date,
+                        date: appointmentDateTime,
                         status: 'pendente'
                     };
 
@@ -1798,7 +1853,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     updateSelectedProfessionalDetails();
                     closeModal();
                     refreshDashboard();
-                    await showPopup(`Remarcacao realizada para ${formatDate(updated.date)}.`);
+                    await showPopup(`Remarcacao realizada para ${formatDate(updated.date)} as ${getAppointmentTime(updated.date)}.`);
                 } else {
                     // Criar novo agendamento
                     if (!selectedProfessional) {
@@ -1812,7 +1867,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                             'Content-Type': 'application/json',
                             'Authorization': `Bearer ${token}`
                         },
-                        body: JSON.stringify({ med_crm: professionalCrm, date })
+                        body: JSON.stringify({ med_crm: professionalCrm, date: appointmentDateTime, time })
                     });
 
                     const body = await resp.json();
@@ -1827,7 +1882,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         specialty: body.specialty || body.especialty || specialty,
                         doctor: body.doctorName || selectedProfessional.name,
                         hospital: body.unit || body.clinicName || unit,
-                        date: body.appointmentDate || date,
+                        date: body.appointmentDate || appointmentDateTime,
                         status: body.status || 'pendente'
                     };
 
@@ -1836,7 +1891,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     updateSelectedProfessionalDetails();
                     closeModal();
                     refreshDashboard();
-                    await showPopup(`Sucesso! Consulta com ${created.doctor} agendada para ${formatDate(created.date)}.`);
+                    await showPopup(`Sucesso! Consulta com ${created.doctor} agendada para ${formatDate(created.date)} as ${getAppointmentTime(created.date)}.`);
                 }
             } catch (err) {
                 console.error('Erro ao criar/remarcar agendamento:', err);
@@ -2008,8 +2063,8 @@ function renderAppointmentsState() {
     }
 
     loadPatientData();
-    updateAppointmentsMonthPicker(getCurrentMonthValue());
     Promise.all([fetchPatientAppointments(), fetchAvailableProfessionals()]).finally(() => {
+        updateAppointmentsMonthPicker(getDefaultAppointmentsMonth());
         populateProfessionalOptions();
         refreshDashboard();
     });

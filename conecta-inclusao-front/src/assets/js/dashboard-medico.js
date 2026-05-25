@@ -340,7 +340,7 @@ function updateSidebarActive(element) {
 
 function isSameDay(dateString, referenceDate = new Date()) {
     if (!dateString) return false;
-    const date = new Date(dateString);
+    const date = new Date(String(dateString).replace(' ', 'T'));
     return !Number.isNaN(date.getTime()) &&
         date.getFullYear() === referenceDate.getFullYear() &&
         date.getMonth() === referenceDate.getMonth() &&
@@ -429,7 +429,7 @@ async function loadAgendaData() {
             markDashboardStatsUnavailable('Dados do profissional nao carregados.');
             agendaContent.innerHTML = `
                 <tr>
-                    <td colspan="5" style="text-align: center; padding: 20px; color: #64748b;">
+                    <td colspan="6" style="text-align: center; padding: 20px; color: #64748b;">
                         Dados do profissional não carregados
                     </td>
                 </tr>
@@ -442,7 +442,7 @@ async function loadAgendaData() {
         console.log('Resposta de agendamentos:', appointmentsResponse);
 
         if (appointmentsResponse.ok && appointmentsResponse.data) {
-            const appointments = getResponseList(appointmentsResponse.data);
+            const appointments = getUniqueAppointments(getResponseList(appointmentsResponse.data));
             appointmentsData = appointments;
             updateDashboardStats(appointments);
 
@@ -454,7 +454,7 @@ async function loadAgendaData() {
             if (appointments.length === 0) {
                 agendaContent.innerHTML = `
                     <tr>
-                        <td colspan="5" style="text-align: center; padding: 20px; color: #64748b;">
+                        <td colspan="6" style="text-align: center; padding: 20px; color: #64748b;">
                             Por enquanto não há nenhum agendamento cadastrado.
                         </td>
                     </tr>
@@ -463,16 +463,36 @@ async function loadAgendaData() {
             }
 
             // Popular tabela com dados reais
-            agendaContent.innerHTML = appointments.map(appointment => {
+            const sortedAppointments = appointments.slice().sort((first, second) => {
+                const firstDone = String(first.status || '').toLowerCase() === 'realizado';
+                const secondDone = String(second.status || '').toLowerCase() === 'realizado';
+
+                if (firstDone !== secondDone) return firstDone ? 1 : -1;
+
+                return parseAppointmentDateTimeValue(first) - parseAppointmentDateTimeValue(second);
+            });
+
+            agendaContent.innerHTML = sortedAppointments.map(appointment => {
                 const patientName = appointment.nome_paciente || appointment.paciente_nome || 'Paciente nao informado';
-                const appointmentTime = appointment.hora_agendamento || formatDateTime(appointment.data_agendamento) || '--';
+                const appointmentDate = formatAppointmentDate(appointment);
+                const appointmentTime = formatAppointmentTime(appointment);
                 const appointmentType = appointment.tipo_consulta || appointment.profissional_especialidade || 'Nao informado';
                 const appointmentStatus = appointment.status || 'Nao informado';
+                const statusLower = String(appointmentStatus).toLowerCase();
+                const isAppointmentToday = isSameDay(getAppointmentDateValue(appointment));
                 const action = getAppointmentAction(appointmentStatus);
+                const actionContent = statusLower === 'realizado'
+                    ? '<span class="action-unavailable">Consulta realizada, ações bloqueadas</span>'
+                    : isAppointmentToday
+                    ? `<button class="btn-action" type="button" data-appointment-id="${escapeHtml(appointment.id)}" data-patient-name="${escapeHtml(patientName)}" data-next-status="${escapeHtml(action.nextStatus || '')}" ${action.disabled ? 'disabled' : ''}>
+                            ${escapeHtml(action.label)}
+                        </button>`
+                    : `<span class="action-unavailable">Disponivel no dia da consulta: ${escapeHtml(appointmentDate)} as ${escapeHtml(appointmentTime)}</span>`;
 
                 return `
                 <tr>
                     <td class="patient-td"><strong>${escapeHtml(patientName)}</strong></td>
+                    <td>${escapeHtml(appointmentDate)}</td>
                     <td>${escapeHtml(appointmentTime)}</td>
                     <td>${escapeHtml(appointmentType)}</td>
                     <td>
@@ -481,9 +501,7 @@ async function loadAgendaData() {
                         </span>
                     </td>
                     <td>
-                        <button class="btn-action" type="button" data-appointment-id="${escapeHtml(appointment.id)}" data-patient-name="${escapeHtml(patientName)}" data-next-status="${escapeHtml(action.nextStatus || '')}" ${action.disabled ? 'disabled' : ''}>
-                            ${escapeHtml(action.label)}
-                        </button>
+                        ${actionContent}
                     </td>
                 </tr>
             `;
@@ -499,7 +517,7 @@ async function loadAgendaData() {
             markDashboardStatsUnavailable();
             agendaContent.innerHTML = `
                 <tr>
-                    <td colspan="5" style="text-align: center; padding: 20px; color: #ef4444;">
+                    <td colspan="6" style="text-align: center; padding: 20px; color: #ef4444;">
                         Erro ao carregar agendamentos: ${appointmentsResponse.data?.message || 'Erro desconhecido'}
                     </td>
                 </tr>
@@ -510,7 +528,7 @@ async function loadAgendaData() {
         markDashboardStatsUnavailable();
         agendaContent.innerHTML = `
             <tr>
-                <td colspan="5" style="text-align: center; padding: 20px; color: #ef4444;">
+                <td colspan="6" style="text-align: center; padding: 20px; color: #ef4444;">
                     Erro ao carregar agendamentos: ${error.message}
                 </td>
             </tr>
@@ -524,13 +542,6 @@ function getStatusClass(status) {
     if (statusLower === 'confirmado') return 'confirm';
     if (statusLower === 'pendente') return 'pending';
     if (statusLower === 'cancelado' || statusLower === 'realizado') return 'pending';
-    return 'waiting';
-}
-
-function getPatientStatusClass(status) {
-    const statusLower = String(status || '').toLowerCase();
-    if (statusLower === 'ativo' || statusLower === 'active' || statusLower === 'confirmado') return 'confirm';
-    if (statusLower === 'inativo' || statusLower === 'inactive' || statusLower === 'realizado') return 'pending';
     return 'waiting';
 }
 
@@ -610,12 +621,12 @@ function loadPatientsData() {
         if (!appointmentsData || appointmentsData.length === 0) {
             tableBody.innerHTML = `
                 <tr>
-                    <td colspan="5" style="text-align: center; padding: 20px; color: #64748b;">
+                    <td colspan="4" style="text-align: center; padding: 20px; color: #64748b;">
                         Por enquanto não há nenhum paciente com agendamentos.
                     </td>
                 </tr>
             `;
-            updatePatientStats(0, 0, 0);
+            updatePatientStats(0);
             return;
         }
 
@@ -636,17 +647,14 @@ function loadPatientsData() {
         });
 
         const patients = Array.from(patientMap.values());
-        const activePatients = patients.filter(p => String(p.status).toLowerCase() === 'confirmado').length;
-        const inactivePatients = patients.filter(p => String(p.status).toLowerCase() === 'realizado').length;
 
-        updatePatientStats(patients.length, activePatients, inactivePatients);
+        updatePatientStats(patients.length);
 
         tableBody.innerHTML = patients.map(patient => `
             <tr>
                 <td><strong>${escapeHtml(patient.name)}</strong></td>
                 <td>${escapeHtml(patient.cpf)}</td>
                 <td>${escapeHtml(patient.email)}</td>
-                <td><span class="status ${getPatientStatusClass(patient.status)}">${escapeHtml(patient.status)}</span></td>
                 <td>${escapeHtml(patient.lastConsultation)}</td>
             </tr>
         `).join('');
@@ -654,7 +662,7 @@ function loadPatientsData() {
         console.error('Erro ao carregar pacientes:', error);
         tableBody.innerHTML = `
             <tr>
-                <td colspan="5" style="text-align: center; padding: 20px; color: #ef4444;">
+                <td colspan="4" style="text-align: center; padding: 20px; color: #ef4444;">
                     Erro ao carregar pacientes
                 </td>
             </tr>
@@ -663,21 +671,111 @@ function loadPatientsData() {
 }
 
 // Função auxiliar para atualizar estatísticas de pacientes
-function updatePatientStats(total, active, inactive) {
+function updatePatientStats(total) {
     const totalEl = document.getElementById('totalPatients');
-    const activeEl = document.getElementById('activePatients');
-    const inactiveEl = document.getElementById('inactivePatients');
 
     if (totalEl) totalEl.innerText = total;
-    if (activeEl) activeEl.innerText = active;
-    if (inactiveEl) inactiveEl.innerText = inactive;
+}
+
+function getAppointmentDateValue(appointment) {
+    return appointment?.data_agendamento || appointment?.appointmentDate || appointment?.date || '';
+}
+
+function getAppointmentTimeValue(appointment) {
+    return appointment?.hora_agendamento || appointment?.appointmentTime || appointment?.time || '';
+}
+
+function getAppointmentDedupKey(appointment) {
+    if (appointment?.id) return `id:${appointment.id}`;
+
+    const patientKey = getPatientKey(appointment) || appointment?.paciente_nome || appointment?.nome_paciente || '';
+    const dateKey = getAppointmentDateValue(appointment);
+    const timeKey = getAppointmentTimeValue(appointment);
+    const statusKey = appointment?.status || '';
+
+    return [patientKey, dateKey, timeKey, statusKey].map(value => String(value).trim().toLowerCase()).join('|');
+}
+
+function getUniqueAppointments(appointments = []) {
+    const seen = new Set();
+
+    return appointments.filter(appointment => {
+        const key = getAppointmentDedupKey(appointment);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
+}
+
+function formatAppointmentDate(appointment) {
+    return formatDateTime(getAppointmentDateValue(appointment));
+}
+
+function parseAppointmentDateValue(dateValue) {
+    const date = new Date(String(dateValue || '').replace(' ', 'T'));
+    return Number.isNaN(date.getTime()) ? Number.MAX_SAFE_INTEGER : date.getTime();
+}
+
+function parseAppointmentDateTimeValue(appointment) {
+    const dateValue = String(getAppointmentDateValue(appointment) || '');
+    const timeValue = String(getAppointmentTimeValue(appointment) || '').slice(0, 5);
+
+    if (!dateValue) return Number.MAX_SAFE_INTEGER;
+
+    const hasTimeInDate = /[T ]\d{2}:\d{2}/.test(dateValue);
+    const normalizedDateTime = hasTimeInDate
+        ? dateValue.replace(' ', 'T')
+        : `${dateValue.split(/[T ]/)[0]}T${timeValue || '00:00'}`;
+
+    const date = new Date(normalizedDateTime);
+    return Number.isNaN(date.getTime()) ? Number.MAX_SAFE_INTEGER : date.getTime();
+}
+
+function formatAppointmentTime(appointment) {
+    const timeValue = getAppointmentTimeValue(appointment);
+    if (timeValue) {
+        const normalizedTime = String(timeValue);
+
+        if (normalizedTime.includes('T')) {
+            const date = new Date(normalizedTime);
+            if (!Number.isNaN(date.getTime())) {
+                return date.toLocaleTimeString('pt-BR', {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            }
+        }
+
+        return normalizedTime.slice(0, 5);
+    }
+
+    const dateValue = getAppointmentDateValue(appointment);
+    const normalizedDateValue = String(dateValue);
+    const timeMatch = normalizedDateValue.match(/[T ](\d{2}:\d{2})/);
+    if (timeMatch) return timeMatch[1];
+
+    const date = new Date(normalizedDateValue);
+    if (Number.isNaN(date.getTime())) return '--';
+
+    return date.toLocaleTimeString('pt-BR', {
+        hour: '2-digit',
+        minute: '2-digit'
+    });
 }
 
 // Função auxiliar para formatar data e hora
 function formatDateTime(dateString) {
     if (!dateString) return '--';
     try {
+        const normalizedDate = String(dateString);
+
+        if (/^\d{4}-\d{2}-\d{2}$/.test(normalizedDate)) {
+            const [year, month, day] = normalizedDate.split('-');
+            return `${day}/${month}/${year}`;
+        }
+
         const date = new Date(dateString);
+        if (Number.isNaN(date.getTime())) return '--';
         return date.toLocaleDateString('pt-BR');
     } catch (error) {
         return '--';
