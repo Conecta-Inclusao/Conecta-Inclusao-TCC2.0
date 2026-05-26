@@ -79,7 +79,6 @@ CREATE TABLE agendamentos (
     medico_id INT NOT NULL,
     data_hora DATETIME NOT NULL,
     status ENUM('pendente', 'confirmado', 'cancelado', 'realizado') DEFAULT 'pendente',
-    link_reuniao VARCHAR(255), -- Para a consulta online
     FOREIGN KEY (clinica_id) REFERENCES clinicas(id) ON DELETE CASCADE,
     FOREIGN KEY (paciente_id) REFERENCES pacientes(id) ON DELETE CASCADE,
     FOREIGN KEY (medico_id) REFERENCES medicos(id) ON DELETE CASCADE
@@ -127,20 +126,26 @@ create table paciente_responsavel(
     FOREIGN KEY (id_responsavel) REFERENCES responsavel(id) ON DELETE CASCADE,
     parentesco varchar (255) 
     );
-
-ALTER TABLE paciente_responsavel add column created_at DATETIME DEFAULT CURRENT_TIMESTAMP;
-ALTER TABLE paciente_responsavel drop column created_at;
-
-ALTER TABLE pacientes
-ADD COLUMN id_responsavel INT,
-ADD CONSTRAINT fk_pacientes_responsavel 
-    FOREIGN KEY (id_responsavel) REFERENCES responsavel(id) 
-    ON DELETE CASCADE;
-
-ALTER TABLE agendamentos
-CHANGE data_hora data_agendamento DATETIME NOT NULL;
-
-select * from responsavel;
-
-ALTER TABLE agendamentos
-DROP COLUMN link_reuniao;
+    
+create table permissoes(
+    id int auto_increment primary key not null,
+    nome varchar (200) not null
+    );
+    
+create table responsavel_permissoes(
+    id_permissao int not null,
+    id_responsavel int not null, 
+    primary key(id_permissao, id_responsavel),
+	CONSTRAINT fk_responsavel_id FOREIGN KEY (id_responsavel) REFERENCES responsavel(id) ON DELETE CASCADE,
+    constraint fk_permissao_id foreign key (id_permissao) references permissoes(id) on delete cascade 
+);
+    
+    insert into permissoes(nome) values(
+		"Ver agendamentos"
+    );
+    insert into permissoes(nome) values(
+		"Enviar mensagens"
+    );
+     insert into permissoes(nome) values(
+		"Gerenciar agendamentos"
+    );

@@ -1,5 +1,16 @@
 let guardianData = null;
 
+function refreshGuardianPasswordFeedback() {
+    const guardianPassword = document.getElementById('guardianPassword');
+    if (!guardianPassword) return;
+
+    if (typeof updatePasswordFeedback === 'function') {
+        updatePasswordFeedback(guardianPassword);
+    } else {
+        guardianPassword.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+}
+
 function applyMask(input, maskFn) {
     input.addEventListener('input', function(event) {
         event.target.value = maskFn(event.target.value);
@@ -150,6 +161,7 @@ function openGuardianModal() {
         guardianPassword.value = '';
     }
 
+    refreshGuardianPasswordFeedback();
     modal.classList.add('active');
     modal.setAttribute('aria-hidden', 'false');
 }
@@ -173,8 +185,8 @@ function validateGuardianModalForm() {
         return false;
     }
 
-    if (guardianPassword.length < 6) {
-        showPopup('A senha do responsável deve ter ao menos 6 caracteres.');
+    if (!isStrongPassword(guardianPassword)) {
+        showPopup('A senha do responsável deve ter 8 caracteres, maiúscula, minúscula, número e caractere especial.');
         return false;
     }
 
@@ -237,8 +249,8 @@ async function handlePatientRegistration(event) {
 
         if (guardianData) {
             registrationData.responsavel = {
-                nome: guardianData.name,
-                parentesco: guardianData.relationship,
+                name: guardianData.name,
+                relationship: guardianData.relationship,
                 email: guardianData.email,
                 password: guardianData.password
             };

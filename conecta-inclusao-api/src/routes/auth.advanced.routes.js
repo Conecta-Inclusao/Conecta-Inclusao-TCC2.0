@@ -1,6 +1,8 @@
 // Rotas avançadas de autenticação com suporte a CRM, CNPJ e CPF
 import { Router } from "express";
 import rateLimit from "express-rate-limit";
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
 import { pool } from "../db.js";
 import {
   universalLoginSchema,
@@ -9,7 +11,8 @@ import {
   registerClinicSchema,
   resetTemporaryPasswordSchema,
   forgotPasswordSchema,
-  resetPasswordSchema
+  resetPasswordSchema,
+  patientGuardianSchema
 } from "../validators/auth.advanced.validators.js";
 import {
   loginUniversal,
@@ -699,10 +702,15 @@ router.post("/patient/guardians", authenticateToken, async (req, res, next) => {
       return res.status(403).json({ message: 'Acesso negado. Apenas pacientes podem adicionar responsáveis.' });
     }
 
-    const { name, relationship, email, password } = req.body;
-    if (!name || !relationship || !email || !password) {
-      return res.status(400).json({ message: 'name, relationship, email e password sao obrigatorios.' });
+    const parsed = patientGuardianSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        message: "Dados invalidos",
+        errors: parsed.error.errors
+      });
     }
+
+    const { name, relationship, email, password } = parsed.data;
 
     const conn = await pool.getConnection();
     try {

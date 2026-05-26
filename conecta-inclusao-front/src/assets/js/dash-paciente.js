@@ -25,6 +25,17 @@ let availableProfessionals = [];
 let appointmentsMonthFilter = '';
 let user = null;
 
+function refreshGuardianPasswordFeedback() {
+    const guardianPassword = document.getElementById('guardianPassword');
+    if (!guardianPassword) return;
+
+    if (typeof updatePasswordFeedback === 'function') {
+        updatePasswordFeedback(guardianPassword);
+    } else {
+        guardianPassword.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+}
+
 async function loadUserInfo() {
     const profileResult = await getUserProfile();
     if (profileResult.ok && profileResult.data) {
@@ -239,6 +250,7 @@ function openGuardianModal() {
     if (modal) {
         modal.style.display = 'flex';
         if (typeof setupPasswordVisibilityToggles === 'function') setupPasswordVisibilityToggles();
+        refreshGuardianPasswordFeedback();
     }
 }
 
@@ -251,6 +263,7 @@ function closeGuardianModal() {
     const form = document.getElementById('formNewGuardian');
     if (form) {
         form.reset();
+        refreshGuardianPasswordFeedback();
     }
 }
 
@@ -1947,8 +1960,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const relationship = document.getElementById('guardianRelationship')?.value;
                 const email = document.getElementById('guardianEmail')?.value.trim();
                 const password = document.getElementById('guardianPassword')?.value.trim();
-                if (!password || password.length < 6) {
-                    await showPopup('A senha deve ter pelo menos 6 caracteres.');
+                if (!isStrongPassword(password)) {
+                    await showPopup('A senha deve ter 8 caracteres, maiúscula, minúscula, número e caractere especial.');
                     return;
                 }
 
@@ -2022,6 +2035,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             saveGuardians(guardians);
             guardianForm.reset();
+            refreshGuardianPasswordFeedback();
             delete guardianForm.dataset.editIndex;
             document.querySelector('.modal-header div h3').textContent = 'Adicionar Responsável';
             document.querySelector('button[type="submit"]').textContent = 'Adicionar Responsável';
