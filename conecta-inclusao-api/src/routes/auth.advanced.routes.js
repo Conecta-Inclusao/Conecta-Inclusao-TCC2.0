@@ -39,6 +39,28 @@ const registerLimiter = rateLimit({
   legacyHeaders: false
 });
 
+const availablePermissions = [
+  { key: "view_appointments", label: "Ver agendamentos" },
+  { key: "manage_appointments", label: "Gerenciar agendamentos" },
+  { key: "send_messages", label: "Enviar mensagens" }
+];
+
+router.get("/permissions", async (req, res, next) => {
+  try {
+    return res.status(200).json({ permissions: availablePermissions });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/permissoes", async (req, res, next) => {
+  try {
+    return res.status(200).json({ permissions: availablePermissions });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.post("/login/universal", loginLimiter, async (req, res, next) => {
   try {
     const parsed = universalLoginSchema.safeParse(req.body);
@@ -630,9 +652,9 @@ router.post("/patient/guardians", authenticateToken, async (req, res, next) => {
       return res.status(403).json({ message: 'Acesso negado. Apenas pacientes podem adicionar responsáveis.' });
     }
 
-    const { name, relationship, email, password } = req.body;
-    if (!name || !relationship || !email || !password) {
-      return res.status(400).json({ message: 'name, relationship, email e password sao obrigatorios.' });
+    const { name, parentesco, email, password, permissoes } = req.body;
+    if (!name || !parentesco || !email || !password) {
+      return res.status(400).json({ message: 'name, parentesco, email e password sao obrigatorios.' });
     }
 
     const conn = await pool.getConnection();
@@ -658,8 +680,24 @@ router.post("/patient/guardians", authenticateToken, async (req, res, next) => {
       const pacienteId = Number(req.user.sub);
       await conn.execute(
         `INSERT INTO paciente_responsavel (id_paciente, id_responsavel, parentesco) VALUES (?, ?, ?)`,
-        [pacienteId, responsavelId, relationship]
+        [pacienteId, responsavelId, parentesco]
       );
+
+      if (Array.isArray(permissoes) && permissoes.length) {
+        const permissionIds = permissoes
+          .map((permission) => Number(permission))
+          .filter((permissionId) => Number.isInteger(permissionId) && permissionId > 0);
+
+        if (permissionIds.length) {
+          const placeholders = permissionIds.map(() => '(?, ?)').join(', ');
+          const values = permissionIds.flatMap((permissionId) => [permissionId, responsavelId]);
+
+          await conn.execute(
+            `INSERT IGNORE INTO responsavel_permissoes (id_permissao, id_responsavel) VALUES ${placeholders}`,
+            values
+          );
+        }
+      }
 
       await conn.execute(
         `UPDATE pacientes SET id_responsavel = ? WHERE id = ?`,
@@ -668,7 +706,7 @@ router.post("/patient/guardians", authenticateToken, async (req, res, next) => {
 
       await conn.commit();
 
-      return res.status(201).json({ id: responsavelId, name, email, relationship });
+      return res.status(201).json({ id: responsavelId, name, email, parentesco });
     } catch (err) {
       await conn.rollback();
       throw err;
@@ -688,7 +726,7 @@ router.get("/patient/guardians", authenticateToken, async (req, res, next) => {
 
     const pacienteId = Number(req.user.sub);
     const [rows] = await pool.execute(
-      `SELECT r.id, r.nome AS name, r.email, pr.parentesco AS relationship
+      `SELECT r.id, r.nome AS name, r.email, pr.parentesco AS parentesco
        FROM paciente_responsavel pr
        INNER JOIN responsavel r ON pr.id_responsavel = r.id
        WHERE pr.id_paciente = ?`,

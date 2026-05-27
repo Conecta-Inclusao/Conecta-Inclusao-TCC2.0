@@ -38,6 +38,28 @@ const strongPasswordSchema = z
   .regex(/\d/, "Senha deve conter número")
   .regex(/[^A-Za-z0-9]/, "Senha deve conter caractere especial");
 
+const guardianSchema = z.preprocess((value) => {
+  if (!value || typeof value !== "object") return value;
+
+  const normalized = { ...value };
+
+  if (!normalized.parentesco && normalized.relationship) {
+    normalized.parentesco = normalized.relationship;
+  }
+
+  if (!normalized.permissoes && normalized.permissions) {
+    normalized.permissoes = normalized.permissions;
+  }
+
+  return normalized;
+}, z.object({
+  name: z.string().trim().min(3, "Nome do responsável muito curto").max(100),
+  parentesco: z.string().trim().min(2, "Parentesco muito curto").max(100),
+  email: z.string().email("Email inválido"),
+  password: strongPasswordSchema,
+  permissoes: z.array(z.union([z.string(), z.number()])).optional()
+}));
+
 export const resetTemporaryPasswordSchema = z.object({
   resetToken: z
     .string()
@@ -82,14 +104,7 @@ export const registerPatientSchema = z.object({
     .string()
     .email("Email inválido")
     .optional(),
-  responsavel: z
-    .object({
-      name: z.string().trim().min(3, "Nome do responsável muito curto").max(100),
-      relationship: z.string().trim().min(2, "Parentesco muito curto").max(100),
-      email: z.string().email("Email inválido"),
-      password: strongPasswordSchema
-    })
-    .optional(),
+  responsavel: guardianSchema.optional(),
   tipoDeficiencia: z
     .string()
     .trim()

@@ -632,17 +632,27 @@ export async function registerUser({ identifier, password, name, profile, userDa
 
         let responsavelId = null;
         if (userData?.responsavel) {
-          const guardianPasswordHash = await bcrypt.hash(String(userData.responsavel.password).trim(), SALT_ROUNDS);
-          const [insertedGuardian] = await connection.execute(
-            `INSERT INTO responsavel (nome, email, senha, status)
-             VALUES (?, ?, ?, 'ACTIVE')`,
-            [
-              userData.responsavel.name,
-              userData.responsavel.email,
-              guardianPasswordHash
-            ]
+          // Se já existir um responsável com o mesmo email, reutiliza o registro
+          const [existingResp] = await connection.execute(
+            `SELECT id FROM responsavel WHERE email = ? LIMIT 1`,
+            [userData.responsavel.email]
           );
-          responsavelId = insertedGuardian.insertId;
+
+          if (existingResp && existingResp[0] && existingResp[0].id) {
+            responsavelId = existingResp[0].id;
+          } else {
+            const guardianPasswordHash = await bcrypt.hash(String(userData.responsavel.password).trim(), SALT_ROUNDS);
+            const [insertedGuardian] = await connection.execute(
+              `INSERT INTO responsavel (nome, email, senha, status)
+               VALUES (?, ?, ?, 'ACTIVE')`,
+              [
+                userData.responsavel.name,
+                userData.responsavel.email,
+                guardianPasswordHash
+              ]
+            );
+            responsavelId = insertedGuardian.insertId;
+          }
         }
 
         const [insertedPatient] = await connection.execute(
@@ -663,8 +673,28 @@ export async function registerUser({ identifier, password, name, profile, userDa
           await connection.execute(
             `INSERT INTO paciente_responsavel (id_paciente, id_responsavel, parentesco)
              VALUES (?, ?, ?)`,
-            [insertedPatient.insertId, responsavelId, userData.responsavel.relationship]
+            [
+              insertedPatient.insertId,
+              responsavelId,
+              userData.responsavel.parentesco
+            ]
           );
+
+          const permissionIds = Array.isArray(userData.responsavel.permissoes)
+            ? userData.responsavel.permissoes
+                .map((permission) => Number(permission))
+                .filter((permissionId) => Number.isInteger(permissionId) && permissionId > 0)
+            : [];
+
+          if (permissionIds.length) {
+            const placeholders = permissionIds.map(() => '(?, ?)').join(', ');
+            const values = permissionIds.flatMap((permissionId) => [permissionId, responsavelId]);
+
+            await connection.execute(
+              `INSERT IGNORE INTO responsavel_permissoes (id_permissao, id_responsavel) VALUES ${placeholders}`,
+              values
+            );
+          }
         }
 
         await connection.commit();
