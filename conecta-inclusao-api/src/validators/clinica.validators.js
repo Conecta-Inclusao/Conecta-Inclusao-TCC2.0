@@ -1,114 +1,91 @@
-// Importa a biblioteca Zod para validação de dados
 import { z } from "zod";
 
-// Schema de validação para criação de clínica
 export const createClinicSchema = z.object({
     clinicName: z
         .string()
         .trim()
-        .min(3, "Nome da clínica deve ter no mínimo 3 caracteres")
-        .max(150, "Nome da clínica deve ter no máximo 150 caracteres"),
-    
+        .min(3, "Nome da clinica deve ter no minimo 3 caracteres")
+        .max(100, "Nome da clinica deve ter no maximo 100 caracteres"),
+
     cnpj: z
         .string()
-        .regex(/^\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}$/, "CNPJ inválido"),
-    
+        .regex(/^\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}$|^\d{14}$/, "CNPJ invalido"),
+
     clinicPhone: z
         .string()
-        .regex(/^\(\d{2}\)\s\d{4,5}-\d{4}$/, "Telefone inválido"),
-    
+        .regex(/^\(\d{2}\)\s\d{4,5}-\d{4}$|^\d{10,11}$/, "Telefone invalido")
+        .optional(),
+
     clinicEmail: z
         .string()
         .trim()
         .toLowerCase()
-        .email("Email da clínica inválido"),
-    
-    specialty: z
-        .array(z.string())
-        .min(1, "Selecione pelo menos uma especialidade"),
-    
-    description: z
-        .string()
-        .trim()
-        .max(500, "Descrição não pode ter mais de 500 caracteres")
+        .email("Email da clinica invalido")
         .optional(),
-    
-    // Endereço
+
     cep: z
         .string()
-        .regex(/^\d{5}-\d{3}$/, "CEP inválido"),
-    
+        .regex(/^\d{5}-\d{3}$|^\d{8}$/, "CEP invalido")
+        .optional(),
+
     address: z
         .string()
         .trim()
-        .min(3, "Endereço inválido")
-        .max(150, "Endereço muito longo"),
-    
+        .max(255, "Endereco muito longo")
+        .optional(),
+
     number: z
         .string()
         .trim()
-        .min(1, "Número é obrigatório"),
-    
+        .max(20)
+        .optional(),
+
     complement: z
         .string()
         .trim()
         .max(100, "Complemento muito longo")
         .optional(),
-    
-    neighborhood: z
-        .string()
-        .trim()
-        .min(2, "Bairro inválido"),
-    
+
     city: z
         .string()
         .trim()
-        .min(2, "Cidade inválida"),
-    
+        .max(100)
+        .optional(),
+
     state: z
         .string()
         .trim()
-        .length(2, "Estado deve ter 2 letras"),
-    
-    // Responsável
+        .length(2, "Estado deve ter 2 letras")
+        .optional(),
+
+    razaoSocial: z
+        .string()
+        .trim()
+        .max(100)
+        .optional(),
+
     responsibleName: z
         .string()
         .trim()
-        .min(3, "Nome do responsável deve ter no mínimo 3 caracteres"),
-    
-    cpf: z
-        .string()
-        .regex(/^\d{3}\.\d{3}\.\d{3}-\d{2}$/, "CPF inválido"),
-    
-    crm: z
-        .string()
-        .trim()
+        .max(100)
         .optional(),
-    
-    responsibleEmail: z
-        .string()
-        .trim()
-        .toLowerCase()
-        .email("Email do responsável inválido"),
-    
-    responsiblePhone: z
-        .string()
-        .regex(/^\(\d{2}\)\s\d{4,5}-\d{4}$/, "Telefone do responsável inválido"),
-    
+
     password: z
         .string()
-        .min(8, "Senha deve ter no mínimo 8 caracteres")
+        .min(8, "Senha deve ter no minimo 8 caracteres")
         .max(100, "Senha muito longa")
         .regex(/[a-zA-Z]/, "Senha deve conter letras")
-        .regex(/[0-9]/, "Senha deve conter números"),
-    
+        .regex(/[0-9]/, "Senha deve conter numeros"),
+
     confirmPassword: z
-        .string(),
-    
+        .string()
+        .optional(),
+
     agreeTerms: z
         .boolean()
-        .refine(val => val === true, "Você deve concordar com os termos")
-}).refine((data) => data.password === data.confirmPassword, {
-    message: "Senhas não conferem",
+        .refine((value) => value === true, "Voce deve concordar com os termos")
+        .optional()
+}).refine((data) => !data.confirmPassword || data.password === data.confirmPassword, {
+    message: "Senhas nao conferem",
     path: ["confirmPassword"]
 });

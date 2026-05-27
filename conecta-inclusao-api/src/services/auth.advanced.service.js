@@ -165,6 +165,16 @@ export async function getUserProfile(user) {
         WHERE id = ?
       `;
       params = [user.sub];
+    } else if (user.profile === 'responsavel') {
+      query = `
+        SELECT r.id, r.nome AS name, r.email,
+               GROUP_CONCAT(pr.id_paciente) AS paciente_ids
+        FROM responsavel r
+        LEFT JOIN paciente_responsavel pr ON pr.id_responsavel = r.id
+        WHERE r.id = ?
+        GROUP BY r.id, r.nome, r.email
+      `;
+      params = [user.sub];
     } else {
       return { ok: false, statusCode: 400, message: "Perfil invalido." };
     }
@@ -243,7 +253,17 @@ async function findAuthRecord(identifierInfo) {
      WHERE email = ? LIMIT 1`,
     [identifierInfo.value]
   );
-  return clinics[0] || null;
+  if (clinics[0]) return clinics[0];
+
+  const [guardians] = await pool.execute(
+    `SELECT id, nome AS name, email, senha AS password_hash,
+            'ACTIVE' AS status, 0 AS failed_attempts, NULL AS locked_until,
+            'responsavel' AS profile
+     FROM responsavel
+     WHERE email = ? LIMIT 1`,
+    [identifierInfo.value]
+  );
+  return guardians[0] || null;
 }
 
 async function updateAuthState(profile, id, fields) {
@@ -342,7 +362,8 @@ export async function loginUniversal({ identifier, password, expectedProfile = n
   const identifierTypeByProfile = {
     paciente: "cpf",
     clinica: "cnpj",
-    medico: "crm"
+    medico: "crm",
+    responsavel: "email"
   };
   const expectedIdentifierType = identifierTypeByProfile[expectedProfile];
 
@@ -634,8 +655,8 @@ export async function registerUser({ identifier, password, name, profile, userDa
         if (userData?.responsavel) {
           const guardianPasswordHash = await bcrypt.hash(String(userData.responsavel.password).trim(), SALT_ROUNDS);
           const [insertedGuardian] = await connection.execute(
-            `INSERT INTO responsavel (nome, email, senha, status)
-             VALUES (?, ?, ?, 'ACTIVE')`,
+            `INSERT INTO responsavel (nome, email, senha)
+             VALUES (?, ?, ?)`,
             [
               userData.responsavel.name,
               userData.responsavel.email,
@@ -646,16 +667,15 @@ export async function registerUser({ identifier, password, name, profile, userDa
         }
 
         const [insertedPatient] = await connection.execute(
-          `INSERT INTO pacientes (nome_paciente, cpf, email, tipo_deficiencia, data_nascimento, senha, id_responsavel, status)
-           VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE')`,
+          `INSERT INTO pacientes (nome_paciente, cpf, email, tipo_deficiencia, data_nascimento, senha, status)
+           VALUES (?, ?, ?, ?, ?, ?, 'ACTIVE')`,
           [
             name,
             identifierInfo.value,
             userData?.email || null,
             userData?.tipoDeficiencia || null,
             userData?.dataNascimento || null,
-            passwordHash,
-            responsavelId
+            passwordHash
           ]
         );
 

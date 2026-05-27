@@ -77,7 +77,7 @@ CREATE TABLE agendamentos (
     clinica_id INT NOT NULL,
     paciente_id INT NOT NULL,
     medico_id INT NOT NULL,
-    data_hora DATETIME NOT NULL,
+    data_agendamento DATETIME NOT NULL,
     status ENUM('pendente', 'confirmado', 'cancelado', 'realizado') DEFAULT 'pendente',
     FOREIGN KEY (clinica_id) REFERENCES clinicas(id) ON DELETE CASCADE,
     FOREIGN KEY (paciente_id) REFERENCES pacientes(id) ON DELETE CASCADE,
@@ -107,13 +107,17 @@ CREATE TABLE sessions (
 -- Garante que a conversa fique vinculada a um mesmo atendimento/agendamento
 -- e possa ser validada por RBAC entre paciente e medico relacionados.
 CREATE TABLE mensagens (
-    id INT AUTO_INCREMENT PRIMARY KEY,
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
     agendamento_id INT NOT NULL,
-    remetente_profile ENUM('paciente', 'medico') NOT NULL,
+    remetente_profile ENUM(
+        'paciente',
+        'medico',
+        'responsavel',
+        'clinica'
+    ) NOT NULL,
     remetente_profile_id INT NOT NULL,
-    destinatario_profile ENUM('paciente', 'medico') NOT NULL,
-    destinatario_profile_id INT NOT NULL,
     conteudo TEXT NOT NULL,
+    lida BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (agendamento_id) REFERENCES agendamentos(id) ON DELETE CASCADE
 );

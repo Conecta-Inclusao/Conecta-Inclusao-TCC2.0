@@ -25,6 +25,8 @@ let availableProfessionals = [];
 let appointmentsMonthFilter = '';
 let user = null;
 let patientAppointmentsRefreshTimer = null;
+let patientChatSocket = null;
+const backendChatMessages = {};
 
 function normalizeAppointmentStatus(status) {
     const normalized = normalizeText(status || 'pendente');
@@ -90,6 +92,7 @@ async function loadUserInfo() {
     await fetchPatientAppointments();
 
     await fetchAvailableProfessionals();
+    initPatientChatSocket();
     renderGuardians();
     loadPatientData();
     refreshDashboard();
@@ -308,7 +311,9 @@ async function fetchPatientAppointments() {
                 doctor: appointment.doctorName || appointment.name || '',
                 hospital: appointment.unit || appointment.clinicName || '',
                 date: mergeAppointmentDateAndTime(appointmentDate, appointmentTime),
-                status: appointment.status || ''
+                status: appointment.status || '',
+                agendamentoId: appointment.id,
+                contactKey: `appointment-${appointment.id}`
             };
         }) : [];
         patientAppointmentsLoaded = true;
@@ -415,6 +420,9 @@ function renderGuardians() {
                         name: g.name || g.nome,
                         relationship: g.relationship || g.parentesco,
                         email: g.email || '',
+                        permissions: Array.isArray(g.permissions)
+                            ? g.permissions
+                            : String(g.permissions || '').split(',').filter(Boolean),
                         dateAdded: g.createdAt || ''
                     })) : [];
                     // cache locally for offline fallback
@@ -520,8 +528,9 @@ function editGuardian(index) {
 
         // Selecionar as permissões
         const checkboxes = document.querySelectorAll('input[name="permissions"]');
+        const guardianPermissions = Array.isArray(guardian.permissions) ? guardian.permissions : [];
         checkboxes.forEach(checkbox => {
-            checkbox.checked = guardian.permissions.includes(checkbox.value);
+            checkbox.checked = guardianPermissions.includes(checkbox.value);
         });
 
         // Armazenar o índice para atualização
@@ -955,6 +964,7 @@ function getMessageContacts() {
         if (!contactsMap.has(appointment.contactKey)) {
             contactsMap.set(appointment.contactKey, {
                 key: appointment.contactKey,
+                agendamentoId: appointment.agendamentoId || appointment.id,
                 name: appointment.doctor,
                 specialty: appointment.specialty,
                 hospital: appointment.hospital,
@@ -1005,6 +1015,59 @@ function ensureConversationExists(contactKey) {
 
 function getActiveContact() {
     return getMessageContacts().find(contact => contact.key === activeChatContactKey) || null;
+}
+
+function mapBackendMessage(message) {
+    return {
+        id: message.id,
+        sender: message.remetenteProfile === 'paciente' ? 'patient' : 'professional',
+        content: message.conteudo || '',
+        timestamp: formatDateTime(message.createdAt || new Date())
+    };
+}
+
+function initPatientChatSocket() {
+    const token = getToken();
+    if (!token || typeof io !== 'function' || patientChatSocket) return;
+
+    patientChatSocket = io('http://localhost:3000', { auth: { token } });
+    patientChatSocket.on('chat:message', (message) => {
+        const key = `appointment-${message.agendamentoId}`;
+        const messages = backendChatMessages[key] || [];
+        if (!messages.some(item => String(item.id) === String(message.id))) {
+            messages.push(mapBackendMessage(message));
+            backendChatMessages[key] = messages;
+        }
+        if (activeChatContactKey === key) renderActiveConversation();
+    });
+}
+
+async function loadBackendConversation(contact) {
+    if (!contact?.agendamentoId || backendChatMessages[contact.key]) return;
+
+    const token = getToken();
+    if (!token) return;
+
+    try {
+        const response = await fetch(`http://localhost:3000/messages/agendamentos/${encodeURIComponent(contact.agendamentoId)}?limit=100`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+            console.error('Falha ao carregar mensagens:', data);
+            backendChatMessages[contact.key] = [];
+            return;
+        }
+
+        backendChatMessages[contact.key] = Array.isArray(data.messages)
+            ? data.messages.map(mapBackendMessage)
+            : [];
+        patientChatSocket?.emit('chat:join', { agendamentoId: contact.agendamentoId });
+    } catch (error) {
+        console.error('Erro ao carregar mensagens:', error);
+        backendChatMessages[contact.key] = [];
+    }
 }
 
 function buildAiReply(contact, userMessage) {
@@ -1194,14 +1257,21 @@ function renderMessageContacts() {
         return;
     }
 
-    if (!contacts.some(contact => contact.key === activeChatContactKey)) {
+        if (!contacts.some(contact => contact.key === activeChatContactKey)) {
         activeChatContactKey = contacts[0].key;
+    }
+    const activeContact = contacts.find(contact => contact.key === activeChatContactKey);
+    if (activeContact?.type !== 'bot') {
+        loadBackendConversation(activeContact).then(renderActiveConversation);
     }
 
     contactsContainer.innerHTML = '';
 
     contacts.forEach(contact => {
         ensureConversationExists(contact.key);
+        if (contact.type !== 'bot') {
+            patientChatSocket?.emit('chat:join', { agendamentoId: contact.agendamentoId });
+        }
 
         const button = document.createElement('button');
         button.type = 'button';
@@ -1214,6 +1284,7 @@ function renderMessageContacts() {
         button.addEventListener('click', () => {
             activeChatContactKey = contact.key;
             renderMessageContacts();
+            loadBackendConversation(contact).then(renderActiveConversation);
             renderActiveConversation();
         });
         contactsContainer.appendChild(button);
@@ -1248,11 +1319,13 @@ function renderActiveConversation() {
         return;
     }
 
-    const messages = ensureConversationExists(contact.key);
+    const messages = contact.type === 'bot'
+        ? ensureConversationExists(contact.key)
+        : (backendChatMessages[contact.key] || []);
     contactName.textContent = contact.name;
     contactMeta.textContent = contact.type === 'bot'
         ? 'Chatbot de apoio ao paciente. Para urgencias, procure atendimento imediato.'
-        : `${contact.specialty} - ${contact.hospital} - Resposta assistida por IA.`;
+        : `${contact.specialty} - ${contact.hospital}`;
     messageInput.disabled = false;
     sendMessageButton.disabled = false;
 
@@ -1306,6 +1379,59 @@ function appendMessageToConversation(contactKey, message) {
 function sendPatientMessage(content) {
     const contact = getActiveContact();
     if (!contact) return;
+
+    if (contact.type !== 'bot') {
+        const token = getToken();
+        if (!token || !contact.agendamentoId) return;
+
+        const optimistic = {
+            id: `tmp-${Date.now()}`,
+            sender: 'patient',
+            content,
+            timestamp: formatDateTime()
+        };
+        backendChatMessages[contact.key] = [...(backendChatMessages[contact.key] || []), optimistic];
+        renderActiveConversation();
+
+        if (patientChatSocket?.connected) {
+            patientChatSocket.emit('chat:send', { agendamentoId: contact.agendamentoId, content }, (result) => {
+                backendChatMessages[contact.key] = (backendChatMessages[contact.key] || []).filter(message => message.id !== optimistic.id);
+                if (!result?.ok) showPopup(result?.message || 'Nao foi possivel enviar a mensagem.');
+                if (result?.ok && result.message) {
+                    const messages = backendChatMessages[contact.key] || [];
+                    if (!messages.some(message => String(message.id) === String(result.message.id))) {
+                        messages.push(mapBackendMessage(result.message));
+                        backendChatMessages[contact.key] = messages;
+                    }
+                }
+                renderActiveConversation();
+            });
+            return;
+        }
+
+        fetch(`http://localhost:3000/messages/agendamentos/${encodeURIComponent(contact.agendamentoId)}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ content })
+        }).then(async response => {
+            const body = await response.json();
+            backendChatMessages[contact.key] = (backendChatMessages[contact.key] || []).filter(message => message.id !== optimistic.id);
+            if (!response.ok) await showPopup(body.message || 'Nao foi possivel enviar a mensagem.');
+            if (response.ok && body.id) {
+                backendChatMessages[contact.key] = [...(backendChatMessages[contact.key] || []), mapBackendMessage(body)];
+            }
+            renderActiveConversation();
+        }).catch(async error => {
+            console.error('Erro ao enviar mensagem:', error);
+            backendChatMessages[contact.key] = (backendChatMessages[contact.key] || []).filter(message => message.id !== optimistic.id);
+            await showPopup('Erro de conexao ao enviar mensagem.');
+            renderActiveConversation();
+        });
+        return;
+    }
 
     appendMessageToConversation(contact.key, {
         sender: 'patient',
@@ -1999,6 +2125,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                         date: appointmentDateTime,
                         status: 'pendente'
                     };
+                    updated.agendamentoId = updated.id || editId;
+                    updated.contactKey = `appointment-${updated.agendamentoId}`;
 
                     // Atualizar localmente
                     const idx = patientAppointments.findIndex(a => String(a.id) === String(editId));
@@ -2038,7 +2166,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                         doctor: body.doctorName || selectedProfessional.name,
                         hospital: body.unit || body.clinicName || unit,
                         date: body.appointmentDate || appointmentDateTime,
-                        status: body.status || 'pendente'
+                        status: body.status || 'pendente',
+                        agendamentoId: body.id,
+                        contactKey: `appointment-${body.id}`
                     };
 
                     patientAppointments.unshift(created);
@@ -2155,7 +2285,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                                 'Content-Type': 'application/json',
                                 'Authorization': `Bearer ${token}`
                             },
-                            body: JSON.stringify({ name, relationship, email, password })
+                            body: JSON.stringify({ name, relationship, email, password, permissions })
                         });
 
                         const body = await resp.json();
@@ -2164,6 +2294,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         } else {
                             // attach server id
                             newGuardian.id = body.id;
+                            newGuardian.permissions = Array.isArray(body.permissions) ? body.permissions : permissions;
                         }
                     } catch (err) {
                         console.error('Erro ao salvar responsavel no servidor:', err);

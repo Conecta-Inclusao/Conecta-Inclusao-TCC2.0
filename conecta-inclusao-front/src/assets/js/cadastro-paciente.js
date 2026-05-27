@@ -243,7 +243,6 @@ async function handlePatientRegistration(event) {
             email: email || null,
             nomeResponsavel: guardianData?.name || null,
             tipoDeficiencia: tipoDeficiencia,
-            planoAtual: planoAtual || null,
             dataNascimento: dataNascimento
         };
 

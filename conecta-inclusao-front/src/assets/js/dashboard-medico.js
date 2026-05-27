@@ -2,6 +2,9 @@ import { getUserProfile, getProfessionalAppointments, getClinicProfessionals, ge
 
 let professionalData = null;
 let appointmentsData = [];
+let activeDoctorChatKey = '';
+let doctorChatSocket = null;
+const doctorChatMessages = {};
 
 async function loadProfessionalInfo() {
     try {
@@ -101,6 +104,10 @@ function escapeHtml(value) {
         .replace(/'/g, '&#039;');
 }
 
+function getToken() {
+    return localStorage.getItem('token');
+}
+
 function getProfessionalUnit() {
     try {
         const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
@@ -118,6 +125,234 @@ function getResponseList(responseData) {
 
 function getPatientKey(appointment) {
     return appointment.paciente_id || appointment.paciente_cpf || appointment.paciente_nome || appointment.id;
+}
+
+function getAppointmentChatKey(appointment) {
+    return `appointment-${appointment.id}`;
+}
+
+function mapDoctorBackendMessage(message) {
+    return {
+        id: message.id,
+        sender: message.remetenteProfile === 'medico' ? 'professional' : 'patient',
+        content: message.conteudo || '',
+        timestamp: formatDateTime(message.createdAt || new Date())
+    };
+}
+
+function initDoctorChatSocket() {
+    const token = getToken();
+    if (!token || typeof io !== 'function' || doctorChatSocket) return;
+
+    doctorChatSocket = io('http://localhost:3000', { auth: { token } });
+    doctorChatSocket.on('chat:message', (message) => {
+        const key = `appointment-${message.agendamentoId}`;
+        const messages = doctorChatMessages[key] || [];
+        if (!messages.some(item => String(item.id) === String(message.id))) {
+            messages.push(mapDoctorBackendMessage(message));
+            doctorChatMessages[key] = messages;
+        }
+        if (activeDoctorChatKey === key) renderDoctorActiveConversation();
+        renderDoctorMessageContacts();
+    });
+}
+
+function getDoctorMessageContacts() {
+    const contactsMap = new Map();
+    appointmentsData.forEach(appointment => {
+        if (!appointment.id) return;
+        const key = getAppointmentChatKey(appointment);
+        if (contactsMap.has(key)) return;
+
+        contactsMap.set(key, {
+            key,
+            agendamentoId: appointment.id,
+            name: appointment.nome_paciente || appointment.paciente_nome || 'Paciente nao informado',
+            meta: `${formatAppointmentDate(appointment)} as ${formatAppointmentTime(appointment)}`,
+            specialty: appointment.profissional_especialidade || appointment.especialidade || 'Atendimento'
+        });
+    });
+
+    return Array.from(contactsMap.values())
+        .sort((first, second) => first.name.localeCompare(second.name, 'pt-BR'));
+}
+
+async function loadDoctorConversation(contact) {
+    if (!contact?.agendamentoId || doctorChatMessages[contact.key]) return;
+
+    const token = getToken();
+    if (!token) return;
+
+    try {
+        const response = await fetch(`http://localhost:3000/messages/agendamentos/${encodeURIComponent(contact.agendamentoId)}?limit=100`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+            console.error('Falha ao carregar mensagens do medico:', data);
+            doctorChatMessages[contact.key] = [];
+            return;
+        }
+
+        doctorChatMessages[contact.key] = Array.isArray(data.messages)
+            ? data.messages.map(mapDoctorBackendMessage)
+            : [];
+        doctorChatSocket?.emit('chat:join', { agendamentoId: contact.agendamentoId });
+    } catch (error) {
+        console.error('Erro ao carregar mensagens do medico:', error);
+        doctorChatMessages[contact.key] = [];
+    }
+}
+
+function renderDoctorMessageContacts() {
+    const container = document.getElementById('doctorMessageContactsList');
+    if (!container) return;
+
+    const contacts = getDoctorMessageContacts();
+    if (!contacts.length) {
+        container.innerHTML = `
+            <div class="chat-contacts-empty">
+                <i class="ph ph-user-list"></i>
+                <p>Nenhum paciente com agendamento para conversar.</p>
+            </div>
+        `;
+        activeDoctorChatKey = '';
+        renderDoctorActiveConversation();
+        return;
+    }
+
+    if (!contacts.some(contact => contact.key === activeDoctorChatKey)) {
+        activeDoctorChatKey = contacts[0].key;
+    }
+
+    const activeContact = contacts.find(contact => contact.key === activeDoctorChatKey);
+    if (activeContact) loadDoctorConversation(activeContact).then(renderDoctorActiveConversation);
+
+    container.innerHTML = '';
+    contacts.forEach(contact => {
+        doctorChatSocket?.emit('chat:join', { agendamentoId: contact.agendamentoId });
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = `chat-contact-card${contact.key === activeDoctorChatKey ? ' active' : ''}`;
+        button.innerHTML = `
+            <strong>${escapeHtml(contact.name)}</strong>
+            <span>${escapeHtml(contact.specialty)}</span>
+            <small>${escapeHtml(contact.meta)}</small>
+        `;
+        button.addEventListener('click', () => {
+            activeDoctorChatKey = contact.key;
+            renderDoctorMessageContacts();
+            loadDoctorConversation(contact).then(renderDoctorActiveConversation);
+            renderDoctorActiveConversation();
+        });
+        container.appendChild(button);
+    });
+}
+
+function renderDoctorActiveConversation() {
+    const messagesList = document.getElementById('doctorChatMessagesList');
+    const contactName = document.getElementById('doctorChatContactName');
+    const contactMeta = document.getElementById('doctorChatContactMeta');
+    const input = document.getElementById('doctorMessageInput');
+    const button = document.getElementById('doctorSendMessageButton');
+    if (!messagesList || !contactName || !contactMeta || !input || !button) return;
+
+    const contact = getDoctorMessageContacts().find(item => item.key === activeDoctorChatKey);
+    if (!contact) {
+        contactName.textContent = 'Selecione um paciente';
+        contactMeta.textContent = 'As mensagens aparecem aqui.';
+        input.value = '';
+        input.disabled = true;
+        button.disabled = true;
+        messagesList.innerHTML = `
+            <div class="chat-empty">
+                <i class="ph ph-chat-circle-dots"></i>
+                <p>Escolha um paciente para abrir a conversa.</p>
+            </div>
+        `;
+        return;
+    }
+
+    contactName.textContent = contact.name;
+    contactMeta.textContent = `${contact.specialty} - ${contact.meta}`;
+    input.disabled = false;
+    button.disabled = false;
+
+    const messages = doctorChatMessages[contact.key] || [];
+    if (!messages.length) {
+        messagesList.innerHTML = `
+            <div class="chat-empty">
+                <i class="ph ph-chat-circle-dots"></i>
+                <p>Nenhuma mensagem ainda. Responda quando o paciente chamar.</p>
+            </div>
+        `;
+        return;
+    }
+
+    messagesList.innerHTML = '';
+    messages.forEach(message => {
+        const bubble = document.createElement('div');
+        bubble.className = `chat-bubble ${message.sender}`;
+        bubble.innerHTML = `
+            <div>${escapeHtml(message.content)}</div>
+            <span class="chat-bubble-meta">${escapeHtml(message.sender === 'professional' ? professionalData?.name || 'Medico' : contact.name)} - ${escapeHtml(message.timestamp)}</span>
+        `;
+        messagesList.appendChild(bubble);
+    });
+    messagesList.scrollTop = messagesList.scrollHeight;
+}
+
+function sendDoctorMessage(content) {
+    const contact = getDoctorMessageContacts().find(item => item.key === activeDoctorChatKey);
+    if (!contact || !content.trim()) return;
+
+    const optimistic = {
+        id: `tmp-${Date.now()}`,
+        sender: 'professional',
+        content,
+        timestamp: formatDateTime()
+    };
+    doctorChatMessages[contact.key] = [...(doctorChatMessages[contact.key] || []), optimistic];
+    renderDoctorActiveConversation();
+
+    if (doctorChatSocket?.connected) {
+        doctorChatSocket.emit('chat:send', { agendamentoId: contact.agendamentoId, content }, (result) => {
+            doctorChatMessages[contact.key] = (doctorChatMessages[contact.key] || []).filter(message => message.id !== optimistic.id);
+            if (!result?.ok) showPopup(result?.message || 'Nao foi possivel enviar a mensagem.');
+            if (result?.ok && result.message) {
+                const messages = doctorChatMessages[contact.key] || [];
+                if (!messages.some(message => String(message.id) === String(result.message.id))) {
+                    messages.push(mapDoctorBackendMessage(result.message));
+                    doctorChatMessages[contact.key] = messages;
+                }
+            }
+            renderDoctorActiveConversation();
+        });
+        return;
+    }
+
+    fetch(`http://localhost:3000/messages/agendamentos/${encodeURIComponent(contact.agendamentoId)}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${getToken()}`
+        },
+        body: JSON.stringify({ content })
+    }).then(async response => {
+        const body = await response.json();
+        doctorChatMessages[contact.key] = (doctorChatMessages[contact.key] || []).filter(message => message.id !== optimistic.id);
+        if (!response.ok) await showPopup(body.message || 'Nao foi possivel enviar a mensagem.');
+        if (response.ok && body.id) {
+            doctorChatMessages[contact.key] = [...(doctorChatMessages[contact.key] || []), mapDoctorBackendMessage(body)];
+        }
+        renderDoctorActiveConversation();
+    }).catch(async error => {
+        console.error('Erro ao enviar mensagem do medico:', error);
+        doctorChatMessages[contact.key] = (doctorChatMessages[contact.key] || []).filter(message => message.id !== optimistic.id);
+        await showPopup('Erro de conexao ao enviar mensagem.');
+        renderDoctorActiveConversation();
+    });
 }
 
 function normalizePatientStatus(status) {
@@ -237,6 +472,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
         // Carregar informações do profissional
         await loadProfessionalInfo();
+        initDoctorChatSocket();
 
         // Carregar equipe
         await loadTeam();
@@ -291,6 +527,8 @@ function showHome(event) {
     // Esconder todas as seções específicas
     document.getElementById('agendaSection').style.display = 'none';
     document.getElementById('pacientesSection').style.display = 'none';
+    document.getElementById('messagesSection').style.display = 'none';
+    document.getElementById('teamSection').style.display = 'block';
 }
 
 // Função para abrir a agenda médica
@@ -318,17 +556,34 @@ async function togglePatientsList(event) {
     loadPatientsData();
 }
 
+async function openMessages(event) {
+    if (event) {
+        event.preventDefault();
+        updateSidebarActive(event.target.closest('a'));
+    }
+
+    showSection('messages');
+    if (!appointmentsData || appointmentsData.length === 0) {
+        await loadAgendaData();
+    }
+    renderDoctorMessageContacts();
+}
+
 // Função para mostrar/esconder seções
 function showSection(section) {
     // Esconder todas
     document.getElementById('agendaSection').style.display = 'none';
     document.getElementById('pacientesSection').style.display = 'none';
+    document.getElementById('messagesSection').style.display = 'none';
+    document.getElementById('teamSection').style.display = 'none';
 
     // Mostrar a selecionada
     if (section === 'agenda') {
         document.getElementById('agendaSection').style.display = 'block';
     } else if (section === 'pacientes') {
         document.getElementById('pacientesSection').style.display = 'block';
+    } else if (section === 'messages') {
+        document.getElementById('messagesSection').style.display = 'block';
     }
 }
 
@@ -445,6 +700,7 @@ async function loadAgendaData() {
             const appointments = getUniqueAppointments(getResponseList(appointmentsResponse.data));
             appointmentsData = appointments;
             updateDashboardStats(appointments);
+            renderDoctorMessageContacts();
 
             console.log('Agendamentos carregados:', appointments);
 
@@ -794,8 +1050,23 @@ async function handleLogout() {
     }
 }
 
+document.addEventListener('DOMContentLoaded', () => {
+    const doctorMessageForm = document.getElementById('doctorMessageForm');
+    if (!doctorMessageForm) return;
+
+    doctorMessageForm.addEventListener('submit', (event) => {
+        event.preventDefault();
+        const input = document.getElementById('doctorMessageInput');
+        const content = input?.value.trim() || '';
+        if (!content) return;
+        sendDoctorMessage(content);
+        input.value = '';
+    });
+});
+
 window.handleLogout = handleLogout;
 window.showHome = showHome;
 window.openAgendaMedica = openAgendaMedica;
 window.togglePatientsList = togglePatientsList;
+window.openMessages = openMessages;
 window.handleAppointmentAction = handleAppointmentAction;

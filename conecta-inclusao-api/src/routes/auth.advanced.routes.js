@@ -714,7 +714,7 @@ router.post("/patient/guardians", authenticateToken, async (req, res, next) => {
       });
     }
 
-    const { name, relationship, email, password } = parsed.data;
+    const { name, relationship, email, password, permissions = [] } = parsed.data;
 
     const conn = await pool.getConnection();
     try {
@@ -742,14 +742,34 @@ router.post("/patient/guardians", authenticateToken, async (req, res, next) => {
         [pacienteId, responsavelId, relationship]
       );
 
-      await conn.execute(
-        `UPDATE pacientes SET id_responsavel = ? WHERE id = ?`,
-        [responsavelId, pacienteId]
-      );
+      const permissionNamesByCode = {
+        view_appointments: "Ver agendamentos",
+        send_messages: "Enviar mensagens",
+        manage_appointments: "Gerenciar agendamentos"
+      };
+      const permissionNames = permissions
+        .map((permission) => permissionNamesByCode[permission])
+        .filter(Boolean);
+
+      if (permissionNames.length > 0) {
+        const placeholders = permissionNames.map(() => "?").join(", ");
+        const [permissionRows] = await conn.execute(
+          `SELECT id, nome FROM permissoes WHERE nome IN (${placeholders})`,
+          permissionNames
+        );
+
+        for (const permission of permissionRows) {
+          await conn.execute(
+            `INSERT IGNORE INTO responsavel_permissoes (id_permissao, id_responsavel)
+             VALUES (?, ?)`,
+            [permission.id, responsavelId]
+          );
+        }
+      }
 
       await conn.commit();
 
-      return res.status(201).json({ id: responsavelId, name, email, relationship });
+      return res.status(201).json({ id: responsavelId, name, email, relationship, permissions });
     } catch (err) {
       await conn.rollback();
       throw err;
@@ -769,14 +789,34 @@ router.get("/patient/guardians", authenticateToken, async (req, res, next) => {
 
     const pacienteId = Number(req.user.sub);
     const [rows] = await pool.execute(
-      `SELECT r.id, r.nome AS name, r.email, pr.parentesco AS relationship
+      `SELECT
+         r.id,
+         r.nome AS name,
+         r.email,
+         pr.parentesco AS relationship,
+         COALESCE(
+           GROUP_CONCAT(
+             CASE p.nome
+               WHEN 'Ver agendamentos' THEN 'view_appointments'
+               WHEN 'Gerenciar agendamentos' THEN 'manage_appointments'
+               WHEN 'Enviar mensagens' THEN 'send_messages'
+             END
+           ),
+           ''
+         ) AS permissions
        FROM paciente_responsavel pr
        INNER JOIN responsavel r ON pr.id_responsavel = r.id
-       WHERE pr.id_paciente = ?`,
+       LEFT JOIN responsavel_permissoes rp ON rp.id_responsavel = r.id
+       LEFT JOIN permissoes p ON p.id = rp.id_permissao
+       WHERE pr.id_paciente = ?
+       GROUP BY r.id, r.nome, r.email, pr.parentesco`,
       [pacienteId]
     );
 
-    return res.status(200).json(rows || []);
+    return res.status(200).json((rows || []).map((row) => ({
+      ...row,
+      permissions: row.permissions ? row.permissions.split(",").filter(Boolean) : []
+    })));
   } catch (err) {
     next(err);
   }

@@ -18,6 +18,7 @@
                 <a href="#" class="active" onclick="showHome(event)"><i class="ph ph-house"></i> Início</a>
                 <a href="#" onclick="openAgendaMedica(event)"><i class="ph ph-calendar-blank"></i> Agenda</a>
                 <a href="#" onclick="togglePatientsList(event)"><i class="ph ph-users"></i> Pacientes</a>
+                <a href="#" onclick="openMessages(event)"><i class="ph ph-chat-circle-text"></i> Mensagens</a>
             </nav>
             <div class="sidebar-footer">
                 <button class="btn-logout" onclick="handleLogout()"><i class="ph ph-sign-out"></i> Sair</button>
@@ -129,7 +130,42 @@
                 </div>
             </section>
 
-            <section class="team-section">
+            <section class="messages-section" id="messagesSection" style="display: none;">
+                <div class="section-header">
+                    <h3>Mensagens</h3>
+                </div>
+                <div class="chat-layout">
+                    <aside class="chat-sidebar">
+                        <div class="chat-sidebar-header">
+                            <h3>Pacientes</h3>
+                            <p>Conversas vinculadas aos seus agendamentos.</p>
+                        </div>
+                        <div id="doctorMessageContactsList" class="chat-contacts"></div>
+                    </aside>
+                    <div class="chat-panel">
+                        <div class="chat-panel-header">
+                            <div>
+                                <strong id="doctorChatContactName">Selecione um paciente</strong>
+                                <span id="doctorChatContactMeta">As mensagens aparecem aqui.</span>
+                            </div>
+                            <span id="doctorChatStatus" class="chat-status-pill">Online</span>
+                        </div>
+                        <div id="doctorChatMessagesList" class="chat-messages">
+                            <div class="chat-empty">
+                                <i class="ph ph-chat-circle-dots"></i>
+                                <p>Escolha um paciente para abrir a conversa.</p>
+                            </div>
+                        </div>
+                        <form id="doctorMessageForm" class="chat-form">
+                            <label class="sr-only" for="doctorMessageInput">Digite sua mensagem</label>
+                            <textarea id="doctorMessageInput" rows="3" placeholder="Digite sua resposta ao paciente..." disabled></textarea>
+                            <button id="doctorSendMessageButton" type="submit" class="btn-primary" disabled>Enviar</button>
+                        </form>
+                    </div>
+                </div>
+            </section>
+
+            <section class="team-section" id="teamSection">
                 <div class="section-header">
                     <h3>Equipe da Unidade</h3>
                     <span class="unit-badge" id="unitBadge">Unidade</span>
@@ -144,6 +180,7 @@
         </main>
     </div>
     <script src="../assets/js/utils.js"></script>
+    <script src="http://localhost:3000/socket.io/socket.io.js"></script>
     <script type="module" src="../assets/js/dashboard-medico.js"></script>
 </body>
 </html>
