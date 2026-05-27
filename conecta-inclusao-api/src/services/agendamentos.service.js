@@ -17,6 +17,10 @@ function normalizeAppointmentDateTime(date, time) {
     return normalized;
 }
 
+function appointmentSlotMinute(dateTime) {
+    return String(dateTime || '').slice(0, 16);
+}
+
 async function resolvePacienteId(pacienteId) {
     const [pacienteRows] = await pool.execute(
         `SELECT p.id
@@ -106,16 +110,16 @@ export async function createAgendamento(data) {
             `SELECT id
              FROM agendamentos
              WHERE medico_id = ?
-               AND data_agendamento = ?
+               AND DATE_FORMAT(data_agendamento, '%Y-%m-%d %H:%i') = ?
                AND status IN ('confirmado', 'pendente')`,
-            [profissional.id, appointmentDateTime]
+            [profissional.id, appointmentSlotMinute(appointmentDateTime)]
         );
 
         if (conflito.length > 0) {
             return {
                 ok: false,
                 statusCode: 409,
-                message: "Horario ja ocupado para este profissional"
+                message: "Este horario ja foi marcado por outro paciente para este profissional. Escolha outro horario."
             };
         }
 
@@ -282,9 +286,10 @@ export async function listAgendamentosByPaciente(paciente_id, limit = 10, offset
 
 export async function updateAgendamentoStatus(id, status) {
     try {
+        const normalizedStatus = String(status || "").toLowerCase() === "finalizado" ? "realizado" : status;
         const validStatuses = ["pendente", "confirmado", "cancelado", "realizado"];
 
-        if (!validStatuses.includes(status)) {
+        if (!validStatuses.includes(normalizedStatus)) {
             return {
                 ok: false,
                 statusCode: 400,
@@ -294,7 +299,7 @@ export async function updateAgendamentoStatus(id, status) {
 
         const [result] = await pool.execute(
             "UPDATE agendamentos SET status = ? WHERE id = ?",
-            [status, id]
+            [normalizedStatus, id]
         );
 
         if (result.affectedRows === 0) {

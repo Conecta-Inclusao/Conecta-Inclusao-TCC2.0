@@ -118,7 +118,6 @@ body {
 .user-profile {
     display: flex;
     align-items: center;
-    gap: 14px;
 }
 
 .user-info {
@@ -133,13 +132,6 @@ body {
 .user-info span {
     font-size: 13px;
     color: #64748b;
-}
-
-.user-profile img {
-    width: 50px;
-    height: 50px;
-    border-radius: 50%;
-    object-fit: cover;
 }
 
 .tab-content {
@@ -246,15 +238,15 @@ body {
 }
 
 .primary-card {
-    background: linear-gradient(160deg, #eef4ff, #f8fbff);
+    background: #ffffff;
 }
 
 .success-card {
-    background: linear-gradient(160deg, #ecfdf5, #f0fdf4);
+    background: #ffffff;
 }
 
 .accent-card {
-    background: linear-gradient(160deg, #fffbeb, #fff7ed);
+    background: #ffffff;
 }
 
 .primary-card i,
@@ -263,13 +255,10 @@ body {
 }
 
 .success-card i,
-.success-card h3 {
-    color: #059669;
-}
-
+.success-card h3,
 .accent-card i,
 .accent-card h3 {
-    color: #ea580c;
+    color: #0f4dbf;
 }
 
 .summary-card,
@@ -733,7 +722,8 @@ body {
 }
 
 .specialty-badge,
-.date-tag {
+.date-tag,
+.appointment-status-badge {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -751,6 +741,64 @@ body {
 .date-tag {
     background: #f8fafc;
     color: #334155;
+}
+
+.appointment-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+.appointment-status-badge {
+    background: #eef4ff;
+    color: #0f4dbf;
+}
+
+.appointment-status-badge.appointment-status-confirmado {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.appointment-status-badge.appointment-status-realizado {
+    background: #e0f7eb;
+    color: #047857;
+}
+
+.appointment-status-badge.appointment-status-cancelado {
+    background: #fee2e2;
+    color: #b91c1c;
+}
+
+.appointment-status-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 999px;
+    flex-shrink: 0;
+    margin-left: auto;
+}
+
+.appointment-status-dot.appointment-status-pendente {
+    background: #0f4dbf;
+}
+
+.appointment-status-dot.appointment-status-confirmado {
+    background: #f59e0b;
+}
+
+.appointment-status-dot.appointment-status-realizado {
+    background: #047857;
+}
+
+.appointment-status-dot.appointment-status-cancelado {
+    background: #b91c1c;
+}
+
+.btn-secondary:disabled,
+.btn-danger:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    transform: none;
 }
 
 .filter-grid {
@@ -1374,6 +1422,209 @@ body {
     color: #475569;
     font-size: 14px;
     user-select: none;
+}
+
+/* Ajustes visuais alinhados aos dashboards de medico e empresa */
+.sidebar {
+    width: 280px;
+    padding: 30px 22px;
+}
+
+.logo-section {
+    margin-bottom: 35px;
+}
+
+.logo-section i {
+    font-size: 28px;
+}
+
+.nav-link {
+    border-radius: 12px;
+    padding: 13px 16px;
+    font-size: 15px;
+}
+
+.nav-link i {
+    font-size: 20px;
+}
+
+.main-content {
+    max-width: 1400px;
+    margin: 0 auto;
+    width: 100%;
+}
+
+.top-bar {
+    padding-bottom: 8px;
+    border-bottom: 1px solid #dbe7f0;
+}
+
+.page-title h1 {
+    font-size: 30px;
+    letter-spacing: 0;
+}
+
+.user-profile {
+    gap: 12px;
+    background: #ffffff;
+    border: 1px solid #dbe7f0;
+    border-radius: 14px;
+    padding: 12px 14px;
+    box-shadow: 0 10px 24px rgba(15, 77, 191, 0.05);
+}
+
+.patient-status-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 30px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: #e0f7eb;
+    color: #047857;
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.overview-header,
+.status-card,
+.summary-card,
+.table-card,
+.filter-card,
+.info-card,
+.guardians-container,
+.modal-content,
+.chat-panel,
+.chat-sidebar,
+.suggestion-card,
+.guardian-card,
+.empty-state {
+    border-radius: 18px;
+}
+
+.overview-header {
+    background: #ffffff;
+    border: 1px solid #dbe7f0;
+    box-shadow: 0 18px 45px rgba(15, 77, 191, 0.06);
+}
+
+.overview-header h2 {
+    font-size: 30px;
+    letter-spacing: 0;
+}
+
+.status-card,
+.summary-card,
+.table-card,
+.filter-card,
+.info-card {
+    box-shadow: 0 18px 45px rgba(15, 77, 191, 0.06);
+}
+
+.status-card {
+    min-height: 124px;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.status-card:hover {
+    border-color: #b7caf5;
+    box-shadow: 0 22px 48px rgba(15, 77, 191, 0.1);
+}
+
+.status-card::after {
+    display: none;
+}
+
+.section-header h2,
+.section-header h3 {
+    font-size: 22px;
+}
+
+.appointments-table {
+    border-collapse: separate;
+    border-spacing: 0;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    overflow: hidden;
+}
+
+.appointments-table thead {
+    background: #f8fbff;
+}
+
+.appointments-table th {
+    font-weight: 800;
+    color: #475569;
+}
+
+.appointments-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.appointments-filter-bar,
+.filter-card {
+    background: #ffffff;
+    border: 1px solid #dbe7f0;
+    border-radius: 18px;
+    padding: 18px;
+    box-shadow: 0 14px 34px rgba(15, 77, 191, 0.05);
+}
+
+.appointments-filter-bar {
+    margin-bottom: 20px;
+}
+
+.icon-button {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+}
+
+#appointmentsPrevMonth,
+#appointmentsNextMonth {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    font-size: 0;
+}
+
+#appointmentsPrevMonth::before,
+#appointmentsNextMonth::before {
+    font-size: 22px;
+    line-height: 1;
+}
+
+#appointmentsPrevMonth::before {
+    content: '<';
+}
+
+#appointmentsNextMonth::before {
+    content: '>';
+}
+
+.appointment-card {
+    border-radius: 16px;
+    box-shadow: 0 14px 34px rgba(15, 77, 191, 0.05);
+}
+
+.appointment-time-block {
+    border-radius: 14px;
+}
+
+.suggestion-card,
+.guardian-card {
+    background: #ffffff;
+    box-shadow: 0 12px 28px rgba(15, 77, 191, 0.05);
+}
+
+.chat-sidebar,
+.chat-messages,
+.schedule-day-column {
+    background: #f8fbff;
+}
+
+.modal-content {
+    max-width: 500px;
 }
 
 @media (max-width: 1080px) {

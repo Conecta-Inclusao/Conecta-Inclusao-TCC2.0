@@ -66,6 +66,10 @@ function isThirtyMinuteSlot(dateTime) {
   return !Number.isNaN(appointmentDate.getTime()) && (minutes === 0 || minutes === 30);
 }
 
+function appointmentSlotMinute(dateTime) {
+  return String(dateTime || '').slice(0, 16);
+}
+
 const loginLimiter = rateLimit({
   windowMs: 60 * 1000,
   limit: 20,
@@ -651,14 +655,14 @@ router.post("/patient/appointments", authenticateToken, async (req, res, next) =
       `SELECT id
        FROM agendamentos
        WHERE medico_id = ?
-         AND data_agendamento = ?
+         AND DATE_FORMAT(data_agendamento, '%Y-%m-%d %H:%i') = ?
          AND status IN ('pendente', 'confirmado')
        LIMIT 1`,
-      [medico.id, appointmentDate]
+      [medico.id, appointmentSlotMinute(appointmentDate)]
     );
 
     if (conflictRows.length > 0) {
-      return res.status(409).json({ message: 'Horario ja ocupado para este profissional.' });
+      return res.status(409).json({ message: 'Este horario ja foi marcado por outro paciente para este profissional. Escolha outro horario.' });
     }
 
     const [insertResult] = await pool.execute(
@@ -849,15 +853,15 @@ router.put("/patient/appointments/:id", authenticateToken, async (req, res, next
       `SELECT id
        FROM agendamentos
        WHERE medico_id = ?
-         AND data_agendamento = ?
+         AND DATE_FORMAT(data_agendamento, '%Y-%m-%d %H:%i') = ?
          AND status IN ('pendente', 'confirmado')
          AND id <> ?
        LIMIT 1`,
-      [doctorIdForConflict, appointmentDate, appointmentId]
+      [doctorIdForConflict, appointmentSlotMinute(appointmentDate), appointmentId]
     );
 
     if (conflictRows.length > 0) {
-      return res.status(409).json({ message: 'Horario ja ocupado para este profissional.' });
+      return res.status(409).json({ message: 'Este horario ja foi marcado por outro paciente para este profissional. Escolha outro horario.' });
     }
 
     if (medicoId) {

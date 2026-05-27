@@ -1,4 +1,4 @@
-import { getUserProfile, getAvailableDoctors } from './api.js';
+import { getUserProfile, getAvailableDoctors, getProfessionalAppointments } from './api.js';
 
 const PROFESSIONALS_STORAGE_KEY = 'companyProfessionals';
 const PATIENT_MESSAGES_STORAGE_KEY = 'patientProfessionalMessages';
@@ -24,6 +24,45 @@ let patientAppointmentsLoaded = false;
 let availableProfessionals = [];
 let appointmentsMonthFilter = '';
 let user = null;
+let patientAppointmentsRefreshTimer = null;
+
+function normalizeAppointmentStatus(status) {
+    const normalized = normalizeText(status || 'pendente');
+    if (normalized === 'realizado' || normalized === 'finalizado' || normalized === 'concluido') {
+        return 'realizado';
+    }
+    if (normalized === 'confirmado' || normalized === 'em atendimento') {
+        return 'confirmado';
+    }
+    if (normalized === 'cancelado') {
+        return 'cancelado';
+    }
+    return 'pendente';
+}
+
+function getAppointmentStatusLabel(status) {
+    const normalized = normalizeAppointmentStatus(status);
+    if (normalized === 'realizado') return 'Finalizado';
+    if (normalized === 'confirmado') return 'Em atendimento';
+    if (normalized === 'cancelado') return 'Cancelado';
+    return 'Agendado';
+}
+
+function getAppointmentStatusClass(status) {
+    return `appointment-status-${normalizeAppointmentStatus(status)}`;
+}
+
+function canPatientManageAppointment(appointment) {
+    return normalizeAppointmentStatus(appointment?.status) === 'pendente';
+}
+
+function appointmentsSnapshot(appointments) {
+    return JSON.stringify((appointments || []).map(appointment => ({
+        id: appointment.id,
+        date: appointment.date,
+        status: appointment.status
+    })));
+}
 
 function refreshGuardianPasswordFeedback() {
     const guardianPassword = document.getElementById('guardianPassword');
@@ -197,6 +236,44 @@ function getAvailableProfessionals() {
     return availableProfessionals;
 }
 
+function normalizeAppointmentSlot(dateTime) {
+    if (!dateTime) return '';
+    return String(dateTime).replace('T', ' ').trim().slice(0, 16);
+}
+
+function isActiveAppointmentStatus(status) {
+    return ['pendente', 'confirmado'].includes(String(status || '').toLowerCase());
+}
+
+async function isProfessionalSlotAlreadyTaken(professionalId, appointmentDateTime, ignoredAppointmentId = null) {
+    if (!professionalId || !appointmentDateTime) return false;
+
+    const result = await getProfessionalAppointments(professionalId, { limit: 100, offset: 0 });
+    if (!result.ok) {
+        console.error('Nao foi possivel verificar disponibilidade do profissional:', result);
+        return false;
+    }
+
+    const appointments = Array.isArray(result.data?.data)
+        ? result.data.data
+        : Array.isArray(result.data)
+            ? result.data
+            : [];
+    const requestedSlot = normalizeAppointmentSlot(appointmentDateTime);
+
+    return appointments.some(appointment => {
+        if (ignoredAppointmentId && String(appointment.id) === String(ignoredAppointmentId)) {
+            return false;
+        }
+
+        const appointmentDate = appointment.appointmentDate || appointment.data_agendamento || appointment.date || '';
+        const appointmentTime = appointment.appointmentTime || appointment.hora_agendamento || '';
+        const appointmentSlot = normalizeAppointmentSlot(mergeAppointmentDateAndTime(appointmentDate, appointmentTime));
+
+        return appointmentSlot === requestedSlot && isActiveAppointmentStatus(appointment.status);
+    });
+}
+
 async function fetchPatientAppointments() {
     const token = getToken();
     if (!token) {
@@ -252,6 +329,34 @@ function openGuardianModal() {
         if (typeof setupPasswordVisibilityToggles === 'function') setupPasswordVisibilityToggles();
         refreshGuardianPasswordFeedback();
     }
+}
+
+async function refreshPatientAppointmentsFromServer({ silent = true } = {}) {
+    const before = appointmentsSnapshot(patientAppointments);
+    await fetchPatientAppointments();
+    const after = appointmentsSnapshot(patientAppointments);
+
+    if (before !== after) {
+        refreshDashboard();
+        if (!silent) {
+            await showPopup('Status dos seus agendamentos atualizado.');
+        }
+    }
+}
+
+function startPatientAppointmentsAutoRefresh() {
+    if (patientAppointmentsRefreshTimer) return;
+
+    patientAppointmentsRefreshTimer = window.setInterval(() => {
+        if (document.hidden) return;
+        refreshPatientAppointmentsFromServer({ silent: true });
+    }, 30000);
+
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+            refreshPatientAppointmentsFromServer({ silent: true });
+        }
+    });
 }
 
 // Função para fechar modal de responsável
@@ -1231,7 +1336,7 @@ function renderOverviewAppointments() {
     if (!appointments.length) {
         tableBody.innerHTML = `
             <tr>
-                <td colspan="4">Nenhum agendamento encontrado.</td>
+                <td colspan="5">Nenhum agendamento encontrado.</td>
             </tr>
         `;
         return;
@@ -1244,6 +1349,11 @@ function renderOverviewAppointments() {
             <td>${escapeHTML(appointment.doctor)}</td>
             <td>${escapeHTML(appointment.hospital)}</td>
             <td>${escapeHTML(formatDate(appointment.date))}</td>
+            <td>
+                <span class="appointment-status-badge ${getAppointmentStatusClass(appointment.status)}">
+                    ${escapeHTML(getAppointmentStatusLabel(appointment.status))}
+                </span>
+            </td>
         `;
         tableBody.appendChild(row);
     });
@@ -1290,6 +1400,7 @@ function createAppointmentCardElement(appointment) {
     card.dataset.specialty = appointment.specialty;
     card.dataset.doctor = appointment.doctor;
     card.dataset.hospital = appointment.hospital;
+    const canManage = canPatientManageAppointment(appointment);
     card.innerHTML = `
         <div class="appointment-time-block">
             <span class="time-hour">${escapeHTML(timeStr)}</span>
@@ -1298,15 +1409,20 @@ function createAppointmentCardElement(appointment) {
         <div class="appointment-info">
             <div class="appointment-headline">
                 <strong>${escapeHTML(appointment.doctor)}</strong>
-                <span class="specialty-badge">${escapeHTML(appointment.specialty)}</span>
+                <div class="appointment-badges">
+                    <span class="specialty-badge">${escapeHTML(appointment.specialty)}</span>
+                    <span class="appointment-status-badge ${getAppointmentStatusClass(appointment.status)}">
+                        ${escapeHTML(getAppointmentStatusLabel(appointment.status))}
+                    </span>
+                </div>
             </div>
             <div class="appointment-details">
                 <span>${escapeHTML(appointment.hospital)}</span>
                 <span class="date-label">${escapeHTML(formatDate(appointment.date))}</span>
             </div>
             <div class="card-actions">
-                <button class="btn-secondary btn-reschedule" type="button">Buscar outro horario</button>
-                <button class="btn-danger btn-cancel" type="button">Desmarcar</button>
+                <button class="btn-secondary btn-reschedule" type="button" ${canManage ? '' : 'disabled'}>Buscar outro horario</button>
+                <button class="btn-danger btn-cancel" type="button" ${canManage ? '' : 'disabled'}>Desmarcar</button>
             </div>
         </div>
     `;
@@ -1415,7 +1531,7 @@ function renderAppointmentsList() {
         // Add up to 3 appointment items for compact view
         appts.slice(0, 4).forEach(appointment => {
             const ap = document.createElement('div');
-            ap.className = 'calendar-appointment';
+            ap.className = `calendar-appointment ${getAppointmentStatusClass(appointment.status)}`;
             ap.dataset.id = appointment.id || '';
             ap.dataset.date = appointment.date || '';
 
@@ -1429,6 +1545,11 @@ function renderAppointmentsList() {
 
             ap.appendChild(tspan);
             ap.appendChild(title);
+
+            const status = document.createElement('span');
+            status.className = `appointment-status-dot ${getAppointmentStatusClass(appointment.status)}`;
+            status.title = getAppointmentStatusLabel(appointment.status);
+            ap.appendChild(status);
 
             // Click opens detail popup with actions
             ap.addEventListener('click', (e) => {
@@ -1509,6 +1630,12 @@ function showAppointmentDetail(appointment) {
     p2.style.color = '#64748b';
     content.appendChild(p2);
 
+    const statusBadge = document.createElement('span');
+    statusBadge.className = `appointment-status-badge ${getAppointmentStatusClass(appointment.status)}`;
+    statusBadge.textContent = getAppointmentStatusLabel(appointment.status);
+    statusBadge.style.marginBottom = '14px';
+    content.appendChild(statusBadge);
+
     const btns = document.createElement('div');
     btns.style.display = 'flex';
     btns.style.gap = '8px';
@@ -1518,7 +1645,9 @@ function showAppointmentDetail(appointment) {
     resBtn.className = 'btn-secondary';
     resBtn.type = 'button';
     resBtn.textContent = 'Remarcar';
+    resBtn.disabled = !canPatientManageAppointment(appointment);
     resBtn.addEventListener('click', () => {
+        if (!canPatientManageAppointment(appointment)) return;
         document.body.removeChild(modal);
         openRescheduleModal(appointment.id);
     });
@@ -1527,7 +1656,9 @@ function showAppointmentDetail(appointment) {
     delBtn.className = 'btn-danger';
     delBtn.type = 'button';
     delBtn.textContent = 'Desmarcar';
+    delBtn.disabled = !canPatientManageAppointment(appointment);
     delBtn.addEventListener('click', async () => {
+        if (!canPatientManageAppointment(appointment)) return;
         document.body.removeChild(modal);
         await cancelAppointmentById(appointment.id, appointment.date);
     });
@@ -1747,9 +1878,14 @@ async function cancelAppointment(button) {
 
 document.addEventListener('DOMContentLoaded', async () => {
     await loadUserInfo();
+    startPatientAppointmentsAutoRefresh();
     const navButtons = document.querySelectorAll('.nav-link');
     navButtons.forEach(button => {
-        button.addEventListener('click', () => {
+        button.addEventListener('click', async () => {
+            if (button.dataset.tab === 'overview' || button.dataset.tab === 'appointments') {
+                await refreshPatientAppointmentsFromServer({ silent: true });
+            }
+
             if (button.dataset.tab === 'appointments') {
                 openAppointmentsTab({ resetMonth: true });
                 return;
@@ -1814,6 +1950,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 return;
             }
 
+            if (!selectedProfessional) {
+                await showPopup('Selecione um profissional que esteja cadastrado no sistema.');
+                return;
+            }
+
             // Tentar criar ou atualizar agendamento no backend
             const token = localStorage.getItem('token');
             if (!token) {
@@ -1823,6 +1964,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             const editId = appointmentForm.dataset.editAppointmentId;
             try {
+                const slotTaken = await isProfessionalSlotAlreadyTaken(selectedProfessional.id, appointmentDateTime, editId || null);
+                if (slotTaken) {
+                    await showPopup('Este horÃ¡rio jÃ¡ foi marcado por outro paciente para este profissional. Escolha outro horÃ¡rio.');
+                    return;
+                }
+
                 if (editId) {
                     // Remarcar (atualizar) um agendamento existente
                     const url = `http://localhost:3000/auth/patient/appointments/${encodeURIComponent(editId)}`;
@@ -1869,11 +2016,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                     await showPopup(`Remarcacao realizada para ${formatDate(updated.date)} as ${getAppointmentTime(updated.date)}.`);
                 } else {
                     // Criar novo agendamento
-                    if (!selectedProfessional) {
-                        await showPopup('Selecione um profissional que esteja cadastrado no sistema.');
-                        return;
-                    }
-
                     const resp = await fetch('http://localhost:3000/auth/patient/appointments', {
                         method: 'POST',
                         headers: {
@@ -2057,17 +2199,6 @@ function renderAppointmentsState() {
             emptyState.remove();
         }
         
-        // Atualizar avatar do paciente (gera avatar via ui-avatars quando houver nome)
-        const patientAvatar = document.getElementById('patientAvatar');
-        if (patientAvatar) {
-            if (user.name) {
-                const encoded = encodeURIComponent(user.name);
-                patientAvatar.src = `https://ui-avatars.com/api/?name=${encoded}&background=0073e6&color=fff`;
-            } else {
-                patientAvatar.removeAttribute('src');
-            }
-        }
-
         // Atualizar responsável exibido no perfil quando disponível
         const profilePatientResponsible = document.getElementById('profilePatientResponsible');
         const responsible = user.responsible || localStorage.getItem('patientResponsible') || '';
