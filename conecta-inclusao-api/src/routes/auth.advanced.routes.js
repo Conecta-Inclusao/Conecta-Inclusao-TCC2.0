@@ -1,6 +1,7 @@
 // Rotas avançadas de autenticação com suporte a CRM, CNPJ e CPF
 import { Router } from "express";
 import rateLimit from "express-rate-limit";
+import bcrypt from "bcrypt";
 import { pool } from "../db.js";
 import {
   universalLoginSchema,
@@ -743,7 +744,6 @@ router.post("/patient/guardians", authenticateToken, async (req, res, next) => {
         `INSERT INTO responsavel (nome, email, senha) VALUES (?, ?, ?)`,
         [name, email, passwordHash]
       );
-      console.log("Resultado da inserção do responsável:", insertResp);
 
       const responsavelId = insertResp.insertId;
       console.log("Responsavel criado com ID:", responsavelId);
