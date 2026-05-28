@@ -38,7 +38,7 @@
                         <strong id="patientHeaderName">Paciente</strong>
                         <span id="patientHeaderSubtitle">Paciente ativo</span>
                     </div>
-                    <img id="patientAvatar" src="" alt="Avatar do paciente">
+                    <span class="patient-status-chip">Ativo</span>
                 </div>
             </header>
 
@@ -111,6 +111,7 @@
                                 <th>Profissional</th>
                                 <th>Unidade</th>
                                 <th>Data</th>
+                                <th>Status</th>
                             </tr>
                         </thead>
                         <tbody id="overviewAppointmentsTable"></tbody>
@@ -337,7 +338,7 @@
                     </div>
                     <div class="split-field">
                         <label for="modalTime">Horário</label>
-                        <input type="time" id="modalTime" required>
+                        <input type="time" id="modalTime" step="1800" required>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -380,7 +381,7 @@
                 </div>
                 <div class="input-group">
                     <label for="guardianPassword">Senha de acesso</label>
-                    <input type="password" id="guardianPassword" required placeholder="Digite uma senha de acesso">
+                    <input type="password" id="guardianPassword" data-password-guidance="true" required placeholder="Senha forte (8+ caracteres, maiúscula, minúscula, número e especial)">
                 </div>
                 <div class="input-group">
                     <label for="guardianEmail">E-mail</label>
@@ -413,6 +414,7 @@
     </div>
 
     <script src="../assets/js/utils.js"></script>
+    <script src="http://localhost:3000/socket.io/socket.io.js"></script>
     <script type="module" src="../assets/js/dash-paciente.js"></script>
 </body>
 </html>

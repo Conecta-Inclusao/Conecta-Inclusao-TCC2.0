@@ -1,59 +1,76 @@
 import { Router } from "express";
+import rateLimit from "express-rate-limit";
 import { z } from "zod";
-import { authenticateToken } from "../services/auth.advanced.service.js";
-import {
-  getConversationWithUser,
-  listAllowedMessageContacts,
-  sendMessageToUser
-} from "../services/message.service.js";
+
+import { getMessages, sendMessage } from "../controllers/chat.controller.js";
+import { authenticateToken } from "../middlewares/auth.middleware.js";
 
 const router = Router();
 
-const sendMessageSchema = z.object({
+const chatLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 120
+});
+
+const agendamentoParamSchema = z.object({
+  agendamentoId: z.coerce.number().int().positive()
+});
+
+const messageBodySchema = z.object({
+  conteudo: z
+    .string()
+    .trim()
+    .min(1, "Mensagem obrigatoria")
+    .max(2000, "Mensagem muito longa")
+    .optional(),
   content: z
     .string()
     .trim()
     .min(1, "Mensagem obrigatoria")
     .max(2000, "Mensagem muito longa")
+    .optional()
+}).refine((data) => data.conteudo || data.content, {
+  message: "Mensagem obrigatoria",
+  path: ["conteudo"]
 });
 
-router.get("/contacts", authenticateToken, async (req, res) => {
-  const result = await listAllowedMessageContacts(req.user);
-
-  if (!result.ok) {
-    return res.status(result.statusCode).json({ message: result.message });
-  }
-
-  return res.status(200).json(result.data);
-});
-
-router.get("/thread/:targetProfileId", authenticateToken, async (req, res) => {
-  const result = await getConversationWithUser(req.user, req.params.targetProfileId);
-
-  if (!result.ok) {
-    return res.status(result.statusCode).json({ message: result.message });
-  }
-
-  return res.status(200).json(result.data);
-});
-
-router.post("/thread/:targetProfileId", authenticateToken, async (req, res) => {
-  const parsed = sendMessageSchema.safeParse(req.body);
+function validateAgendamentoParam(req, res, next) {
+  const parsed = agendamentoParamSchema.safeParse(req.params);
 
   if (!parsed.success) {
-    return res.status(400).json({
-      message: "Dados invalidos",
-      errors: parsed.error.issues
-    });
+    return res.status(400).json({ message: "Agendamento invalido.", errors: parsed.error.issues });
   }
 
-  const result = await sendMessageToUser(req.user, req.params.targetProfileId, parsed.data.content);
+  req.params.agendamentoId = String(parsed.data.agendamentoId);
+  return next();
+}
 
-  if (!result.ok) {
-    return res.status(result.statusCode).json({ message: result.message });
+function validateMessageBody(req, res, next) {
+  const parsed = messageBodySchema.safeParse(req.body);
+
+  if (!parsed.success) {
+    return res.status(400).json({ message: "Dados invalidos.", errors: parsed.error.issues });
   }
 
-  return res.status(201).json(result.data);
-});
+  req.body = parsed.data;
+  return next();
+}
+
+router.get(
+  "/agendamentos/:agendamentoId",
+  authenticateToken,
+  validateAgendamentoParam,
+  getMessages
+);
+
+router.post(
+  "/agendamentos/:agendamentoId",
+  authenticateToken,
+  chatLimiter,
+  validateAgendamentoParam,
+  validateMessageBody,
+  sendMessage
+);
 
 export default router;
+

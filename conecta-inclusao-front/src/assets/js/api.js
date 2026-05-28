@@ -166,7 +166,7 @@ export async function updateAppointmentStatus(appointmentId, status) {
 }
 
 export async function getClinicas() {
-    const response = await fetch('http://localhost:3000/api/clinica');
+    const response = await fetch('http://localhost:3000/api/clinicas');
     const data = await response.json();
     return { ok: response.ok, status: response.status, data };
 }

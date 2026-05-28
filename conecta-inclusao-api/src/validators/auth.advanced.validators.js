@@ -85,6 +85,16 @@ export const resetPasswordSchema = z.object({
   newPassword: strongPasswordSchema
 });
 
+export const patientGuardianSchema = z.object({
+  name: z.string().trim().min(3, "Nome do responsÃ¡vel muito curto").max(100),
+  relationship: z.string().trim().min(2, "Parentesco muito curto").max(100),
+  email: z.string().trim().email("Email invÃ¡lido"),
+  password: strongPasswordSchema,
+  permissions: z
+    .array(z.enum(["view_appointments", "manage_appointments", "send_messages"]))
+    .optional()
+});
+
 // Schema para registro de paciente (CPF)
 export const registerPatientSchema = z.object({
   cpf: z

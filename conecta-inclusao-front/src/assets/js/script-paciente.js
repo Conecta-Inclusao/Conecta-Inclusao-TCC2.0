@@ -132,8 +132,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const cpf = document.getElementById('cpf').value;
             const password = document.getElementById('password').value;
 
-            if (cpf.length < 11 || password.length < 4) {
-                showPopup("Por favor, informe um CPF e uma senha com no mínimo 4 caracteres.");
+            if (cpf.length < 11 || password.length < 8) {
+                showPopup("Por favor, informe um CPF e uma senha com no mínimo 8 caracteres.");
                 return;
             }
 

@@ -2,6 +2,7 @@
 import { Router } from "express";
 import rateLimit from "express-rate-limit";
 import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
 import { pool } from "../db.js";
 import {
   universalLoginSchema,
@@ -10,7 +11,8 @@ import {
   registerClinicSchema,
   resetTemporaryPasswordSchema,
   forgotPasswordSchema,
-  resetPasswordSchema
+  resetPasswordSchema,
+  patientGuardianSchema
 } from "../validators/auth.advanced.validators.js";
 import {
   loginUniversal,
@@ -28,6 +30,48 @@ import {
 } from "../services/auth.advanced.service.js";
 
 const router = Router();
+
+function normalizeAppointmentDateTime(date, time) {
+  const rawDate = String(date || '').trim();
+  const rawTime = String(time || '').trim();
+
+  if (!rawDate) return null;
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+    const appointmentTime = rawTime ? rawTime.slice(0, 5) : '00:00';
+    return `${rawDate} ${appointmentTime}:00`;
+  }
+
+  const normalized = rawDate.replace('T', ' ').replace(/\.\d{3}Z$/, '').trim();
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(normalized)) {
+    return `${normalized}:00`;
+  }
+
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(normalized)) {
+    return normalized;
+  }
+
+  return rawDate;
+}
+
+function isValidAppointmentDateTime(dateTime) {
+  return Boolean(dateTime) && !Number.isNaN(new Date(String(dateTime).replace(' ', 'T')).getTime());
+}
+
+function isPastAppointmentDateTime(dateTime) {
+  const appointmentDate = new Date(String(dateTime).replace(' ', 'T'));
+  return !Number.isNaN(appointmentDate.getTime()) && appointmentDate < new Date();
+}
+
+function isThirtyMinuteSlot(dateTime) {
+  const appointmentDate = new Date(String(dateTime).replace(' ', 'T'));
+  const minutes = appointmentDate.getMinutes();
+  return !Number.isNaN(appointmentDate.getTime()) && (minutes === 0 || minutes === 30);
+}
+
+function appointmentSlotMinute(dateTime) {
+  return String(dateTime || '').slice(0, 16);
+}
 
 const loginLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -586,8 +630,10 @@ router.get("/patient/appointments", authenticateToken, async (req, res, next) =>
     const [rows] = await pool.execute(
       `SELECT
          a.id,
+         a.data_agendamento,
          a.data_agendamento AS appointmentDate,
-         a.status,
+         DATE_FORMAT(a.data_agendamento, '%H:%i') AS appointmentTime,
+         COALESCE(a.status, 'pendente') AS status,
          m.name AS doctorName,
          m.especialidade AS specialty,
          m.unidade AS unit,
@@ -596,7 +642,7 @@ router.get("/patient/appointments", authenticateToken, async (req, res, next) =>
        INNER JOIN medicos m ON a.medico_id = m.id
        INNER JOIN clinicas c ON a.clinica_id = c.id
        WHERE a.paciente_id = ?
-         AND a.status <> 'cancelado'
+         AND (a.status IS NULL OR a.status <> 'cancelado')
        ORDER BY a.data_agendamento ASC`,
       [patientId]
     );
@@ -665,15 +711,22 @@ router.post("/patient/appointments", authenticateToken, async (req, res, next) =
       return res.status(403).json({ message: 'Acesso negado. Apenas pacientes podem criar agendamentos.' });
     }
 
-    const { med_crm, date } = req.body;
+    const { med_crm, date, time } = req.body;
     if (!med_crm || !date) {
       return res.status(400).json({ message: 'med_crm e date sao obrigatorios.' });
     }
 
-    const rawDate = String(date).trim();
-    const appointmentDate = rawDate.length === 10 ? `${rawDate} 00:00:00` : rawDate;
-    if (Number.isNaN(new Date(appointmentDate).getTime())) {
+    const appointmentDate = normalizeAppointmentDateTime(date, time);
+    if (!isValidAppointmentDateTime(appointmentDate)) {
       return res.status(400).json({ message: 'Date inválido. Use formato YYYY-MM-DD ou YYYY-MM-DD HH:MM:SS.' });
+    }
+
+    if (!isThirtyMinuteSlot(appointmentDate)) {
+      return res.status(400).json({ message: 'Escolha um horario em intervalos de 30 minutos.' });
+    }
+
+    if (isPastAppointmentDateTime(appointmentDate)) {
+      return res.status(400).json({ message: 'Nao e possivel agendar para uma data ou horario no passado.' });
     }
 
     // Normalizar CRM
@@ -696,6 +749,20 @@ router.post("/patient/appointments", authenticateToken, async (req, res, next) =
       return res.status(400).json({ message: 'Profissional não vinculado a nenhuma clínica. Atualize o cadastro do médico antes de agendar.' });
     }
 
+    const [conflictRows] = await pool.execute(
+      `SELECT id
+       FROM agendamentos
+       WHERE medico_id = ?
+         AND DATE_FORMAT(data_agendamento, '%Y-%m-%d %H:%i') = ?
+         AND status IN ('pendente', 'confirmado')
+       LIMIT 1`,
+      [medico.id, appointmentSlotMinute(appointmentDate)]
+    );
+
+    if (conflictRows.length > 0) {
+      return res.status(409).json({ message: 'Este horario ja foi marcado por outro paciente para este profissional. Escolha outro horario.' });
+    }
+
     const [insertResult] = await pool.execute(
       `INSERT INTO agendamentos (clinica_id, paciente_id, medico_id, data_agendamento, status)
        VALUES (?, ?, ?, ?, 'pendente')`,
@@ -708,7 +775,15 @@ router.post("/patient/appointments", authenticateToken, async (req, res, next) =
     }
 
     const [rows] = await pool.execute(
-      `SELECT a.id, a.data_agendamento AS appointmentDate, a.status, m.name AS doctorName, m.especialidade AS specialty, m.unidade AS unit, c.nome AS clinicName
+      `SELECT a.id,
+              a.data_agendamento,
+              a.data_agendamento AS appointmentDate,
+              DATE_FORMAT(a.data_agendamento, '%H:%i') AS appointmentTime,
+              a.status,
+              m.name AS doctorName,
+              m.especialidade AS specialty,
+              m.unidade AS unit,
+              c.nome AS clinicName
        FROM agendamentos a
        INNER JOIN medicos m ON a.medico_id = m.id
        INNER JOIN clinicas c ON a.clinica_id = c.id
@@ -729,10 +804,15 @@ router.post("/patient/guardians", authenticateToken, async (req, res, next) => {
       return res.status(403).json({ message: 'Acesso negado. Apenas pacientes podem adicionar responsáveis.' });
     }
 
-    const { name, parentesco, email, password, permissoes } = req.body;
-    if (!name || !parentesco || !email || !password) {
-      return res.status(400).json({ message: 'name, parentesco, email e password sao obrigatorios.' });
+    const parsed = patientGuardianSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        message: "Dados invalidos",
+        errors: parsed.error.errors
+      });
     }
+
+    const { name, relationship, email, password, permissions = [] } = parsed.data;
 
     const conn = await pool.getConnection();
     try {
@@ -805,11 +885,17 @@ router.get("/patient/guardians", authenticateToken, async (req, res, next) => {
       `SELECT r.id, r.nome AS name, r.email, pr.parentesco AS parentesco
        FROM paciente_responsavel pr
        INNER JOIN responsavel r ON pr.id_responsavel = r.id
-       WHERE pr.id_paciente = ?`,
+       LEFT JOIN responsavel_permissoes rp ON rp.id_responsavel = r.id
+       LEFT JOIN permissoes p ON p.id = rp.id_permissao
+       WHERE pr.id_paciente = ?
+       GROUP BY r.id, r.nome, r.email, pr.parentesco`,
       [pacienteId]
     );
 
-    return res.status(200).json(rows || []);
+    return res.status(200).json((rows || []).map((row) => ({
+      ...row,
+      permissions: row.permissions ? row.permissions.split(",").filter(Boolean) : []
+    })));
   } catch (err) {
     next(err);
   }
@@ -827,30 +913,27 @@ router.put("/patient/appointments/:id", authenticateToken, async (req, res, next
       return res.status(400).json({ message: 'ID de agendamento inválido.' });
     }
 
-    const { med_crm, date } = req.body;
+    const { med_crm, date, time } = req.body;
     if (!date) {
       return res.status(400).json({ message: 'Date é obrigatório para remarcar.' });
     }
 
-    const rawDate = String(date).trim();
-    const appointmentDate = rawDate.length === 10 ? `${rawDate} 00:00:00` : rawDate;
-    if (Number.isNaN(new Date(appointmentDate).getTime())) {
+    const appointmentDate = normalizeAppointmentDateTime(date, time);
+    if (!isValidAppointmentDateTime(appointmentDate)) {
       return res.status(400).json({ message: 'Date inválido. Use formato YYYY-MM-DD ou YYYY-MM-DD HH:MM:SS.' });
     }
 
-    // Não permitir remarcar para data no passado
-    const newDateObj = new Date(appointmentDate);
-    const today = new Date();
-    today.setHours(0,0,0,0);
-    const compareDate = new Date(newDateObj);
-    compareDate.setHours(0,0,0,0);
-    if (compareDate < today) {
-      return res.status(400).json({ message: 'Nao é possivel remarcar para uma data passada.' });
+    if (!isThirtyMinuteSlot(appointmentDate)) {
+      return res.status(400).json({ message: 'Escolha um horario em intervalos de 30 minutos.' });
+    }
+
+    if (isPastAppointmentDateTime(appointmentDate)) {
+      return res.status(400).json({ message: 'Nao e possivel remarcar para uma data ou horario no passado.' });
     }
 
     const patientId = Number(req.user.sub);
     const [[existing]] = await pool.execute(
-      `SELECT id, paciente_id, status FROM agendamentos WHERE id = ? LIMIT 1`,
+      `SELECT id, paciente_id, medico_id, status FROM agendamentos WHERE id = ? LIMIT 1`,
       [appointmentId]
     );
 
@@ -884,6 +967,22 @@ router.put("/patient/appointments/:id", authenticateToken, async (req, res, next
     }
 
     // Montar query de atualização
+    const doctorIdForConflict = medicoId || existing.medico_id;
+    const [conflictRows] = await pool.execute(
+      `SELECT id
+       FROM agendamentos
+       WHERE medico_id = ?
+         AND DATE_FORMAT(data_agendamento, '%Y-%m-%d %H:%i') = ?
+         AND status IN ('pendente', 'confirmado')
+         AND id <> ?
+       LIMIT 1`,
+      [doctorIdForConflict, appointmentSlotMinute(appointmentDate), appointmentId]
+    );
+
+    if (conflictRows.length > 0) {
+      return res.status(409).json({ message: 'Este horario ja foi marcado por outro paciente para este profissional. Escolha outro horario.' });
+    }
+
     if (medicoId) {
       await pool.execute(
         `UPDATE agendamentos SET medico_id = ?, clinica_id = ?, data_agendamento = ? WHERE id = ?`,
@@ -897,7 +996,15 @@ router.put("/patient/appointments/:id", authenticateToken, async (req, res, next
     }
 
     const [rows] = await pool.execute(
-      `SELECT a.id, a.data_agendamento AS appointmentDate, a.status, m.name AS doctorName, m.especialidade AS specialty, m.unidade AS unit, c.nome AS clinicName
+      `SELECT a.id,
+              a.data_agendamento,
+              a.data_agendamento AS appointmentDate,
+              DATE_FORMAT(a.data_agendamento, '%H:%i') AS appointmentTime,
+              a.status,
+              m.name AS doctorName,
+              m.especialidade AS specialty,
+              m.unidade AS unit,
+              c.nome AS clinicName
        FROM agendamentos a
        INNER JOIN medicos m ON a.medico_id = m.id
        INNER JOIN clinicas c ON a.clinica_id = c.id

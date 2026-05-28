@@ -1,41 +1,50 @@
-// Importa a biblioteca Zod para validação de dados
+// Importa a biblioteca Zod para validacao de dados
 import { z } from "zod";
 
-// Schema de validação para criação de agendamento
+function parseDateTime(value) {
+    return new Date(String(value).replace(' ', 'T'));
+}
+
+// Schema de validacao para criacao de agendamento
 export const createAgendamentoSchema = z.object({
     clinica_id: z
         .number()
         .int()
-        .positive("ID da clínica deve ser um número positivo"),
-    
+        .positive("ID da clinica deve ser um numero positivo"),
+
     paciente_id: z
         .number()
         .int()
-        .positive("ID do paciente deve ser um número positivo"),
-    
+        .positive("ID do paciente deve ser um numero positivo"),
+
     profissional_id: z
         .number()
         .int()
-        .positive("ID do profissional deve ser um número positivo"),
-    
+        .positive("ID do profissional deve ser um numero positivo"),
+
     data_agendamento: z
         .string()
-        .refine((date) => !isNaN(Date.parse(date)), "Data de agendamento inválida")
-        .refine((date) => new Date(date) > new Date(), "Data de agendamento deve ser futura"),
-    
+        .refine((date) => !Number.isNaN(parseDateTime(date).getTime()), "Data de agendamento invalida")
+        .refine((date) => parseDateTime(date) > new Date(), "Data de agendamento deve ser futura"),
+
+    hora_agendamento: z
+        .string()
+        .regex(/^\d{2}:\d{2}(:\d{2})?$/, "Hora de agendamento invalida")
+        .optional(),
+
     especialidade: z
         .string()
         .trim()
-        .min(1, "Especialidade é obrigatória")
+        .min(1, "Especialidade e obrigatoria")
         .max(100, "Especialidade muito longa"),
-    
+
     tipo_consulta: z
         .enum(['presencial', 'online', 'telefone'])
         .default('presencial'),
-    
+
     observacoes: z
         .string()
         .trim()
-        .max(500, "Observações não podem ter mais de 500 caracteres")
+        .max(500, "Observacoes nao podem ter mais de 500 caracteres")
         .optional()
 });

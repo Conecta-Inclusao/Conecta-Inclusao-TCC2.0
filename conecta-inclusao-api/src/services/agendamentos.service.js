@@ -1,5 +1,26 @@
 import { pool } from "../db.js";
 
+function normalizeAppointmentDateTime(date, time) {
+    const rawDate = String(date || '').trim();
+    const rawTime = String(time || '').trim();
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+        const appointmentTime = rawTime ? rawTime.slice(0, 5) : '00:00';
+        return `${rawDate} ${appointmentTime}:00`;
+    }
+
+    const normalized = rawDate.replace('T', ' ').trim();
+    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(normalized)) {
+        return `${normalized}:00`;
+    }
+
+    return normalized;
+}
+
+function appointmentSlotMinute(dateTime) {
+    return String(dateTime || '').slice(0, 16);
+}
+
 async function resolvePacienteId(pacienteId) {
     const [pacienteRows] = await pool.execute(
         `SELECT p.id
@@ -42,10 +63,12 @@ export async function createAgendamento(data) {
             paciente_id,
             profissional_id,
             data_agendamento,
+            hora_agendamento,
             especialidade,
             tipo_consulta = "presencial",
             observacoes
         } = data;
+        const appointmentDateTime = normalizeAppointmentDateTime(data_agendamento, hora_agendamento);
 
         const clinica = await resolveClinicaId(clinica_id);
         if (!clinica) {
@@ -87,16 +110,16 @@ export async function createAgendamento(data) {
             `SELECT id
              FROM agendamentos
              WHERE medico_id = ?
-               AND data_agendamento = ?
+               AND DATE_FORMAT(data_agendamento, '%Y-%m-%d %H:%i') = ?
                AND status IN ('confirmado', 'pendente')`,
-            [profissional.id, data_agendamento]
+            [profissional.id, appointmentSlotMinute(appointmentDateTime)]
         );
 
         if (conflito.length > 0) {
             return {
                 ok: false,
                 statusCode: 409,
-                message: "Horario ja ocupado para este profissional"
+                message: "Este horario ja foi marcado por outro paciente para este profissional. Escolha outro horario."
             };
         }
 
@@ -107,7 +130,7 @@ export async function createAgendamento(data) {
                 clinica.id,
                 paciente.id,
                 profissional.id,
-                data_agendamento
+                appointmentDateTime
             ]
         );
 
@@ -120,7 +143,8 @@ export async function createAgendamento(data) {
                 clinica_id: clinica.id,
                 paciente_id: paciente.id,
                 medico_id: profissional.id,
-                data_agendamento,
+                data_agendamento: appointmentDateTime,
+                hora_agendamento: appointmentDateTime.slice(11, 16),
                 status: "pendente"
             }
         };
@@ -138,6 +162,8 @@ export async function listAgendamentosByClinica(clinica_id, limit = 10, offset =
     try {
         const [rows] = await pool.execute(
             `SELECT a.*,
+                    a.data_agendamento AS appointmentDate,
+                    DATE_FORMAT(a.data_agendamento, '%H:%i') AS appointmentTime,
                     p.nome_paciente AS paciente_nome,
                     p.cpf AS paciente_cpf,
                     p.email AS paciente_email,
@@ -182,6 +208,8 @@ export async function listAgendamentosByProfissional(profissional_id, limit = 10
 
         const [rows] = await pool.execute(
             `SELECT a.*,
+                    a.data_agendamento AS appointmentDate,
+                    DATE_FORMAT(a.data_agendamento, '%H:%i') AS appointmentTime,
                     p.nome_paciente AS paciente_nome,
                     p.cpf AS paciente_cpf,
                     p.email AS paciente_email,
@@ -227,6 +255,8 @@ export async function listAgendamentosByPaciente(paciente_id, limit = 10, offset
 
         const [rows] = await pool.execute(
             `SELECT a.*,
+                    a.data_agendamento AS appointmentDate,
+                    DATE_FORMAT(a.data_agendamento, '%H:%i') AS appointmentTime,
                     m.name AS profissional_nome,
                     m.crm AS profissional_crm,
                     m.especialidade AS profissional_especialidade,
@@ -256,9 +286,10 @@ export async function listAgendamentosByPaciente(paciente_id, limit = 10, offset
 
 export async function updateAgendamentoStatus(id, status) {
     try {
+        const normalizedStatus = String(status || "").toLowerCase() === "finalizado" ? "realizado" : status;
         const validStatuses = ["pendente", "confirmado", "cancelado", "realizado"];
 
-        if (!validStatuses.includes(status)) {
+        if (!validStatuses.includes(normalizedStatus)) {
             return {
                 ok: false,
                 statusCode: 400,
@@ -268,7 +299,7 @@ export async function updateAgendamentoStatus(id, status) {
 
         const [result] = await pool.execute(
             "UPDATE agendamentos SET status = ? WHERE id = ?",
-            [status, id]
+            [normalizedStatus, id]
         );
 
         if (result.affectedRows === 0) {

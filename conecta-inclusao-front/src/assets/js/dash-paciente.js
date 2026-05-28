@@ -1,4 +1,4 @@
-import { getUserProfile, getPatientAppointments, getAvailableDoctors } from './api.js';
+import { getUserProfile, getAvailableDoctors, getProfessionalAppointments } from './api.js';
 
 const PROFESSIONALS_STORAGE_KEY = 'companyProfessionals';
 const PATIENT_MESSAGES_STORAGE_KEY = 'patientProfessionalMessages';
@@ -24,6 +24,58 @@ let patientAppointmentsLoaded = false;
 let availableProfessionals = [];
 let appointmentsMonthFilter = '';
 let user = null;
+let patientAppointmentsRefreshTimer = null;
+let patientChatSocket = null;
+const backendChatMessages = {};
+
+function normalizeAppointmentStatus(status) {
+    const normalized = normalizeText(status || 'pendente');
+    if (normalized === 'realizado' || normalized === 'finalizado' || normalized === 'concluido') {
+        return 'realizado';
+    }
+    if (normalized === 'confirmado' || normalized === 'em atendimento') {
+        return 'confirmado';
+    }
+    if (normalized === 'cancelado') {
+        return 'cancelado';
+    }
+    return 'pendente';
+}
+
+function getAppointmentStatusLabel(status) {
+    const normalized = normalizeAppointmentStatus(status);
+    if (normalized === 'realizado') return 'Finalizado';
+    if (normalized === 'confirmado') return 'Em atendimento';
+    if (normalized === 'cancelado') return 'Cancelado';
+    return 'Agendado';
+}
+
+function getAppointmentStatusClass(status) {
+    return `appointment-status-${normalizeAppointmentStatus(status)}`;
+}
+
+function canPatientManageAppointment(appointment) {
+    return normalizeAppointmentStatus(appointment?.status) === 'pendente';
+}
+
+function appointmentsSnapshot(appointments) {
+    return JSON.stringify((appointments || []).map(appointment => ({
+        id: appointment.id,
+        date: appointment.date,
+        status: appointment.status
+    })));
+}
+
+function refreshGuardianPasswordFeedback() {
+    const guardianPassword = document.getElementById('guardianPassword');
+    if (!guardianPassword) return;
+
+    if (typeof updatePasswordFeedback === 'function') {
+        updatePasswordFeedback(guardianPassword);
+    } else {
+        guardianPassword.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+}
 
 async function loadUserInfo() {
     const profileResult = await getUserProfile();
@@ -37,19 +89,10 @@ async function loadUserInfo() {
         user = {};
     }
 
-    const patientId = user?.id || localStorage.getItem('patientId');
-    if (patientId) {
-        const appointmentsResult = await getPatientAppointments(patientId);
-        if (appointmentsResult.ok && Array.isArray(appointmentsResult.data)) {
-            patientAppointments = appointmentsResult.data;
-        } else {
-            console.error('Falha ao carregar agendamentos do paciente:', appointmentsResult);
-            patientAppointments = [];
-        }
-        patientAppointmentsLoaded = true;
-    }
+    await fetchPatientAppointments();
 
     await fetchAvailableProfessionals();
+    initPatientChatSocket();
     renderGuardians();
     loadPatientData();
     refreshDashboard();
@@ -101,6 +144,12 @@ function loadPatientData() {
 function getCurrentMonthValue() {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function getDefaultAppointmentsMonth() {
+    const appointments = getAppointmentData();
+    const nextAppointment = appointments.find(appointment => appointment.date);
+    return nextAppointment?.date ? String(nextAppointment.date).slice(0, 7) : getCurrentMonthValue();
 }
 
 function formatMonthLabel(monthValue) {
@@ -187,6 +236,44 @@ function getAvailableProfessionals() {
     return availableProfessionals;
 }
 
+function normalizeAppointmentSlot(dateTime) {
+    if (!dateTime) return '';
+    return String(dateTime).replace('T', ' ').trim().slice(0, 16);
+}
+
+function isActiveAppointmentStatus(status) {
+    return ['pendente', 'confirmado'].includes(String(status || '').toLowerCase());
+}
+
+async function isProfessionalSlotAlreadyTaken(professionalId, appointmentDateTime, ignoredAppointmentId = null) {
+    if (!professionalId || !appointmentDateTime) return false;
+
+    const result = await getProfessionalAppointments(professionalId, { limit: 100, offset: 0 });
+    if (!result.ok) {
+        console.error('Nao foi possivel verificar disponibilidade do profissional:', result);
+        return false;
+    }
+
+    const appointments = Array.isArray(result.data?.data)
+        ? result.data.data
+        : Array.isArray(result.data)
+            ? result.data
+            : [];
+    const requestedSlot = normalizeAppointmentSlot(appointmentDateTime);
+
+    return appointments.some(appointment => {
+        if (ignoredAppointmentId && String(appointment.id) === String(ignoredAppointmentId)) {
+            return false;
+        }
+
+        const appointmentDate = appointment.appointmentDate || appointment.data_agendamento || appointment.date || '';
+        const appointmentTime = appointment.appointmentTime || appointment.hora_agendamento || '';
+        const appointmentSlot = normalizeAppointmentSlot(mergeAppointmentDateAndTime(appointmentDate, appointmentTime));
+
+        return appointmentSlot === requestedSlot && isActiveAppointmentStatus(appointment.status);
+    });
+}
+
 async function fetchPatientAppointments() {
     const token = getToken();
     if (!token) {
@@ -211,14 +298,21 @@ async function fetchPatientAppointments() {
             return [];
         }
 
-        patientAppointments = Array.isArray(data) ? data.map(appointment => ({
-            id: appointment.id || `local-${Date.now()}`,
-            specialty: appointment.specialty || appointment.especialty || '',
-            doctor: appointment.doctorName || appointment.name || '',
-            hospital: appointment.unit || appointment.clinicName || '',
-            date: appointment.appointmentDate || appointment.data_agendamento || appointment.date || '',
-            status: appointment.status || ''
-        })) : [];
+        patientAppointments = Array.isArray(data) ? data.map(appointment => {
+            const appointmentDate = appointment.appointmentDate || appointment.data_agendamento || appointment.date || '';
+            const appointmentTime = appointment.appointmentTime || appointment.hora_agendamento || '';
+
+            return {
+                id: appointment.id || `local-${Date.now()}`,
+                specialty: appointment.specialty || appointment.especialty || '',
+                doctor: appointment.doctorName || appointment.name || '',
+                hospital: appointment.unit || appointment.clinicName || '',
+                date: mergeAppointmentDateAndTime(appointmentDate, appointmentTime),
+                status: appointment.status || '',
+                agendamentoId: appointment.id,
+                contactKey: `appointment-${appointment.id}`
+            };
+        }) : [];
         patientAppointmentsLoaded = true;
         return patientAppointments;
     } catch (error) {
@@ -235,7 +329,36 @@ function openGuardianModal() {
     if (modal) {
         modal.style.display = 'flex';
         if (typeof setupPasswordVisibilityToggles === 'function') setupPasswordVisibilityToggles();
+        refreshGuardianPasswordFeedback();
     }
+}
+
+async function refreshPatientAppointmentsFromServer({ silent = true } = {}) {
+    const before = appointmentsSnapshot(patientAppointments);
+    await fetchPatientAppointments();
+    const after = appointmentsSnapshot(patientAppointments);
+
+    if (before !== after) {
+        refreshDashboard();
+        if (!silent) {
+            await showPopup('Status dos seus agendamentos atualizado.');
+        }
+    }
+}
+
+function startPatientAppointmentsAutoRefresh() {
+    if (patientAppointmentsRefreshTimer) return;
+
+    patientAppointmentsRefreshTimer = window.setInterval(() => {
+        if (document.hidden) return;
+        refreshPatientAppointmentsFromServer({ silent: true });
+    }, 30000);
+
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+            refreshPatientAppointmentsFromServer({ silent: true });
+        }
+    });
 }
 
 // Função para fechar modal de responsável
@@ -247,6 +370,7 @@ function closeGuardianModal() {
     const form = document.getElementById('formNewGuardian');
     if (form) {
         form.reset();
+        refreshGuardianPasswordFeedback();
     }
 }
 
@@ -399,6 +523,7 @@ function editGuardian(index) {
 
         // Selecionar as permissões
         const checkboxes = document.querySelectorAll('input[name="permissions"]');
+        const guardianPermissions = Array.isArray(guardian.permissions) ? guardian.permissions : [];
         checkboxes.forEach(checkbox => {
             checkbox.checked = (guardian.permissoes || guardian.permissions || []).includes(checkbox.value);
         });
@@ -521,6 +646,20 @@ function switchTab(tabKey) {
     buttons.forEach(button => button.classList.toggle('active', button.dataset.tab === tabKey));
 }
 
+async function openAppointmentsTab({ resetMonth = false } = {}) {
+    switchTab('appointments');
+    await fetchPatientAppointments();
+
+    if (resetMonth || !appointmentsMonthFilter) {
+        updateAppointmentsMonthPicker(getDefaultAppointmentsMonth());
+    } else {
+        renderAppointmentsList();
+    }
+
+    updateOverviewCards();
+    renderOverviewAppointments();
+}
+
 function parseAppointmentDate(dateString) {
     if (!dateString) {
         return new Date(NaN);
@@ -563,6 +702,20 @@ function getAppointmentTime(dateString) {
     const parts = str.split(' ');
     if (parts.length > 1 && parts[1].match(/\d{2}:\d{2}/)) return parts[1].slice(0,5);
     return '--:--';
+}
+
+function buildAppointmentDateTime(date, time) {
+    if (!date || !time) return '';
+    return `${date} ${String(time).slice(0, 5)}:00`;
+}
+
+function mergeAppointmentDateAndTime(dateValue, timeValue) {
+    if (!dateValue) return '';
+
+    const datePart = String(dateValue).split(/[T ]/)[0];
+    if (!timeValue) return String(dateValue);
+
+    return `${datePart} ${String(timeValue).slice(0, 5)}:00`;
 }
 
 function formatProfessionalListForChat(professionals) {
@@ -671,13 +824,26 @@ function getTodayInputValue() {
     return `${year}-${month}-${day}`;
 }
 
-function isPastDate(dateValue) {
-    if (!dateValue) return false;
-    const selectedDate = new Date(dateValue);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    selectedDate.setHours(0, 0, 0, 0);
-    return selectedDate < today;
+function parseLocalDateTimeInput(dateValue, timeValue = '00:00') {
+    if (!dateValue) return new Date(NaN);
+
+    const [year, month, day] = String(dateValue).split('-').map(Number);
+    const [hour = 0, minute = 0] = String(timeValue || '00:00').split(':').map(Number);
+
+    return new Date(year, month - 1, day, hour, minute, 0, 0);
+}
+
+function isPastAppointmentDateTime(dateValue, timeValue) {
+    const selectedDateTime = parseLocalDateTimeInput(dateValue, timeValue);
+    if (Number.isNaN(selectedDateTime.getTime())) return false;
+
+    return selectedDateTime < new Date();
+}
+
+function isValidThirtyMinuteSlot(timeValue) {
+    if (!timeValue) return false;
+    const [, minute = 0] = String(timeValue).split(':').map(Number);
+    return minute === 0 || minute === 30;
 }
 
 function populateProfessionalOptions() {
@@ -750,7 +916,7 @@ function getAppointmentData() {
 }
 
 function getPatientName() {
-    return userProfile ? userProfile.name : 'Paciente';
+    return user?.name || 'Paciente';
 }
 
 function loadStoredConversations() {
@@ -793,6 +959,7 @@ function getMessageContacts() {
         if (!contactsMap.has(appointment.contactKey)) {
             contactsMap.set(appointment.contactKey, {
                 key: appointment.contactKey,
+                agendamentoId: appointment.agendamentoId || appointment.id,
                 name: appointment.doctor,
                 specialty: appointment.specialty,
                 hospital: appointment.hospital,
@@ -843,6 +1010,59 @@ function ensureConversationExists(contactKey) {
 
 function getActiveContact() {
     return getMessageContacts().find(contact => contact.key === activeChatContactKey) || null;
+}
+
+function mapBackendMessage(message) {
+    return {
+        id: message.id,
+        sender: message.remetenteProfile === 'paciente' ? 'patient' : 'professional',
+        content: message.conteudo || '',
+        timestamp: formatDateTime(message.createdAt || new Date())
+    };
+}
+
+function initPatientChatSocket() {
+    const token = getToken();
+    if (!token || typeof io !== 'function' || patientChatSocket) return;
+
+    patientChatSocket = io('http://localhost:3000', { auth: { token } });
+    patientChatSocket.on('chat:message', (message) => {
+        const key = `appointment-${message.agendamentoId}`;
+        const messages = backendChatMessages[key] || [];
+        if (!messages.some(item => String(item.id) === String(message.id))) {
+            messages.push(mapBackendMessage(message));
+            backendChatMessages[key] = messages;
+        }
+        if (activeChatContactKey === key) renderActiveConversation();
+    });
+}
+
+async function loadBackendConversation(contact) {
+    if (!contact?.agendamentoId || backendChatMessages[contact.key]) return;
+
+    const token = getToken();
+    if (!token) return;
+
+    try {
+        const response = await fetch(`http://localhost:3000/messages/agendamentos/${encodeURIComponent(contact.agendamentoId)}?limit=100`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+            console.error('Falha ao carregar mensagens:', data);
+            backendChatMessages[contact.key] = [];
+            return;
+        }
+
+        backendChatMessages[contact.key] = Array.isArray(data.messages)
+            ? data.messages.map(mapBackendMessage)
+            : [];
+        patientChatSocket?.emit('chat:join', { agendamentoId: contact.agendamentoId });
+    } catch (error) {
+        console.error('Erro ao carregar mensagens:', error);
+        backendChatMessages[contact.key] = [];
+    }
 }
 
 function buildAiReply(contact, userMessage) {
@@ -1032,14 +1252,21 @@ function renderMessageContacts() {
         return;
     }
 
-    if (!contacts.some(contact => contact.key === activeChatContactKey)) {
+        if (!contacts.some(contact => contact.key === activeChatContactKey)) {
         activeChatContactKey = contacts[0].key;
+    }
+    const activeContact = contacts.find(contact => contact.key === activeChatContactKey);
+    if (activeContact?.type !== 'bot') {
+        loadBackendConversation(activeContact).then(renderActiveConversation);
     }
 
     contactsContainer.innerHTML = '';
 
     contacts.forEach(contact => {
         ensureConversationExists(contact.key);
+        if (contact.type !== 'bot') {
+            patientChatSocket?.emit('chat:join', { agendamentoId: contact.agendamentoId });
+        }
 
         const button = document.createElement('button');
         button.type = 'button';
@@ -1052,6 +1279,7 @@ function renderMessageContacts() {
         button.addEventListener('click', () => {
             activeChatContactKey = contact.key;
             renderMessageContacts();
+            loadBackendConversation(contact).then(renderActiveConversation);
             renderActiveConversation();
         });
         contactsContainer.appendChild(button);
@@ -1086,11 +1314,13 @@ function renderActiveConversation() {
         return;
     }
 
-    const messages = ensureConversationExists(contact.key);
+    const messages = contact.type === 'bot'
+        ? ensureConversationExists(contact.key)
+        : (backendChatMessages[contact.key] || []);
     contactName.textContent = contact.name;
     contactMeta.textContent = contact.type === 'bot'
         ? 'Chatbot de apoio ao paciente. Para urgencias, procure atendimento imediato.'
-        : `${contact.specialty} - ${contact.hospital} - Resposta assistida por IA.`;
+        : `${contact.specialty} - ${contact.hospital}`;
     messageInput.disabled = false;
     sendMessageButton.disabled = false;
 
@@ -1145,6 +1375,59 @@ function sendPatientMessage(content) {
     const contact = getActiveContact();
     if (!contact) return;
 
+    if (contact.type !== 'bot') {
+        const token = getToken();
+        if (!token || !contact.agendamentoId) return;
+
+        const optimistic = {
+            id: `tmp-${Date.now()}`,
+            sender: 'patient',
+            content,
+            timestamp: formatDateTime()
+        };
+        backendChatMessages[contact.key] = [...(backendChatMessages[contact.key] || []), optimistic];
+        renderActiveConversation();
+
+        if (patientChatSocket?.connected) {
+            patientChatSocket.emit('chat:send', { agendamentoId: contact.agendamentoId, content }, (result) => {
+                backendChatMessages[contact.key] = (backendChatMessages[contact.key] || []).filter(message => message.id !== optimistic.id);
+                if (!result?.ok) showPopup(result?.message || 'Nao foi possivel enviar a mensagem.');
+                if (result?.ok && result.message) {
+                    const messages = backendChatMessages[contact.key] || [];
+                    if (!messages.some(message => String(message.id) === String(result.message.id))) {
+                        messages.push(mapBackendMessage(result.message));
+                        backendChatMessages[contact.key] = messages;
+                    }
+                }
+                renderActiveConversation();
+            });
+            return;
+        }
+
+        fetch(`http://localhost:3000/messages/agendamentos/${encodeURIComponent(contact.agendamentoId)}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ content })
+        }).then(async response => {
+            const body = await response.json();
+            backendChatMessages[contact.key] = (backendChatMessages[contact.key] || []).filter(message => message.id !== optimistic.id);
+            if (!response.ok) await showPopup(body.message || 'Nao foi possivel enviar a mensagem.');
+            if (response.ok && body.id) {
+                backendChatMessages[contact.key] = [...(backendChatMessages[contact.key] || []), mapBackendMessage(body)];
+            }
+            renderActiveConversation();
+        }).catch(async error => {
+            console.error('Erro ao enviar mensagem:', error);
+            backendChatMessages[contact.key] = (backendChatMessages[contact.key] || []).filter(message => message.id !== optimistic.id);
+            await showPopup('Erro de conexao ao enviar mensagem.');
+            renderActiveConversation();
+        });
+        return;
+    }
+
     appendMessageToConversation(contact.key, {
         sender: 'patient',
         content,
@@ -1174,7 +1457,7 @@ function renderOverviewAppointments() {
     if (!appointments.length) {
         tableBody.innerHTML = `
             <tr>
-                <td colspan="4">Nenhum agendamento encontrado.</td>
+                <td colspan="5">Nenhum agendamento encontrado.</td>
             </tr>
         `;
         return;
@@ -1187,6 +1470,11 @@ function renderOverviewAppointments() {
             <td>${escapeHTML(appointment.doctor)}</td>
             <td>${escapeHTML(appointment.hospital)}</td>
             <td>${escapeHTML(formatDate(appointment.date))}</td>
+            <td>
+                <span class="appointment-status-badge ${getAppointmentStatusClass(appointment.status)}">
+                    ${escapeHTML(getAppointmentStatusLabel(appointment.status))}
+                </span>
+            </td>
         `;
         tableBody.appendChild(row);
     });
@@ -1233,6 +1521,7 @@ function createAppointmentCardElement(appointment) {
     card.dataset.specialty = appointment.specialty;
     card.dataset.doctor = appointment.doctor;
     card.dataset.hospital = appointment.hospital;
+    const canManage = canPatientManageAppointment(appointment);
     card.innerHTML = `
         <div class="appointment-time-block">
             <span class="time-hour">${escapeHTML(timeStr)}</span>
@@ -1241,15 +1530,20 @@ function createAppointmentCardElement(appointment) {
         <div class="appointment-info">
             <div class="appointment-headline">
                 <strong>${escapeHTML(appointment.doctor)}</strong>
-                <span class="specialty-badge">${escapeHTML(appointment.specialty)}</span>
+                <div class="appointment-badges">
+                    <span class="specialty-badge">${escapeHTML(appointment.specialty)}</span>
+                    <span class="appointment-status-badge ${getAppointmentStatusClass(appointment.status)}">
+                        ${escapeHTML(getAppointmentStatusLabel(appointment.status))}
+                    </span>
+                </div>
             </div>
             <div class="appointment-details">
                 <span>${escapeHTML(appointment.hospital)}</span>
                 <span class="date-label">${escapeHTML(formatDate(appointment.date))}</span>
             </div>
             <div class="card-actions">
-                <button class="btn-secondary btn-reschedule" type="button">Buscar outro horario</button>
-                <button class="btn-danger btn-cancel" type="button">Desmarcar</button>
+                <button class="btn-secondary btn-reschedule" type="button" ${canManage ? '' : 'disabled'}>Buscar outro horario</button>
+                <button class="btn-danger btn-cancel" type="button" ${canManage ? '' : 'disabled'}>Desmarcar</button>
             </div>
         </div>
     `;
@@ -1276,6 +1570,7 @@ function openRescheduleModal(appointmentId) {
     document.getElementById('modalSpec').value = appointment?.specialty || '';
     document.getElementById('modalUnit').value = appointment?.hospital || '';
     document.getElementById('modalDate').value = appointment?.date ? String(appointment.date).slice(0,10) : '';
+    document.getElementById('modalTime').value = appointment?.date ? getAppointmentTime(appointment.date) : '';
     // Reset profissional para permitir trocar se desejar
     document.getElementById('modalProfessional').value = '';
 
@@ -1295,21 +1590,9 @@ function renderAppointmentsList() {
     list.innerHTML = '';
     const appointments = applyAppointmentsMonthFilter(getAppointmentData());
 
-    if (!appointments.length) {
-        const monthLabel = appointmentsMonthFilter ? formatMonthLabel(appointmentsMonthFilter) : 'mês selecionado';
-        const message = document.createElement('div');
-        message.className = 'empty-state';
-        message.innerHTML = `
-            <i class="ph ph-calendar-x"></i>
-            <p>Voce nao possui consultas agendadas para ${escapeHTML(monthLabel)}.</p>
-        `;
-        list.appendChild(message);
-        return;
-    }
-
     // Group appointments by ISO date key YYYY-MM-DD
     const groupedAppointments = appointments.reduce((groups, appointment) => {
-        const dateKey = String(appointment.date || '').split('T')[0] || 'unknown';
+        const dateKey = String(appointment.date || '').split(/[T ]/)[0] || 'unknown';
         if (!groups[dateKey]) groups[dateKey] = [];
         groups[dateKey].push(appointment);
         return groups;
@@ -1369,7 +1652,7 @@ function renderAppointmentsList() {
         // Add up to 3 appointment items for compact view
         appts.slice(0, 4).forEach(appointment => {
             const ap = document.createElement('div');
-            ap.className = 'calendar-appointment';
+            ap.className = `calendar-appointment ${getAppointmentStatusClass(appointment.status)}`;
             ap.dataset.id = appointment.id || '';
             ap.dataset.date = appointment.date || '';
 
@@ -1383,6 +1666,11 @@ function renderAppointmentsList() {
 
             ap.appendChild(tspan);
             ap.appendChild(title);
+
+            const status = document.createElement('span');
+            status.className = `appointment-status-dot ${getAppointmentStatusClass(appointment.status)}`;
+            status.title = getAppointmentStatusLabel(appointment.status);
+            ap.appendChild(status);
 
             // Click opens detail popup with actions
             ap.addEventListener('click', (e) => {
@@ -1410,6 +1698,17 @@ function renderAppointmentsList() {
     dayColumn.appendChild(monthCalendar);
 
     list.appendChild(dayColumn);
+
+    if (!appointments.length) {
+        const monthLabel = appointmentsMonthFilter ? formatMonthLabel(appointmentsMonthFilter) : 'mês selecionado';
+        const message = document.createElement('div');
+        message.className = 'empty-state';
+        message.innerHTML = `
+            <i class="ph ph-calendar-x"></i>
+            <p>Voce nao possui consultas agendadas para ${escapeHTML(monthLabel)}.</p>
+        `;
+        list.appendChild(message);
+    }
 }
 
 function showAppointmentDetail(appointment) {
@@ -1452,6 +1751,12 @@ function showAppointmentDetail(appointment) {
     p2.style.color = '#64748b';
     content.appendChild(p2);
 
+    const statusBadge = document.createElement('span');
+    statusBadge.className = `appointment-status-badge ${getAppointmentStatusClass(appointment.status)}`;
+    statusBadge.textContent = getAppointmentStatusLabel(appointment.status);
+    statusBadge.style.marginBottom = '14px';
+    content.appendChild(statusBadge);
+
     const btns = document.createElement('div');
     btns.style.display = 'flex';
     btns.style.gap = '8px';
@@ -1461,7 +1766,9 @@ function showAppointmentDetail(appointment) {
     resBtn.className = 'btn-secondary';
     resBtn.type = 'button';
     resBtn.textContent = 'Remarcar';
+    resBtn.disabled = !canPatientManageAppointment(appointment);
     resBtn.addEventListener('click', () => {
+        if (!canPatientManageAppointment(appointment)) return;
         document.body.removeChild(modal);
         openRescheduleModal(appointment.id);
     });
@@ -1470,7 +1777,9 @@ function showAppointmentDetail(appointment) {
     delBtn.className = 'btn-danger';
     delBtn.type = 'button';
     delBtn.textContent = 'Desmarcar';
+    delBtn.disabled = !canPatientManageAppointment(appointment);
     delBtn.addEventListener('click', async () => {
+        if (!canPatientManageAppointment(appointment)) return;
         document.body.removeChild(modal);
         await cancelAppointmentById(appointment.id, appointment.date);
     });
@@ -1579,7 +1888,7 @@ function addAppointmentToDashboard(selectedProfessional, date) {
     }
 
     refreshDashboard();
-    switchTab('appointments');
+    openAppointmentsTab({ resetMonth: true });
     return true;
 }
 
@@ -1689,9 +1998,21 @@ async function cancelAppointment(button) {
 
 document.addEventListener('DOMContentLoaded', async () => {
     await loadUserInfo();
+    startPatientAppointmentsAutoRefresh();
     const navButtons = document.querySelectorAll('.nav-link');
     navButtons.forEach(button => {
-        button.addEventListener('click', () => switchTab(button.dataset.tab));
+        button.addEventListener('click', async () => {
+            if (button.dataset.tab === 'overview' || button.dataset.tab === 'appointments') {
+                await refreshPatientAppointmentsFromServer({ silent: true });
+            }
+
+            if (button.dataset.tab === 'appointments') {
+                openAppointmentsTab({ resetMonth: true });
+                return;
+            }
+
+            switchTab(button.dataset.tab);
+        });
     });
 
     const overviewButton = document.getElementById('btnOverviewNewAppointment');
@@ -1701,7 +2022,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const appointmentsButton = document.getElementById('btnGoAppointments');
     if (appointmentsButton) {
-        appointmentsButton.addEventListener('click', () => switchTab('appointments'));
+        appointmentsButton.addEventListener('click', () => openAppointmentsTab({ resetMonth: true }));
     }
 
     const appointmentsPrevMonth = document.getElementById('appointmentsPrevMonth');
@@ -1730,16 +2051,27 @@ document.addEventListener('DOMContentLoaded', async () => {
             const specialty = document.getElementById('modalSpec')?.value;
             const unit = document.getElementById('modalUnit')?.value;
             const time = document.getElementById('modalTime')?.value;
+            const appointmentDateTime = buildAppointmentDateTime(date, time);
             const selectedProfessional = getProfessionalByRegistry(professionalId);
             const professionalCrm = String(selectedProfessional?.registry || '').trim();
 
-            if (isPastDate(date)) {
-                await showPopup('Não é possível agendar ou remarcar para uma data no passado. Escolha uma data atual ou futura.');
+            if (!date || !time) {
+                await showPopup('Informe a data e o horário do agendamento.');
                 return;
             }
 
-            if (!date || !time) {
-                await showPopup('Informe a data e o horário do agendamento.');
+            if (!isValidThirtyMinuteSlot(time)) {
+                await showPopup('Escolha um horário em intervalos de 30 minutos, como 16:00 ou 16:30.');
+                return;
+            }
+
+            if (isPastAppointmentDateTime(date, time)) {
+                await showPopup('Não é possível agendar ou remarcar para uma data ou horário no passado. Escolha um horário atual ou futuro.');
+                return;
+            }
+
+            if (!selectedProfessional) {
+                await showPopup('Selecione um profissional que esteja cadastrado no sistema.');
                 return;
             }
 
@@ -1752,10 +2084,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             const editId = appointmentForm.dataset.editAppointmentId;
             try {
+                const slotTaken = await isProfessionalSlotAlreadyTaken(selectedProfessional.id, appointmentDateTime, editId || null);
+                if (slotTaken) {
+                    await showPopup('Este horÃ¡rio jÃ¡ foi marcado por outro paciente para este profissional. Escolha outro horÃ¡rio.');
+                    return;
+                }
+
                 if (editId) {
                     // Remarcar (atualizar) um agendamento existente
                     const url = `http://localhost:3000/auth/patient/appointments/${encodeURIComponent(editId)}`;
-                    const bodyData = { date };
+                    const bodyData = { date: appointmentDateTime, time };
                     if (professionalCrm) bodyData.med_crm = professionalCrm;
 
                     const resp = await fetch(url, {
@@ -1778,9 +2116,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                         specialty,
                         doctor: selectedProfessional?.name || 'Profissional',
                         hospital: unit,
-                        date,
+                        date: appointmentDateTime,
                         status: 'pendente'
                     };
+                    updated.agendamentoId = updated.id || editId;
+                    updated.contactKey = `appointment-${updated.agendamentoId}`;
 
                     // Atualizar localmente
                     const idx = patientAppointments.findIndex(a => String(a.id) === String(editId));
@@ -1795,21 +2135,16 @@ document.addEventListener('DOMContentLoaded', async () => {
                     updateSelectedProfessionalDetails();
                     closeModal();
                     refreshDashboard();
-                    await showPopup(`Remarcacao realizada para ${formatDate(updated.date)}.`);
+                    await showPopup(`Remarcacao realizada para ${formatDate(updated.date)} as ${getAppointmentTime(updated.date)}.`);
                 } else {
                     // Criar novo agendamento
-                    if (!selectedProfessional) {
-                        await showPopup('Selecione um profissional que esteja cadastrado no sistema.');
-                        return;
-                    }
-
                     const resp = await fetch('http://localhost:3000/auth/patient/appointments', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
                             'Authorization': `Bearer ${token}`
                         },
-                        body: JSON.stringify({ med_crm: professionalCrm, date })
+                        body: JSON.stringify({ med_crm: professionalCrm, date: appointmentDateTime, time })
                     });
 
                     const body = await resp.json();
@@ -1824,8 +2159,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                         specialty: body.specialty || body.especialty || specialty,
                         doctor: body.doctorName || selectedProfessional.name,
                         hospital: body.unit || body.clinicName || unit,
-                        date: body.appointmentDate || date,
-                        status: body.status || 'pendente'
+                        date: body.appointmentDate || appointmentDateTime,
+                        status: body.status || 'pendente',
+                        agendamentoId: body.id,
+                        contactKey: `appointment-${body.id}`
                     };
 
                     patientAppointments.unshift(created);
@@ -1833,7 +2170,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     updateSelectedProfessionalDetails();
                     closeModal();
                     refreshDashboard();
-                    await showPopup(`Sucesso! Consulta com ${created.doctor} agendada para ${formatDate(created.date)}.`);
+                    await showPopup(`Sucesso! Consulta com ${created.doctor} agendada para ${formatDate(created.date)} as ${getAppointmentTime(created.date)}.`);
                 }
             } catch (err) {
                 console.error('Erro ao criar/remarcar agendamento:', err);
@@ -1889,8 +2226,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const parentesco = document.getElementById('guardianRelationship')?.value;
                 const email = document.getElementById('guardianEmail')?.value.trim();
                 const password = document.getElementById('guardianPassword')?.value.trim();
-                if (!password || password.length < 6) {
-                    await showPopup('A senha deve ter pelo menos 6 caracteres.');
+                if (!isStrongPassword(password)) {
+                    await showPopup('A senha deve ter 8 caracteres, maiúscula, minúscula, número e caractere especial.');
                     return;
                 }
 
@@ -1951,6 +2288,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         } else {
                             // attach server id
                             newGuardian.id = body.id;
+                            newGuardian.permissions = Array.isArray(body.permissions) ? body.permissions : permissions;
                         }
                     } catch (err) {
                         console.error('Erro ao salvar responsavel no servidor:', err);
@@ -1964,6 +2302,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             saveGuardians(guardians);
             guardianForm.reset();
+            refreshGuardianPasswordFeedback();
             delete guardianForm.dataset.editIndex;
             document.querySelector('.modal-header div h3').textContent = 'Adicionar Responsável';
             document.querySelector('button[type="submit"]').textContent = 'Adicionar Responsável';
@@ -1985,17 +2324,6 @@ function renderAppointmentsState() {
             emptyState.remove();
         }
         
-        // Atualizar avatar do paciente (gera avatar via ui-avatars quando houver nome)
-        const patientAvatar = document.getElementById('patientAvatar');
-        if (patientAvatar) {
-            if (user.name) {
-                const encoded = encodeURIComponent(user.name);
-                patientAvatar.src = `https://ui-avatars.com/api/?name=${encoded}&background=0073e6&color=fff`;
-            } else {
-                patientAvatar.removeAttribute('src');
-            }
-        }
-
         // Atualizar responsável exibido no perfil quando disponível
         const profilePatientResponsible = document.getElementById('profilePatientResponsible');
         const responsible = user.responsible || localStorage.getItem('patientResponsible') || '';
@@ -2005,8 +2333,8 @@ function renderAppointmentsState() {
     }
 
     loadPatientData();
-    updateAppointmentsMonthPicker(getCurrentMonthValue());
     Promise.all([fetchPatientAppointments(), fetchAvailableProfessionals()]).finally(() => {
+        updateAppointmentsMonthPicker(getDefaultAppointmentsMonth());
         populateProfessionalOptions();
         refreshDashboard();
     });

@@ -83,9 +83,8 @@ CREATE TABLE agendamentos (
     clinica_id INT NOT NULL,
     paciente_id INT NOT NULL,
     medico_id INT NOT NULL,
-    data_hora DATETIME NOT NULL,
+    data_agendamento DATETIME NOT NULL,
     status ENUM('pendente', 'confirmado', 'cancelado', 'realizado') DEFAULT 'pendente',
-    link_reuniao VARCHAR(255), -- Para a consulta online
     FOREIGN KEY (clinica_id) REFERENCES clinicas(id) ON DELETE CASCADE,
     FOREIGN KEY (paciente_id) REFERENCES pacientes(id) ON DELETE CASCADE,
     FOREIGN KEY (medico_id) REFERENCES medicos(id) ON DELETE CASCADE
@@ -114,13 +113,17 @@ CREATE TABLE sessions (
 -- Garante que a conversa fique vinculada a um mesmo atendimento/agendamento
 -- e possa ser validada por RBAC entre paciente e medico relacionados.
 CREATE TABLE mensagens (
-    id INT AUTO_INCREMENT PRIMARY KEY,
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
     agendamento_id INT NOT NULL,
-    remetente_profile ENUM('paciente', 'medico') NOT NULL,
+    remetente_profile ENUM(
+        'paciente',
+        'medico',
+        'responsavel',
+        'clinica'
+    ) NOT NULL,
     remetente_profile_id INT NOT NULL,
-    destinatario_profile ENUM('paciente', 'medico') NOT NULL,
-    destinatario_profile_id INT NOT NULL,
     conteudo TEXT NOT NULL,
+    lida BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (agendamento_id) REFERENCES agendamentos(id) ON DELETE CASCADE
 );
@@ -134,17 +137,26 @@ create table paciente_responsavel(
     parentesco varchar (255),
     permissions JSON DEFAULT (JSON_ARRAY())
     );
-
-ALTER TABLE paciente_responsavel add column created_at DATETIME DEFAULT CURRENT_TIMESTAMP;
-ALTER TABLE paciente_responsavel drop column created_at;
-
-ALTER TABLE pacientes
-ADD COLUMN id_responsavel INT,
-ADD CONSTRAINT fk_pacientes_responsavel 
-    FOREIGN KEY (id_responsavel) REFERENCES responsavel(id) 
-    ON DELETE CASCADE;
-
-ALTER TABLE agendamentos
-CHANGE data_hora data_agendamento DATETIME NOT NULL;
-
-select * from responsavel;
+    
+create table permissoes(
+    id int auto_increment primary key not null,
+    nome varchar (200) not null
+    );
+    
+create table responsavel_permissoes(
+    id_permissao int not null,
+    id_responsavel int not null, 
+    primary key(id_permissao, id_responsavel),
+	CONSTRAINT fk_responsavel_id FOREIGN KEY (id_responsavel) REFERENCES responsavel(id) ON DELETE CASCADE,
+    constraint fk_permissao_id foreign key (id_permissao) references permissoes(id) on delete cascade 
+);
+    
+    insert into permissoes(nome) values(
+		"Ver agendamentos"
+    );
+    insert into permissoes(nome) values(
+		"Enviar mensagens"
+    );
+     insert into permissoes(nome) values(
+		"Gerenciar agendamentos"
+    );

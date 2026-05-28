@@ -765,16 +765,15 @@ export async function registerUser({ identifier, password, name, profile, userDa
         }
 
         const [insertedPatient] = await connection.execute(
-          `INSERT INTO pacientes (nome_paciente, cpf, email, tipo_deficiencia, data_nascimento, senha, id_responsavel, status)
-           VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE')`,
+          `INSERT INTO pacientes (nome_paciente, cpf, email, tipo_deficiencia, data_nascimento, senha, status)
+           VALUES (?, ?, ?, ?, ?, ?, 'ACTIVE')`,
           [
             name,
             identifierInfo.value,
             userData?.email || null,
             userData?.tipoDeficiencia || null,
             userData?.dataNascimento || null,
-            passwordHash,
-            responsavelId
+            passwordHash
           ]
         );
 

@@ -1,281 +1,261 @@
 import { pool } from "../db.js";
 
-async function resolveActor(reqUser) {
-  const profileId = Number(reqUser?.sub);
-  const profile = reqUser?.profile;
+const ALLOWED_PROFILES = ["paciente", "medico", "responsavel", "clinica"];
+const MAX_MESSAGE_LENGTH = 2000;
+const MAX_PAGE_LIMIT = 100;
 
-  if (!profileId || !["paciente", "medico"].includes(profile)) {
-    return {
-      ok: false,
-      statusCode: 403,
-      message: "Acesso negado. Apenas pacientes e medicos podem usar mensagens."
-    };
+export function getRoomName(agendamentoId) {
+  return `chat_${agendamentoId}`;
+}
+
+function actorIdFromUser(user) {
+  return Number(user?.sub || user?.profileId);
+}
+
+function normalizePagination({ page = 1, limit = 30 } = {}) {
+  const normalizedPage = Math.max(Number(page) || 1, 1);
+  const normalizedLimit = Math.min(Math.max(Number(limit) || 30, 1), MAX_PAGE_LIMIT);
+  const offset = (normalizedPage - 1) * normalizedLimit;
+
+  return { page: normalizedPage, limit: normalizedLimit, offset };
+}
+
+export function resolveActorFromAuth(user) {
+  const profile = user?.profile;
+  const profileId = actorIdFromUser(user);
+
+  if (!ALLOWED_PROFILES.includes(profile) || !profileId) {
+    return null;
   }
 
-  if (profile === "paciente") {
-    const [rows] = await pool.execute(
-      `SELECT id, nome_paciente AS name FROM pacientes WHERE id = ? LIMIT 1`,
-      [profileId]
-    );
-
-    if (!rows[0]) {
-      return { ok: false, statusCode: 404, message: "Paciente nao encontrado." };
-    }
-  } else {
-    const [rows] = await pool.execute(
-      `SELECT id, name FROM medicos WHERE id = ? LIMIT 1`,
-      [profileId]
-    );
-
-    if (!rows[0]) {
-      return { ok: false, statusCode: 404, message: "Medico nao encontrado." };
-    }
-  }
-
-  return {
-    ok: true,
-    data: { profile, profileId }
-  };
+  return { profile, profileId };
 }
 
 async function ensureMessagingTable() {
   await pool.execute(
     `CREATE TABLE IF NOT EXISTS mensagens (
-      id INT AUTO_INCREMENT PRIMARY KEY,
+      id BIGINT AUTO_INCREMENT PRIMARY KEY,
       agendamento_id INT NOT NULL,
-      remetente_profile ENUM('paciente', 'medico') NOT NULL,
+      remetente_profile ENUM('paciente', 'medico', 'responsavel', 'clinica') NOT NULL,
       remetente_profile_id INT NOT NULL,
-      destinatario_profile ENUM('paciente', 'medico') NOT NULL,
-      destinatario_profile_id INT NOT NULL,
       conteudo TEXT NOT NULL,
+      lida BOOLEAN DEFAULT FALSE,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (agendamento_id) REFERENCES agendamentos(id) ON DELETE CASCADE
     )`
   );
-}
 
-async function findLinkBetweenProfiles(actor, targetProfileId) {
-  if (actor.profile === "paciente") {
-    const [rows] = await pool.execute(
-      `SELECT
-          a.id AS appointmentId,
-          m.id AS targetProfileId,
-          'medico' AS targetProfile,
-          m.name AS targetName,
-          m.especialidade AS targetSpecialty,
-          m.unidade AS targetUnit
-       FROM agendamentos a
-       INNER JOIN medicos m ON m.id = a.medico_id
-       WHERE a.paciente_id = ? AND m.id = ?
-       ORDER BY a.data_agendamento DESC
-       LIMIT 1`,
-      [actor.profileId, targetProfileId]
-    );
+  const [columns] = await pool.execute(
+    `SELECT COLUMN_NAME, COLUMN_TYPE
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'mensagens'`
+  );
+  const columnNames = new Set(columns.map((column) => column.COLUMN_NAME));
+  const senderProfileColumn = columns.find((column) => column.COLUMN_NAME === "remetente_profile");
 
-    return rows[0] || null;
+  if (columnNames.has("destinatario_profile")) {
+    await pool.execute("ALTER TABLE mensagens DROP COLUMN destinatario_profile");
   }
 
+  if (columnNames.has("destinatario_profile_id")) {
+    await pool.execute("ALTER TABLE mensagens DROP COLUMN destinatario_profile_id");
+  }
+
+  if (!columnNames.has("lida")) {
+    await pool.execute("ALTER TABLE mensagens ADD COLUMN lida BOOLEAN DEFAULT FALSE AFTER conteudo");
+  }
+
+  if (!String(senderProfileColumn?.COLUMN_TYPE || "").includes("responsavel")) {
+    await pool.execute(
+      "ALTER TABLE mensagens MODIFY COLUMN remetente_profile ENUM('paciente', 'medico', 'responsavel', 'clinica') NOT NULL"
+    );
+  }
+}
+
+async function findAppointment(agendamentoId) {
   const [rows] = await pool.execute(
-    `SELECT
-        a.id AS appointmentId,
-        p.id AS targetProfileId,
-        'paciente' AS targetProfile,
-        p.nome_paciente AS targetName
-     FROM agendamentos a
-     INNER JOIN pacientes p ON p.id = a.paciente_id
-     WHERE a.medico_id = ? AND p.id = ?
-     ORDER BY a.data_agendamento DESC
+    `SELECT id, paciente_id, medico_id, clinica_id, status, data_agendamento
+     FROM agendamentos
+     WHERE id = ?
      LIMIT 1`,
-    [actor.profileId, targetProfileId]
+    [agendamentoId]
   );
 
   return rows[0] || null;
 }
 
-export async function listAllowedMessageContacts(reqUser) {
+async function guardianCanAccess(pacienteId, responsavelId) {
+  const [rows] = await pool.execute(
+    `SELECT 1
+     FROM paciente_responsavel
+     WHERE id_paciente = ? AND id_responsavel = ?
+     LIMIT 1`,
+    [pacienteId, responsavelId]
+  );
+
+  return Boolean(rows[0]);
+}
+
+async function canAccessAppointment(appointment, actor) {
+  if (actor.profile === "paciente") {
+    return Number(appointment.paciente_id) === actor.profileId;
+  }
+
+  if (actor.profile === "medico") {
+    return Number(appointment.medico_id) === actor.profileId;
+  }
+
+  if (actor.profile === "clinica") {
+    return Number(appointment.clinica_id) === actor.profileId;
+  }
+
+  if (actor.profile === "responsavel") {
+    return guardianCanAccess(appointment.paciente_id, actor.profileId);
+  }
+
+  return false;
+}
+
+export async function validateChatAccess(user, agendamentoId) {
   try {
-    await ensureMessagingTable();
+    const actor = resolveActorFromAuth(user);
+    const normalizedAgendamentoId = Number(agendamentoId);
 
-    const actorResult = await resolveActor(reqUser);
-    if (!actorResult.ok) return actorResult;
-
-    const actor = actorResult.data;
-
-    if (actor.profile === "paciente") {
-      const [rows] = await pool.execute(
-        `SELECT
-            DISTINCT m.id AS profileId,
-            m.id AS userId,
-            'medico' AS profile,
-            m.name,
-            m.crm AS registry,
-            m.especialidade AS specialty,
-            m.unidade AS unit,
-            MAX(a.data_agendamento) AS lastAppointmentAt
-         FROM agendamentos a
-         INNER JOIN medicos m ON m.id = a.medico_id
-         WHERE a.paciente_id = ?
-         GROUP BY m.id, m.name, m.crm, m.especialidade, m.unidade
-         ORDER BY lastAppointmentAt DESC, m.name ASC`,
-        [actor.profileId]
-      );
-
-      return { ok: true, statusCode: 200, data: rows };
+    if (!actor) {
+      return { ok: false, statusCode: 403, message: "Perfil sem permissao para acessar o chat." };
     }
 
-    const [rows] = await pool.execute(
-      `SELECT
-          DISTINCT p.id AS profileId,
-          p.id AS userId,
-          'paciente' AS profile,
-          p.nome_paciente AS name,
-          p.cpf,
-          MAX(a.data_agendamento) AS lastAppointmentAt
-       FROM agendamentos a
-       INNER JOIN pacientes p ON p.id = a.paciente_id
-       WHERE a.medico_id = ?
-       GROUP BY p.id, p.nome_paciente, p.cpf
-       ORDER BY lastAppointmentAt DESC, p.nome_paciente ASC`,
-      [actor.profileId]
-    );
+    if (!normalizedAgendamentoId) {
+      return { ok: false, statusCode: 400, message: "Agendamento invalido." };
+    }
 
-    return { ok: true, statusCode: 200, data: rows };
+    const appointment = await findAppointment(normalizedAgendamentoId);
+    if (!appointment) {
+      return { ok: false, statusCode: 404, message: "Agendamento nao encontrado." };
+    }
+
+    const allowed = await canAccessAppointment(appointment, actor);
+    if (!allowed) {
+      return { ok: false, statusCode: 403, message: "Acesso negado ao chat deste agendamento." };
+    }
+
+    return {
+      ok: true,
+      statusCode: 200,
+      data: { actor, appointment, room: getRoomName(normalizedAgendamentoId) }
+    };
   } catch (error) {
-    console.error("Erro em listAllowedMessageContacts:", error);
+    console.error("Erro em validateChatAccess:", error);
     return { ok: false, statusCode: 500, message: "Erro interno do servidor." };
   }
 }
 
-export async function getConversationWithUser(reqUser, targetProfileId) {
+export async function listMessagesByAppointment(user, agendamentoId, pagination = {}) {
   try {
     await ensureMessagingTable();
 
-    const actorResult = await resolveActor(reqUser);
-    if (!actorResult.ok) return actorResult;
+    const access = await validateChatAccess(user, agendamentoId);
+    if (!access.ok) return access;
 
-    const actor = actorResult.data;
-    const normalizedTargetProfileId = Number(targetProfileId);
+    const { page, limit, offset } = normalizePagination(pagination);
+    const [countRows] = await pool.execute(
+      `SELECT COUNT(*) AS total
+       FROM mensagens
+       WHERE agendamento_id = ?`,
+      [access.data.appointment.id]
+    );
 
-    if (!normalizedTargetProfileId) {
-      return { ok: false, statusCode: 400, message: "Destino invalido." };
-    }
-
-    const allowedLink = await findLinkBetweenProfiles(actor, normalizedTargetProfileId);
-    if (!allowedLink) {
-      return {
-        ok: false,
-        statusCode: 403,
-        message: "Acesso negado. Esta conversa so pode ocorrer entre partes vinculadas pelo mesmo atendimento."
-      };
-    }
-
+    const total = Number(countRows[0]?.total || 0);
     const [messages] = await pool.execute(
       `SELECT
           id,
-          agendamento_id AS appointmentId,
-          remetente_profile AS senderProfile,
-          remetente_profile_id AS senderProfileId,
-          remetente_profile_id AS senderUserId,
-          destinatario_profile AS recipientProfile,
-          destinatario_profile_id AS recipientProfileId,
-          destinatario_profile_id AS recipientUserId,
-          conteudo AS content,
+          agendamento_id AS agendamentoId,
+          remetente_profile AS remetenteProfile,
+          remetente_profile_id AS remetenteProfileId,
+          conteudo,
+          lida,
           created_at AS createdAt
        FROM mensagens
        WHERE agendamento_id = ?
-         AND (
-           (remetente_profile = ? AND remetente_profile_id = ? AND destinatario_profile = ? AND destinatario_profile_id = ?)
-           OR
-           (remetente_profile = ? AND remetente_profile_id = ? AND destinatario_profile = ? AND destinatario_profile_id = ?)
-         )
-       ORDER BY created_at ASC, id ASC`,
-      [
-        allowedLink.appointmentId,
-        actor.profile,
-        actor.profileId,
-        allowedLink.targetProfile,
-        normalizedTargetProfileId,
-        allowedLink.targetProfile,
-        normalizedTargetProfileId,
-        actor.profile,
-        actor.profileId
-      ]
+       ORDER BY created_at DESC, id DESC
+       LIMIT ? OFFSET ?`,
+      [access.data.appointment.id, limit, offset]
     );
 
     return {
       ok: true,
       statusCode: 200,
       data: {
-        contact: {
-          profileId: normalizedTargetProfileId,
-          userId: normalizedTargetProfileId,
-          profile: allowedLink.targetProfile,
-          name: allowedLink.targetName,
-          specialty: allowedLink.targetSpecialty || null,
-          unit: allowedLink.targetUnit || null
-        },
-        appointmentId: allowedLink.appointmentId,
-        messages
+        agendamentoId: access.data.appointment.id,
+        room: access.data.room,
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+        messages: messages.reverse()
       }
     };
   } catch (error) {
-    console.error("Erro em getConversationWithUser:", error);
+    console.error("Erro em listMessagesByAppointment:", error);
     return { ok: false, statusCode: 500, message: "Erro interno do servidor." };
   }
 }
 
-export async function sendMessageToUser(reqUser, targetProfileId, content) {
+export async function createMessageForAppointment(user, agendamentoId, content) {
   try {
     await ensureMessagingTable();
 
-    const actorResult = await resolveActor(reqUser);
-    if (!actorResult.ok) return actorResult;
+    const access = await validateChatAccess(user, agendamentoId);
+    if (!access.ok) return access;
 
-    const actor = actorResult.data;
-    const normalizedTargetProfileId = Number(targetProfileId);
-    const normalizedContent = String(content || "").trim();
-
-    if (!normalizedTargetProfileId) {
-      return { ok: false, statusCode: 400, message: "Destino invalido." };
+    if (access.data.actor.profile === "clinica") {
+      return { ok: false, statusCode: 403, message: "Clinicas ainda nao podem enviar mensagens." };
     }
+
+    const normalizedContent = String(content || "").trim();
 
     if (!normalizedContent) {
       return { ok: false, statusCode: 400, message: "A mensagem nao pode ser vazia." };
     }
 
-    const allowedLink = await findLinkBetweenProfiles(actor, normalizedTargetProfileId);
-    if (!allowedLink) {
-      return {
-        ok: false,
-        statusCode: 403,
-        message: "Acesso negado. Voce so pode enviar mensagens para usuarios vinculados ao mesmo atendimento."
-      };
+    if (normalizedContent.length > MAX_MESSAGE_LENGTH) {
+      return { ok: false, statusCode: 400, message: "Mensagem muito longa." };
     }
 
+    const { actor, appointment, room } = access.data;
     const [result] = await pool.execute(
       `INSERT INTO mensagens
-       (agendamento_id, remetente_profile, remetente_profile_id, destinatario_profile, destinatario_profile_id, conteudo)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [allowedLink.appointmentId, actor.profile, actor.profileId, allowedLink.targetProfile, normalizedTargetProfileId, normalizedContent]
+       (agendamento_id, remetente_profile, remetente_profile_id, conteudo)
+       VALUES (?, ?, ?, ?)`,
+      [appointment.id, actor.profile, actor.profileId, normalizedContent]
+    );
+
+    const [rows] = await pool.execute(
+      `SELECT
+          id,
+          agendamento_id AS agendamentoId,
+          remetente_profile AS remetenteProfile,
+          remetente_profile_id AS remetenteProfileId,
+          conteudo,
+          lida,
+          created_at AS createdAt
+       FROM mensagens
+       WHERE id = ?
+       LIMIT 1`,
+      [result.insertId]
     );
 
     return {
       ok: true,
       statusCode: 201,
       data: {
-        id: result.insertId,
-        appointmentId: allowedLink.appointmentId,
-        senderProfile: actor.profile,
-        senderProfileId: actor.profileId,
-        senderUserId: actor.profileId,
-        recipientProfile: allowedLink.targetProfile,
-        recipientProfileId: normalizedTargetProfileId,
-        recipientUserId: normalizedTargetProfileId,
-        content: normalizedContent
+        room,
+        message: rows[0]
       }
     };
   } catch (error) {
-    console.error("Erro em sendMessageToUser:", error);
+    console.error("Erro em createMessageForAppointment:", error);
     return { ok: false, statusCode: 500, message: "Erro interno do servidor." };
   }
 }

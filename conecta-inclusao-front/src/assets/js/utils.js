@@ -355,6 +355,13 @@ function updatePasswordFeedback(input) {
     });
 }
 
+function refreshPasswordFeedback(root = document) {
+    const scope = root instanceof Element || root instanceof Document ? root : document;
+    scope.querySelectorAll('input[data-password-guidance="true"]').forEach((input) => {
+        updatePasswordFeedback(input);
+    });
+}
+
 function setupPasswordRuleFeedback() {
     const passwordInputs = document.querySelectorAll('input[type="password"][data-password-guidance="true"]');
 
@@ -400,6 +407,14 @@ function setupPasswordRuleFeedback() {
 
         input.dataset.passwordFeedbackId = feedbackId;
         input.addEventListener('input', () => updatePasswordFeedback(input));
+        input.addEventListener('change', () => updatePasswordFeedback(input));
+        if (form && form.dataset.passwordFeedbackResetReady !== 'true') {
+            form.addEventListener('reset', () => {
+                setTimeout(() => refreshPasswordFeedback(form), 0);
+            });
+            form.dataset.passwordFeedbackResetReady = 'true';
+        }
+        updatePasswordFeedback(input);
         input.dataset.passwordGuidanceReady = 'true';
     });
 }

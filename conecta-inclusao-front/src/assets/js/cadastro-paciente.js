@@ -2,6 +2,17 @@ let guardianData = null;
 let availablePermissions = null;
 const API = 'http://localhost:3000'; 
 
+function refreshGuardianPasswordFeedback() {
+    const guardianPassword = document.getElementById('guardianPassword');
+    if (!guardianPassword) return;
+
+    if (typeof updatePasswordFeedback === 'function') {
+        updatePasswordFeedback(guardianPassword);
+    } else {
+        guardianPassword.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+}
+
 function applyMask(input, maskFn) {
     input.addEventListener('input', function(event) {
         event.target.value = maskFn(event.target.value);

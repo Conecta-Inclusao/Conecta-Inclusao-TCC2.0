@@ -10,7 +10,7 @@ function cnpjMask(value) {
     v = v.replace(/(\d{2})(\d)/, '$1.$2');
     v = v.replace(/(\d{3})(\d)/, '$1.$2');
     v = v.replace(/(\d{3})(\d)/, '$1/$2');
-    v = v.replace(/(\d{4})(\d{1,2})$/, `'$1-$2`);
+    v = v.replace(/(\d{4})(\d{1,2})$/, '$1-$2');
     return v;
 }
 
@@ -110,13 +110,14 @@ function validateCompanyForm() {
     const role = document.getElementById('contactRole').value.trim();
     const branch = document.getElementById('companyBranch').value.trim();
     const address = document.getElementById('address').value.trim();
+    const streetNumber = document.getElementById('streetNumber').value.trim();
     const city = document.getElementById('city').value.trim();
     const state = document.getElementById('state').value.trim();
     const zip = document.getElementById('zip').value.trim();
     const password = document.getElementById('password').value;
     const confirmPassword = document.getElementById('confirmPassword').value;
 
-    if (!companyName || !companyLegalName || !cnpj || !email || !phone || !contact || !role || !branch || !address || !city || !state || !zip || !password || !confirmPassword) {
+    if (!companyName || !companyLegalName || !cnpj || !email || !phone || !contact || !role || !branch || !address || !streetNumber || !city || !state || !zip || !password || !confirmPassword) {
         showPopup('Preencha todos os campos obrigatórios antes de continuar.');
         return false;
     }
@@ -179,13 +180,14 @@ function handleCompanyRegistration(event) {
     const role = document.getElementById('contactRole').value.trim();
     const branch = document.getElementById('companyBranch').value.trim();
     const address = document.getElementById('address').value.trim();
+    const streetNumber = document.getElementById('streetNumber').value.trim();
     const city = document.getElementById('city').value.trim();
     const state = document.getElementById('state').value.trim();
     const zip = document.getElementById('zip').value.trim();
     const password = document.getElementById('password').value;
     const confirmPassword = document.getElementById('confirmPassword').value;
 
-    if (!companyName || !companyLegalName || !cnpj || !email || !phone || !contact || !role || !branch || !address || !city || !state || !zip || !password || !confirmPassword) {
+    if (!companyName || !companyLegalName || !cnpj || !email || !phone || !contact || !role || !branch || !address || !streetNumber || !city || !state || !zip || !password || !confirmPassword) {
         showPopup('Preencha todos os campos obrigatórios antes de continuar.');
         return;
     }
@@ -222,13 +224,15 @@ function handleCompanyRegistration(event) {
         submitButton.innerHTML = '<i class="ph ph-circle-notch-bold" style="animation: spin 1s linear infinite;"></i> Cadastrando...';
 
         const cnpjDigits = cnpj.replace(/\D/g, '');
+        const fullAddress = `${address}, ${streetNumber}`;
         const registrationData = {
             cnpj: cnpjDigits,
             password: password,
             name: companyName,
             email: email,
             razaoSocial: companyLegalName,
-            endereco: address,
+            endereco: fullAddress,
+            numero: streetNumber,
             cidade: city,
             estado: state,
             cep: zip.replace('-', ''),
@@ -243,8 +247,9 @@ function handleCompanyRegistration(event) {
             document.getElementById('registerCompanyForm').reset();
             
             // Armazenar CNPJ formatado em localStorage para pré-preencher o login
-            localStorage.setItem('lastCNPJ', cnpj);
-            localStorage.setItem('lastRegisteredCNPJ', cnpjDigits);
+            const registeredCnpj = result.data?.identifier || result.data?.cnpj || cnpjDigits;
+            localStorage.setItem('lastCNPJ', cnpjMask(registeredCnpj));
+            localStorage.setItem('lastRegisteredCNPJ', registeredCnpj);
             
             window.location.href = 'login-empresa.html';
         } else {
