@@ -467,8 +467,8 @@ function renderGuardians() {
                     <span>${guardian.parentesco || guardian.relationship}</span>
                 </div>
                 <div class="guardian-actions">
-                    <button class="btn-secondary" type="button" onclick="editGuardian(${index})">
-                        <i class="ph ph-pencil"></i>
+                 
+                       
                     </button>
                     <button class="btn-danger" type="button" onclick="removeGuardian(${index})">
                         <i class="ph ph-trash"></i>
@@ -1484,6 +1484,7 @@ function updateOverviewCards() {
     const appointments = getAppointmentData();
     const totalAppointments = document.getElementById('totalAppointments');
     const nextAppointmentDate = document.getElementById('nextAppointmentDate');
+    const nextAppointmentTime = document.getElementById('nextAppointmentTime');
     const specialtyCount = document.getElementById('specialtyCount');
     const favoriteHospital = document.getElementById('favoriteHospital');
 
@@ -1491,8 +1492,20 @@ function updateOverviewCards() {
         totalAppointments.innerText = appointments.length;
     }
 
-    if (nextAppointmentDate) {
-        nextAppointmentDate.innerText = appointments.length ? formatDateTime(appointments[0].date) : '--';
+    if (nextAppointmentDate && appointments.length) {
+        const appointment = appointments[0];
+        const date = parseAppointmentDate(appointment.date);
+        const dayName = date.toLocaleDateString('pt-BR', { weekday: 'short' }).toUpperCase();
+        const dateFormatted = date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+        nextAppointmentDate.innerText = `${dayName}, ${dateFormatted}`;
+        
+        if (nextAppointmentTime) {
+            const time = getAppointmentTime(appointment.date);
+            nextAppointmentTime.innerText = time;
+        }
+    } else {
+        if (nextAppointmentDate) nextAppointmentDate.innerText = '--';
+        if (nextAppointmentTime) nextAppointmentTime.innerText = '--';
     }
 
     if (specialtyCount) {
