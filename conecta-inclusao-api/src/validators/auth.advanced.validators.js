@@ -25,7 +25,7 @@ export const universalLoginSchema = z.object({
     .min(8, "Senha deve ter no mínimo 8 caracteres")
     .max(100, "Senha muito longa"),
   expectedProfile: z
-    .enum(["paciente", "medico", "clinica"])
+    .enum(["paciente", "medico", "clinica", "responsavel"])
     .optional()
 });
 

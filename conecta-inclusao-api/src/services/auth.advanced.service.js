@@ -78,7 +78,8 @@ function tableForProfile(profile) {
   return {
     paciente: "pacientes",
     medico: "medicos",
-    clinica: "clinicas"
+    clinica: "clinicas",
+    responsavel: "responsavel"
   }[profile];
 }
 
@@ -165,6 +166,13 @@ export async function getUserProfile(user) {
         WHERE id = ?
       `;
       params = [user.sub];
+    } else if (user.profile === 'responsavel') {
+      query = `
+        SELECT id, nome AS name, email, status
+        FROM responsavel
+        WHERE id = ?
+      `;
+      params = [user.sub];
     } else {
       return { ok: false, statusCode: 400, message: "Perfil invalido." };
     }
@@ -182,7 +190,20 @@ export async function getUserProfile(user) {
   }
 }
 
-async function findAuthRecord(identifierInfo) {
+async function findAuthRecord(identifierInfo, expectedProfile = null) {
+  if (expectedProfile === 'responsavel') {
+    if (identifierInfo.type !== 'email') {
+      return null;
+    }
+    const [rows] = await pool.execute(
+      `SELECT id, nome AS name, email, senha AS password_hash, status, 'responsavel' AS profile
+       FROM responsavel
+       WHERE email = ? LIMIT 1`,
+      [identifierInfo.value]
+    );
+    return rows[0] || null;
+  }
+
   if (identifierInfo.type === "cpf") {
     const [rows] = await pool.execute(
       `SELECT id, nome_paciente AS name, email, cpf, senha AS password_hash, status, failed_attempts, locked_until,
@@ -217,33 +238,45 @@ async function findAuthRecord(identifierInfo) {
     return rows[0] || null;
   }
 
-  const [patients] = await pool.execute(
-    `SELECT id, nome_paciente AS name, email, cpf, senha AS password_hash, status, failed_attempts, locked_until,
-            'paciente' AS profile
-     FROM pacientes
-     WHERE email = ? LIMIT 1`,
-    [identifierInfo.value]
-  );
-  if (patients[0]) return patients[0];
+  if (identifierInfo.type === 'email') {
+    const [patients] = await pool.execute(
+      `SELECT id, nome_paciente AS name, email, cpf, senha AS password_hash, status, failed_attempts, locked_until,
+              'paciente' AS profile
+       FROM pacientes
+       WHERE email = ? LIMIT 1`,
+      [identifierInfo.value]
+    );
+    if (patients[0]) return patients[0];
 
-  const [doctors] = await pool.execute(
-    `SELECT id, name, email, crm, senha AS password_hash, status, failed_attempts, locked_until,
-            must_change_password, temporary_password_token, temporary_password_expires_at,
-            unidade, especialidade, clinica_id, 'medico' AS profile
-     FROM medicos
-     WHERE email = ? LIMIT 1`,
-    [identifierInfo.value]
-  );
-  if (doctors[0]) return doctors[0];
+    const [doctors] = await pool.execute(
+      `SELECT id, name, email, crm, senha AS password_hash, status, failed_attempts, locked_until,
+              must_change_password, temporary_password_token, temporary_password_expires_at,
+              unidade, especialidade, clinica_id, 'medico' AS profile
+       FROM medicos
+       WHERE email = ? LIMIT 1`,
+      [identifierInfo.value]
+    );
+    if (doctors[0]) return doctors[0];
 
-  const [clinics] = await pool.execute(
-    `SELECT id, nome AS name, email, cnpj, senha AS password_hash, status, failed_attempts, locked_until,
-            'clinica' AS profile
-     FROM clinicas
-     WHERE email = ? LIMIT 1`,
-    [identifierInfo.value]
-  );
-  return clinics[0] || null;
+    const [clinics] = await pool.execute(
+      `SELECT id, nome AS name, email, cnpj, senha AS password_hash, status, failed_attempts, locked_until,
+              'clinica' AS profile
+       FROM clinicas
+       WHERE email = ? LIMIT 1`,
+      [identifierInfo.value]
+    );
+    if (clinics[0]) return clinics[0];
+
+    const [responsavels] = await pool.execute(
+      `SELECT id, nome AS name, email, senha AS password_hash, status, 'responsavel' AS profile
+       FROM responsavel
+       WHERE email = ? LIMIT 1`,
+      [identifierInfo.value]
+    );
+    return responsavels[0] || null;
+  }
+
+  return null;
 }
 
 async function updateAuthState(profile, id, fields) {
@@ -342,7 +375,8 @@ export async function loginUniversal({ identifier, password, expectedProfile = n
   const identifierTypeByProfile = {
     paciente: "cpf",
     clinica: "cnpj",
-    medico: "crm"
+    medico: "crm",
+    responsavel: "email"
   };
   const expectedIdentifierType = identifierTypeByProfile[expectedProfile];
 
@@ -350,7 +384,7 @@ export async function loginUniversal({ identifier, password, expectedProfile = n
     return { ok: false, statusCode: 401, message: "Credenciais invalidas." };
   }
 
-  const record = await findAuthRecord(identifierInfo);
+  const record = await findAuthRecord(identifierInfo, expectedProfile);
   if (!record) {
     return { ok: false, statusCode: 401, message: "Credenciais invalidas." };
   }
@@ -468,6 +502,81 @@ async function findPasswordResetAccount(type, identifier) {
   }
 
   return null;
+}
+
+export async function getResponsavelPermissions(responsavelId) {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT pr.id_paciente AS pacienteId, pr.parentesco AS relationship, pr.permissions
+       FROM paciente_responsavel pr
+       WHERE pr.id_responsavel = ?`,
+      [responsavelId]
+    );
+
+    const permissions = rows.map(row => ({
+      pacienteId: row.pacienteId,
+      relationship: row.relationship,
+      permissions: row.permissions
+        ? typeof row.permissions === 'string'
+          ? JSON.parse(row.permissions)
+          : row.permissions
+        : []
+    }));
+
+    return { ok: true, statusCode: 200, data: { permissions } };
+  } catch (err) {
+    console.error("Erro em getResponsavelPermissions:", err);
+    return { ok: false, statusCode: 500, message: "Erro interno do servidor." };
+  }
+}
+
+export async function getAvailablePermissions() {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT id, nome FROM permissoes ORDER BY id ASC`
+    );
+
+    const permissions = rows.map(row => ({
+      key: String(row.id),
+      label: row.nome
+    }));
+
+    return { ok: true, statusCode: 200, data: { permissions } };
+  } catch (err) {
+    console.error("Erro em getAvailablePermissions:", err);
+    return { ok: false, statusCode: 500, message: "Erro interno do servidor." };
+  }
+}
+
+export async function updateResponsavelPermissions(responsavelId, pacienteId, permissions) {
+  try {
+    if (!Array.isArray(permissions)) {
+      return { ok: false, statusCode: 400, message: "Permissions deve ser um array." };
+    }
+
+    const [result] = await pool.execute(
+      `UPDATE paciente_responsavel
+       SET permissions = ?
+       WHERE id_responsavel = ? AND id_paciente = ?`,
+      [JSON.stringify(permissions), responsavelId, pacienteId]
+    );
+
+    if (result.affectedRows === 0) {
+      return { ok: false, statusCode: 404, message: "Relacionamento nao encontrado ou nao autorizado." };
+    }
+
+    return {
+      ok: true,
+      statusCode: 200,
+      data: {
+        pacienteId,
+        permissions
+      }
+    };
+  } catch (err) {
+    console.error("Erro em updateResponsavelPermissions:", err);
+    return { ok: false, statusCode: 500, message: "Erro interno do servidor." };
+  }
 }
 
 export async function requestPasswordReset({ type, identifier }) {

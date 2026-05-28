@@ -20,7 +20,10 @@ import {
   resetPasswordWithToken,
   authenticateToken,
   getClinicDetails,
-  getUserProfile
+  getUserProfile,
+  getResponsavelPermissions,
+  updateResponsavelPermissions,
+  getAvailablePermissions
 } from "../services/auth.advanced.service.js";
 
 const router = Router();
@@ -73,6 +76,79 @@ router.post("/login/universal", loginLimiter, async (req, res, next) => {
     }
 
     const result = await loginUniversal(parsed.data);
+
+    if (!result.ok) {
+      return res.status(result.statusCode).json({ message: result.message });
+    }
+
+    return res.status(200).json(result.data);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/login/responsavel", loginLimiter, async (req, res, next) => {
+  try {
+    const parsed = universalLoginSchema.safeParse({ ...req.body, expectedProfile: 'responsavel' });
+
+    if (!parsed.success) {
+      return res.status(400).json({
+        message: "Dados invalidos",
+        errors: parsed.error.errors
+      });
+    }
+
+    const result = await loginUniversal(parsed.data);
+
+    if (!result.ok) {
+      return res.status(result.statusCode).json({ message: result.message });
+    }
+
+    return res.status(200).json(result.data);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/permissoes", async (req, res, next) => {
+  try {
+    const result = await getAvailablePermissions();
+
+    if (!result.ok) {
+      return res.status(result.statusCode).json({ message: result.message });
+    }
+
+    return res.status(200).json(result.data);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/permissoes_responsaveis", authenticateToken, async (req, res, next) => {
+  try {
+    if (req.user.profile !== 'responsavel') {
+      return res.status(403).json({ message: 'Acesso negado. Apenas responsáveis podem ver suas permissões.' });
+    }
+
+    const result = await getResponsavelPermissions(Number(req.user.sub));
+    if (!result.ok) {
+      return res.status(result.statusCode).json({ message: result.message });
+    }
+
+    return res.status(200).json(result.data);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/permissoes_responsaveis", authenticateToken, async (req, res, next) => {
+  try {
+    if (req.user.profile !== 'responsavel') {
+      return res.status(403).json({ message: 'Acesso negado. Apenas responsáveis podem atualizar permissões.' });
+    }
+
+    const { pacienteId, permissions } = req.body;
+    const result = await updateResponsavelPermissions(Number(req.user.sub), pacienteId, permissions);
 
     if (!result.ok) {
       return res.status(result.statusCode).json({ message: result.message });
