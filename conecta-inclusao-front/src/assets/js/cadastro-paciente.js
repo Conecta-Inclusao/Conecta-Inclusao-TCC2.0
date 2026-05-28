@@ -1,4 +1,6 @@
 let guardianData = null;
+let availablePermissions = null;
+const API = 'http://localhost:3000'; 
 
 function applyMask(input, maskFn) {
     input.addEventListener('input', function(event) {
@@ -43,11 +45,63 @@ function updateGuardianSummary() {
     }
 
     const parts = [guardianData.name];
-    if (guardianData.relationship) parts.push(`(${guardianData.relationship})`);
+    if (guardianData.parentesco) parts.push(`(${guardianData.parentesco})`);
     if (guardianData.email) parts.push(guardianData.email);
+    if (guardianData.permissoes && guardianData.permissoes.length) {
+        parts.push(`Permissões: ${guardianData.permissoes.join(', ')}`);
+    }
     summaryText.textContent = parts.join(' ');
     hiddenName.value = guardianData.name;
 }
+
+async function fetchAvailablePermissions() {
+    try {
+        const response = await fetch(`${API}/auth/permissions`);
+        const result = await response.json();
+        if (response.ok && Array.isArray(result.permissions)) {
+            availablePermissions = result.permissions;
+        } else {
+            availablePermissions = [];
+            console.error('Falha ao buscar permissões:', result.message || response.statusText);
+        }
+    } catch (error) {
+        availablePermissions = [];
+        console.error('Erro ao buscar permissões:', error);
+    }
+
+    renderGuardianPermissions();
+}
+
+function renderGuardianPermissions() {
+    const container = document.getElementById('guardianPermissionsContainer');
+    if (!container) return;
+
+    if (availablePermissions === null) {
+        container.innerHTML = '<p>Carregando permissões...</p>';
+        return;
+    }
+
+    if (!availablePermissions.length) {
+        container.innerHTML = '<p>Não foi possível carregar as permissões. Tente novamente mais tarde.</p>';
+        return;
+    }
+
+    const currentPermissions = guardianData?.permissoes || [];
+    container.innerHTML = availablePermissions.map(permission => {
+        const checked = currentPermissions.includes(permission.key) ? 'checked' : '';
+        return `
+            <label class="permission-option" style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+                <input type="checkbox" name="guardianPermissions" value="${permission.key}" ${checked}>
+                <span>${permission.label}</span>
+            </label>
+        `;
+    }).join('');
+}
+
+function getSelectedGuardianPermissions() {
+    return Array.from(document.querySelectorAll('input[name="guardianPermissions"]:checked')).map(input => input.value);
+}
+
 
 function updateGuardianSection() {
     const birthDate = document.getElementById('dataNascimento').value;
@@ -89,13 +143,18 @@ function validatePatientForm() {
         return false;
     }
 
-    if (cpf.length < 14) {
+    if (!validarCPF(cpf)) {
         showPopup('Insira um CPF válido.');
         return false;
     }
 
     if (!isStrongPassword(password)) {
         showPopup('A senha deve ter 8 caracteres, maiúscula, minúscula, número e caractere especial.');
+        return false;
+    }
+
+    if (!isStrongPassword(confirmPassword)) {
+        showPopup('A senha de confirmação deve obedecer aos mesmos requisitos de segurança.');
         return false;
     }
 
@@ -114,7 +173,8 @@ function validatePatientForm() {
 
 async function registerPatientAPI(data) {
     try {
-        const response = await fetch('http://localhost:3000/auth/register/patient', {
+        console.debug('Enviando cadastro de paciente:', data);
+        const response = await fetch(`${API}/auth/register/patient`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -122,6 +182,7 @@ async function registerPatientAPI(data) {
             body: JSON.stringify(data)
         });
         const result = await response.json();
+        console.debug('Resposta do cadastro:', response.status, result);
         return { ok: response.ok, data: result };
     } catch (error) {
         console.error('Erro na requisição:', error);
@@ -140,7 +201,7 @@ function openGuardianModal() {
 
     if (guardianData) {
         guardianName.value = guardianData.name;
-        guardianRelationship.value = guardianData.relationship;
+        guardianRelationship.value = guardianData.parentesco;
         guardianEmail.value = guardianData.email;
         guardianPassword.value = guardianData.password;
     } else {
@@ -148,8 +209,10 @@ function openGuardianModal() {
         guardianRelationship.value = '';
         guardianEmail.value = '';
         guardianPassword.value = '';
+        guardianData = { permissoes: [] };
     }
 
+    renderGuardianPermissions();
     modal.classList.add('active');
     modal.setAttribute('aria-hidden', 'false');
 }
@@ -167,14 +230,20 @@ function validateGuardianModalForm() {
     const guardianRelationship = document.getElementById('guardianRelationship').value.trim();
     const guardianEmail = document.getElementById('guardianEmail').value.trim();
     const guardianPassword = document.getElementById('guardianPassword').value;
+    const selectedPermissions = getSelectedGuardianPermissions();
 
     if (!guardianName || !guardianRelationship || !guardianEmail || !guardianPassword) {
         showPopup('Preencha todos os campos do responsável.');
         return false;
     }
 
-    if (guardianPassword.length < 6) {
-        showPopup('A senha do responsável deve ter ao menos 6 caracteres.');
+    if (!isStrongPassword(guardianPassword)) {
+        showPopup('A senha do responsável deve ter 8 caracteres, incluindo maiúscula, minúscula, número e caractere especial.');
+        return false;
+    }
+
+    if (Array.isArray(availablePermissions) && availablePermissions.length && selectedPermissions.length === 0) {
+        showPopup('Selecione pelo menos uma permissão para o responsável.');
         return false;
     }
 
@@ -190,9 +259,10 @@ function handleGuardianModalSubmit(event) {
 
     guardianData = {
         name: document.getElementById('guardianName').value.trim(),
-        relationship: document.getElementById('guardianRelationship').value.trim(),
+        parentesco: document.getElementById('guardianRelationship').value.trim(),
         email: document.getElementById('guardianEmail').value.trim(),
-        password: document.getElementById('guardianPassword').value
+        password: document.getElementById('guardianPassword').value,
+        permissoes: getSelectedGuardianPermissions()
     };
 
     updateGuardianSummary();
@@ -202,7 +272,7 @@ function handleGuardianModalSubmit(event) {
 
 async function handlePatientRegistration(event) {
     event.preventDefault();
-    const submitButton = document.querySelector('.btn-submit');
+    const submitButton = document.querySelector('#registerPatientForm button[type="submit"]');
 
     if (!validatePatientForm()) {
         return;
@@ -228,19 +298,21 @@ async function handlePatientRegistration(event) {
             cpf: cpfDigits,
             password: password,
             name: name,
-            email: email || null,
-            nomeResponsavel: guardianData?.name || null,
             tipoDeficiencia: tipoDeficiencia,
-            planoAtual: planoAtual || null,
             dataNascimento: dataNascimento
         };
 
+        if (email) {
+            registrationData.email = email;
+        }
+
         if (guardianData) {
             registrationData.responsavel = {
-                nome: guardianData.name,
-                parentesco: guardianData.relationship,
+                name: guardianData.name,
+                parentesco: guardianData.parentesco,
                 email: guardianData.email,
-                password: guardianData.password
+                password: guardianData.password,
+                permissoes: guardianData.permissoes || []
             };
         }
 
@@ -296,6 +368,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     updateGuardianSummary();
     updateGuardianSection();
+    fetchAvailablePermissions();
 
     const style = document.createElement('style');
     style.innerHTML = `

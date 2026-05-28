@@ -6,7 +6,13 @@ CREATE TABLE responsavel (
    id int primary key AUTO_INCREMENT not null,
    nome varchar (100) not null, 
    email varchar (100) not null unique,
-   senha VARCHAR(255) NOT NULL COMMENT 'Hash bcrypt da senha'
+   senha VARCHAR(255) NOT NULL COMMENT 'Hash bcrypt da senha',
+   status VARCHAR(20) DEFAULT 'ACTIVE',
+   failed_attempts INT DEFAULT 0,
+   locked_until DATETIME NULL,
+   password_reset_token VARCHAR(255) NULL,
+   password_reset_expires_at DATETIME NULL,
+   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- 2. Tabela de Pacientes (Informações do responsável e PCD)
@@ -125,7 +131,8 @@ create table paciente_responsavel(
     primary key (id_paciente,id_responsavel),
     FOREIGN KEY (id_paciente) REFERENCES pacientes(id) ON DELETE CASCADE,
     FOREIGN KEY (id_responsavel) REFERENCES responsavel(id) ON DELETE CASCADE,
-    parentesco varchar (255) 
+    parentesco varchar (255),
+    permissions JSON DEFAULT (JSON_ARRAY())
     );
 
 ALTER TABLE paciente_responsavel add column created_at DATETIME DEFAULT CURRENT_TIMESTAMP;

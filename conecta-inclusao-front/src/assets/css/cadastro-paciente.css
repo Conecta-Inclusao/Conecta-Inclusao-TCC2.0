@@ -216,6 +216,36 @@ body {
     margin: 0;
 }
 
+.permission-option {
+    padding: 1rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    background: #f8fbff;
+    margin-bottom: 0.75rem;
+}
+
+.permission-option input {
+    width: auto;
+    margin-right: 0.85rem;
+}
+
+.permission-option strong {
+    font-size: 0.98rem;
+    color: #0f172a;
+}
+
+.permission-option div {
+    margin-left: 2.55rem;
+    margin-top: 0.25rem;
+    color: #64748b;
+    font-size: 0.9rem;
+}
+
+.permissions-grid {
+    display: grid;
+    gap: 0.75rem;
+}
+
 .modal {
     display: none;
     position: fixed;

@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login Responsável - Portal Saúde</title>
+    <link rel="stylesheet" href="../assets/css/login-responsavel.css">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-header">
+            <div class="back-button">
+                <a href="login-paciente.html"><i class="ph ph-arrow-left"></i> Voltar</a>
+            </div>
+            <div class="guardian-icon">
+                <i class="ph ph-user-circle"></i>
+            </div>
+            <h1>Área do Responsável</h1>
+            <p>Acesse os dados do paciente e gerencie permissões autorizadas.</p>
+        </div>
+
+        <form id="loginFormResponsavel">
+            <div class="input-group">
+                <label for="email">E-mail</label>
+                <input type="email" id="email" placeholder="seu@email.com" required>
+            </div>
+
+            <div class="input-group">
+                <label for="password">Senha</label>
+                <input type="password" id="password" placeholder="Sua senha" required>
+            </div>
+
+            <button type="submit" class="btn-login">Acessar como responsável</button>
+ 
+        </form>
+    </div>
+
+    <script src="../assets/js/utils.js"></script>
+    <script src="../assets/js/login-responsavel.js"></script>
+</body>
+</html>

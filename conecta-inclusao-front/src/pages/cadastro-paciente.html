@@ -30,21 +30,25 @@
                 <div class="form-group">
                     <label for="cpf">CPF <span class="required">*</span></label>
                     <input type="text" id="cpf" name="cpf" placeholder="000.000.000-00" required>
+                    <p class="field-note">CPF obrigatório. Informe 11 dígitos válidos no formato 000.000.000-00 ou 00000000000.</p>
                 </div>
 
                 <div class="form-group">
                     <label for="name">Nome Completo <span class="required">*</span></label>
                     <input type="text" id="name" name="name" placeholder="João Silva" required>
+                    <p class="field-note">Nome obrigatório. Deve ter entre 3 e 100 caracteres.</p>
                 </div>
 
                 <div class="form-row">
                     <div class="form-group">
                         <label for="dataNascimento">Data de Nascimento <span class="required">*</span></label>
                         <input type="date" id="dataNascimento" name="dataNascimento" required>
+                        <p class="field-note">Data de nascimento obrigatória. Informe uma data válida.</p>
                     </div>
                     <div class="form-group">
                         <label for="email">Email</label>
                         <input type="email" id="email" name="email" placeholder="seu.email@example.com">
+                        <p class="field-note">Email opcional. Se preenchido, deve ser um endereço válido.</p>
                     </div>
                 </div>
 
@@ -62,21 +66,7 @@
                         <option value="Transtorno do Espectro Autista">Transtorno do Espectro Autista</option>
                         <option value="Outra">Outra</option>
                     </select>
-                </div>
-
-                <div class="form-group">
-                    <label for="planoAtual">Plano de Saúde <span class="required">*</span></label>
-                    <select id="planoAtual" name="planoAtual" required>
-                        <option value="">Selecione o plano atual...</option>
-                        <option value="Particular">Particular</option>
-                        <option value="SUS">SUS</option>
-                        <option value="Unimed">Unimed</option>
-                        <option value="Amil">Amil</option>
-                        <option value="Bradesco Saúde">Bradesco Saúde</option>
-                        <option value="SulAmérica">SulAmérica</option>
-                        <option value="NotreDame">NotreDame</option>
-                        <option value="Outro">Outro</option>
-                    </select>
+                    <p class="field-note">Selecione o tipo de deficiência. Este campo é obrigatório.</p>
                 </div>
 
                 <h3 class="section-title">Informações do Responsável</h3>
@@ -101,10 +91,12 @@
                     <div class="form-group">
                         <label for="password">Senha <span class="required">*</span></label>
                         <input type="password" id="password" name="password" data-password-guidance="true" placeholder="Senha forte (8+ caracteres, maiúscula, minúscula, número e especial)" required>
+                        <p class="field-note">Senha obrigatória. Use no mínimo 8 caracteres, incluindo maiúscula, minúscula, número e caractere especial.</p>
                     </div>
                     <div class="form-group">
                         <label for="confirmPassword">Confirmar Senha <span class="required">*</span></label>
                         <input type="password" id="confirmPassword" name="confirmPassword" placeholder="Repita a senha" required>
+                        <p class="field-note">Digite a mesma senha informada acima para confirmar.</p>
                     </div>
                 </div>
 
@@ -127,18 +119,28 @@
                         <div class="form-group">
                             <label for="guardianName">Nome completo</label>
                             <input type="text" id="guardianName" placeholder="Nome do responsável">
+                            <p class="field-note">Nome do responsável obrigatório se houver responsável. Deve ter entre 3 e 100 caracteres.</p>
                         </div>
                         <div class="form-group">
                             <label for="guardianRelationship">Parentesco</label>
                             <input type="text" id="guardianRelationship" placeholder="Ex: Mãe, Pai, Tutor">
+                            <p class="field-note">Parentesco obrigatório para responsável. Informe um relacionamento claro.</p>
                         </div>
                         <div class="form-group">
                             <label for="guardianEmail">E-mail</label>
                             <input type="email" id="guardianEmail" placeholder="email@exemplo.com">
+                            <p class="field-note">Email do responsável obrigatório e deve ser válido.</p>
                         </div>
                         <div class="form-group">
                             <label for="guardianPassword">Senha de acesso</label>
                             <input type="password" id="guardianPassword" placeholder="Senha para acesso">
+                            <p class="field-note">Senha do responsável obrigatória. Use no mínimo 8 caracteres, incluindo maiúscula, minúscula, número e especial.</p>
+                        </div>
+                        <div class="form-group">
+                            <label>Permissões</label>
+                            <div id="guardianPermissionsContainer" class="permissions-grid">
+                                <p>Carregando permissões...</p>
+                            </div>
                         </div>
                         <div class="form-actions" style="justify-content:flex-end; gap:12px; margin-top:18px;">
                             <button type="button" class="btn btn-cancel" id="cancelGuardianButton">Cancelar</button>

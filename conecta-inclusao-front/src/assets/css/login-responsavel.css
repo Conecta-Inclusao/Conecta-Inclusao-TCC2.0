@@ -1,0 +1,161 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+    background-color: #f7f7f7;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.login-container {
+    background-color: #ffffff;
+    padding: 40px;
+    border-radius: 16px;
+    box-shadow: 0 15px 35px rgba(42, 103, 184, 0.12);
+    width: 100%;
+    max-width: 420px;
+    text-align: center;
+}
+
+.guardian-icon {
+    font-size: 64px;
+    color: #1c7d3a;
+    margin-bottom: 15px;
+}
+
+h1 {
+    color: #1f2937;
+    font-size: 26px;
+    margin-bottom: 12px;
+}
+
+p {
+    color: #475569;
+    font-size: 14px;
+    line-height: 1.5;
+    margin-bottom: 30px;
+    padding: 0 10px;
+}
+
+.input-group {
+    text-align: left;
+    margin-bottom: 18px;
+}
+
+.input-group label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: #475569;
+    margin-bottom: 6px;
+}
+
+.input-group input {
+    width: 100%;
+    padding: 14px;
+    border: 2px solid #e2e8f0;
+    border-radius: 10px;
+    font-size: 15px;
+    transition: all 0.3s ease;
+}
+
+.input-group input:focus {
+    outline: none;
+    border-color: #1c7d3a;
+    background-color: #f0fdf4;
+}
+
+.btn-login {
+    width: 100%;
+    background-color: #1c7d3a;
+    color: white;
+    border: none;
+    padding: 16px;
+    border-radius: 10px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    margin-top: 10px;
+}
+
+.btn-login:hover {
+    background-color: #16672e;
+    box-shadow: 0 5px 15px rgba(22, 103, 46, 0.28);
+}
+
+.login-footer {
+    margin-top: 25px;
+    display: flex;
+    justify-content: space-between;
+}
+
+.login-footer a {
+    font-size: 13px;
+    color: #1c7d3a;
+    font-weight: 500;
+    text-decoration: none;
+}
+
+.login-footer a:hover {
+    text-decoration: underline;
+}
+
+.back-button {
+    text-align: left;
+    margin-bottom: 20px;
+}
+
+.back-button a {
+    color: #1c7d3a;
+    text-decoration: none;
+    font-size: 16px;
+    display: inline-flex;
+    align-items: center;
+}
+
+.back-button a:hover {
+    text-decoration: underline;
+}
+
+.back-button i {
+    margin-right: 5px;
+}
+
+@media (max-width: 768px) {
+    .login-container {
+        padding: 20px;
+        max-width: 90%;
+        margin: 20px;
+    }
+
+    .guardian-icon {
+        font-size: 45px;
+    }
+
+    h1 {
+        font-size: 24px;
+    }
+
+    .input-group input {
+        padding: 12px;
+        font-size: 14px;
+    }
+
+    .btn-login {
+        padding: 14px;
+        font-size: 15px;
+    }
+
+    .login-footer {
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+    }
+}

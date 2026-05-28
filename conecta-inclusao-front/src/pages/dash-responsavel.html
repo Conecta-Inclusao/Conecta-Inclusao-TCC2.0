@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard do Responsável - Portal Saúde</title>
+    <link rel="stylesheet" href="../assets/css/login-responsavel.css">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+</head>
+<body>
+    <div class="login-container" style="max-width: 760px;">
+        <div class="login-header">
+            <div class="back-button">
+                <a href="login-responsavel.html"><i class="ph ph-arrow-left"></i> Voltar</a>
+            </div>
+            <div class="guardian-icon">
+                <i class="ph ph-clipboard-text"></i>
+            </div>
+            <h1>Bem-vindo, Responsável</h1>
+            <p>Aqui você poderá ver suas permissões e os dados do paciente autorizados.</p>
+        </div>
+        <div id="responsibleContent" style="text-align:left; padding: 20px;">
+            <section style="margin-bottom: 25px;">
+                <h2 style="margin-bottom: 10px;">Seu perfil</h2>
+                <p id="userInfo">Carregando informações...</p>
+            </section>
+            <section style="margin-bottom: 25px;">
+                <h2 style="margin-bottom: 10px;">Permissões</h2>
+                <div id="permissionsList"></div>
+            </section>
+            <section>
+                <button id="refreshPermissions" class="btn-login" style="width:auto; min-width: 220px;">Atualizar permissões</button>
+            </section>
+        </div>
+    </div>
+
+    <script src="../assets/js/utils.js"></script>
+    <script>
+        async function loadResponsavelDashboard() {
+            const user = JSON.parse(localStorage.getItem('user') || 'null');
+            if (!user || user.profile !== 'responsavel') {
+                window.location.href = 'login-responsavel.html';
+                return;
+            }
+
+            document.getElementById('userInfo').innerHTML = `Nome: <strong>${user.name || 'Responsável'}</strong><br>E-mail: <strong>${user.email || 'não informado'}</strong>`;
+
+            async function fetchPermissions() {
+                const token = localStorage.getItem('token');
+                if (!token) return;
+                try {
+                    const response = await fetch('http://localhost:3000/auth/permissoes_responsaveis', {
+                        method: 'GET',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+                    const data = await response.json();
+                    const permissionsList = document.getElementById('permissionsList');
+                    if (!response.ok) {
+                        permissionsList.innerHTML = `<p style="color:#bf1650;">Não foi possível carregar as permissões. ${data.message || ''}</p>`;
+                        return;
+                    }
+                    permissionsList.innerHTML = (data.permissions || []).map(p => `<span style="display:inline-block; margin:4px 8px 4px 0; padding:8px 12px; border-radius:999px; background:#e5f9f0; color:#0f5132; font-weight:600;">${p}</span>`).join('') || '<p>Nenhuma permissão encontrada.</p>';
+                } catch (err) {
+                    console.error(err);
+                    document.getElementById('permissionsList').innerHTML = '<p style="color:#bf1650;">Erro ao carregar permissões.</p>';
+                }
+            }
+
+            document.getElementById('refreshPermissions').addEventListener('click', fetchPermissions);
+            await fetchPermissions();
+        }
+
+        document.addEventListener('DOMContentLoaded', loadResponsavelDashboard);
+    </script>
+</body>
+</html>

@@ -63,7 +63,6 @@ function loadPatientData() {
     const profileBirthDate = document.getElementById('profileBirthDate');
     const profilePatientResponsible = document.getElementById('profilePatientResponsible');
     const profileDisabilityType = document.getElementById('profileDisabilityType');
-    const profilePlan = document.getElementById('profilePlan');
     const profilePreferredUnit = document.getElementById('profilePreferredUnit');
 
     const name = user?.name || 'Paciente';
@@ -71,7 +70,6 @@ function loadPatientData() {
     const birthDate = user?.data_nascimento ? formatDate(user.data_nascimento) : '--';
     const responsible = user?.responsible || localStorage.getItem('patientResponsible') || '--';
     const disabilityType = user?.tipo_deficiencia || '--';
-    const plan = user?.plan || '--';
     const preferredUnit = user?.unidade || user?.unit || '--';
 
     if (patientHeaderName) {
@@ -94,9 +92,6 @@ function loadPatientData() {
     }
     if (profileDisabilityType) {
         profileDisabilityType.textContent = disabilityType;
-    }
-    if (profilePlan) {
-        profilePlan.textContent = plan;
     }
     if (profilePreferredUnit) {
         profilePreferredUnit.textContent = preferredUnit;
@@ -296,8 +291,9 @@ function renderGuardians() {
                     guardians = Array.isArray(data) ? data.map(g => ({
                         id: g.id,
                         name: g.name || g.nome,
-                        relationship: g.relationship || g.parentesco,
+                        parentesco: g.parentesco || g.relationship,
                         email: g.email || '',
+                        permissoes: g.permissoes || g.permissions || [],
                         dateAdded: g.createdAt || ''
                     })) : [];
                     // cache locally for offline fallback
@@ -327,7 +323,7 @@ function renderGuardians() {
         guardiansList.innerHTML = '';
 
         guardians.forEach((guardian, index) => {
-        const permissionsText = (guardian.permissions || [])
+        const permissionsText = (guardian.permissoes || guardian.permissions || [])
             .map(p => {
                 const permissionMap = {
                     'view_appointments': 'Ver agendamentos',
@@ -344,7 +340,7 @@ function renderGuardians() {
             <div class="guardian-card-header">
                 <div class="guardian-info">
                     <strong>${guardian.name}</strong>
-                    <span>${guardian.relationship}</span>
+                    <span>${guardian.parentesco || guardian.relationship}</span>
                 </div>
                 <div class="guardian-actions">
                     <button class="btn-secondary" type="button" onclick="editGuardian(${index})">
@@ -397,14 +393,14 @@ function editGuardian(index) {
         
         // Preencher o formulário com os dados do responsável
         document.getElementById('guardianName').value = guardian.name;
-        document.getElementById('guardianRelationship').value = guardian.relationship;
+        document.getElementById('guardianRelationship').value = guardian.parentesco || guardian.relationship;
         document.getElementById('guardianPassword').value = guardian.password || '';
         document.getElementById('guardianEmail').value = guardian.email;
 
         // Selecionar as permissões
         const checkboxes = document.querySelectorAll('input[name="permissions"]');
         checkboxes.forEach(checkbox => {
-            checkbox.checked = guardian.permissions.includes(checkbox.value);
+            checkbox.checked = (guardian.permissoes || guardian.permissions || []).includes(checkbox.value);
         });
 
         // Armazenar o índice para atualização
@@ -1609,7 +1605,6 @@ async function handleLogout() {
 async function filterResults() {
     const specialty = document.getElementById('searchSpecialty')?.value || '';
     const hospital = document.getElementById('searchHospital')?.value || '';
-    const plan = document.getElementById('searchPlan')?.value || '';
     const button = document.querySelector('.btn-search-filter');
 
     if (button) {
@@ -1618,7 +1613,7 @@ async function filterResults() {
     }
 
     setTimeout(async () => {
-        const description = [specialty || 'todas as areas', hospital || 'todos os hospitais', plan || 'todos os planos'].join(', ');
+        const description = [specialty || 'todas as areas', hospital || 'todos os hospitais'].join(', ');
         await showPopup(`Filtro aplicado para ${description}.`);
 
         if (button) {
@@ -1891,7 +1886,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             event.preventDefault();
 
                 const name = document.getElementById('guardianName')?.value.trim();
-                const relationship = document.getElementById('guardianRelationship')?.value;
+                const parentesco = document.getElementById('guardianRelationship')?.value;
                 const email = document.getElementById('guardianEmail')?.value.trim();
                 const password = document.getElementById('guardianPassword')?.value.trim();
                 if (!password || password.length < 6) {
@@ -1899,14 +1894,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                     return;
                 }
 
-                if (!name || !relationship || !email || !password) {
+                if (!name || !parentesco || !email || !password) {
                     await showPopup('Por favor, preencha todos os campos obrigatórios.');
                     return;
                 }
-            const permissions = Array.from(document.querySelectorAll('input[name="permissions"]:checked'))
+            const permissoes = Array.from(document.querySelectorAll('input[name="permissions"]:checked'))
                 .map(checkbox => checkbox.value);
 
-            if (permissions.length === 0) {
+            if (permissoes.length === 0) {
                 await showPopup('Selecione pelo menos uma permissão.');
                 return;
             }
@@ -1918,10 +1913,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 // Atualizar responsável existente
                 guardians[parseInt(editIndex)] = {
                     name,
-                    relationship,
+                    parentesco,
                     password,
                     email,
-                    permissions,
+                    permissoes,
                     dateAdded: guardians[parseInt(editIndex)].dateAdded
                 };
                 await showPopup(`Responsável ${name} atualizado com sucesso.`);
@@ -1930,10 +1925,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const today = new Date().toLocaleDateString('pt-BR');
                 const newGuardian = {
                     name,
-                    relationship,
+                    parentesco,
                     password,
                     email,
-                    permissions,
+                    permissoes,
                     dateAdded: today
                 };
 
@@ -1947,7 +1942,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                                 'Content-Type': 'application/json',
                                 'Authorization': `Bearer ${token}`
                             },
-                            body: JSON.stringify({ name, relationship, email, password })
+                            body: JSON.stringify({ name, parentesco, email, password, permissoes })
                         });
 
                         const body = await resp.json();
