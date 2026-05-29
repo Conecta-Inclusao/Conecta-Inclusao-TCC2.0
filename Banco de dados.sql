@@ -29,7 +29,9 @@ CREATE TABLE pacientes (
     locked_until DATETIME NULL,
     password_reset_token VARCHAR(255) NULL,
     password_reset_expires_at DATETIME NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    id_responsavel INT,
+    FOREIGN KEY (id_responsavel) REFERENCES responsavel(id) ON DELETE CASCADE
 );
 
 -- 3. Tabela de Clínicas/Empresas (Detalhes das empresas)
@@ -134,8 +136,7 @@ create table paciente_responsavel(
     primary key (id_paciente,id_responsavel),
     FOREIGN KEY (id_paciente) REFERENCES pacientes(id) ON DELETE CASCADE,
     FOREIGN KEY (id_responsavel) REFERENCES responsavel(id) ON DELETE CASCADE,
-    parentesco varchar (255),
-    permissions JSON DEFAULT (JSON_ARRAY())
+    parentesco varchar (255)
     );
     
 create table permissoes(
