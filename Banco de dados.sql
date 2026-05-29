@@ -7,12 +7,7 @@ CREATE TABLE responsavel (
    nome varchar (100) not null, 
    email varchar (100) not null unique,
    senha VARCHAR(255) NOT NULL COMMENT 'Hash bcrypt da senha',
-   status VARCHAR(20) DEFAULT 'ACTIVE',
-   failed_attempts INT DEFAULT 0,
-   locked_until DATETIME NULL,
-   password_reset_token VARCHAR(255) NULL,
-   password_reset_expires_at DATETIME NULL,
-   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+   status TINYINT(4) DEFAULT 1
 );
 
 -- 2. Tabela de Pacientes (Informações do responsável e PCD)
@@ -29,7 +24,9 @@ CREATE TABLE pacientes (
     locked_until DATETIME NULL,
     password_reset_token VARCHAR(255) NULL,
     password_reset_expires_at DATETIME NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    id_responsavel INT(11),
+    CONSTRAINT fk_pacientes_responsavel FOREIGN KEY (id_responsavel) REFERENCES responsavel(id) ON DELETE CASCADE
 );
 
 -- 3. Tabela de Clínicas/Empresas (Detalhes das empresas)
@@ -134,8 +131,7 @@ create table paciente_responsavel(
     primary key (id_paciente,id_responsavel),
     FOREIGN KEY (id_paciente) REFERENCES pacientes(id) ON DELETE CASCADE,
     FOREIGN KEY (id_responsavel) REFERENCES responsavel(id) ON DELETE CASCADE,
-    parentesco varchar (255),
-    permissions JSON DEFAULT (JSON_ARRAY())
+    parentesco varchar (255) 
     );
     
 create table permissoes(
@@ -160,3 +156,9 @@ create table responsavel_permissoes(
      insert into permissoes(nome) values(
 		"Gerenciar agendamentos"
     );
+    
+    
+    ALTER TABLE pacientes
+    ADD COLUMN id_responsavel INT,
+    ADD  CONSTRAINT fk_pacientes_responsavel 
+    FOREIGN KEY (id_responsavel) REFERENCES responsavel(id) ON DELETE CASCADE;
