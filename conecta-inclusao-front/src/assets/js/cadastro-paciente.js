@@ -1,6 +1,6 @@
-let guardianData = null;
+﻿let guardianData = null;
 let availablePermissions = null;
-const API = 'http://localhost:3000'; 
+const API = 'https://conecta-inclusao-tcc2-0.onrender.com'; 
 
 function refreshGuardianPasswordFeedback() {
     const guardianPassword = document.getElementById('guardianPassword');
@@ -50,7 +50,7 @@ function updateGuardianSummary() {
     const hiddenName = document.getElementById('nomeResponsavel');
 
     if (!guardianData) {
-        summaryText.textContent = 'Nenhum responsável adicionado.';
+        summaryText.textContent = 'Nenhum responsÃ¡vel adicionado.';
         hiddenName.value = '';
         return;
     }
@@ -59,7 +59,7 @@ function updateGuardianSummary() {
     if (guardianData.parentesco) parts.push(`(${guardianData.parentesco})`);
     if (guardianData.email) parts.push(guardianData.email);
     if (guardianData.permissoes && guardianData.permissoes.length) {
-        parts.push(`Permissões: ${guardianData.permissoes.join(', ')}`);
+        parts.push(`PermissÃµes: ${guardianData.permissoes.join(', ')}`);
     }
     summaryText.textContent = parts.join(' ');
     hiddenName.value = guardianData.name;
@@ -73,11 +73,11 @@ async function fetchAvailablePermissions() {
             availablePermissions = result.permissions;
         } else {
             availablePermissions = [];
-            console.error('Falha ao buscar permissões:', result.message || response.statusText);
+            console.error('Falha ao buscar permissÃµes:', result.message || response.statusText);
         }
     } catch (error) {
         availablePermissions = [];
-        console.error('Erro ao buscar permissões:', error);
+        console.error('Erro ao buscar permissÃµes:', error);
     }
 
     renderGuardianPermissions();
@@ -88,12 +88,12 @@ function renderGuardianPermissions() {
     if (!container) return;
 
     if (availablePermissions === null) {
-        container.innerHTML = '<p>Carregando permissões...</p>';
+        container.innerHTML = '<p>Carregando permissÃµes...</p>';
         return;
     }
 
     if (!availablePermissions.length) {
-        container.innerHTML = '<p>Não foi possível carregar as permissões. Tente novamente mais tarde.</p>';
+        container.innerHTML = '<p>NÃ£o foi possÃ­vel carregar as permissÃµes. Tente novamente mais tarde.</p>';
         return;
     }
 
@@ -123,19 +123,19 @@ function updateGuardianSection() {
     const openModalBtn = document.getElementById('openGuardianModalButton');
 
     if (age !== null && age < 18) {
-        guardianAdvice.textContent = 'Paciente menor de idade exige responsável. Preencha os dados do responsável.';
+        guardianAdvice.textContent = 'Paciente menor de idade exige responsÃ¡vel. Preencha os dados do responsÃ¡vel.';
         guardianSummary.style.display = 'block';
-        if (openModalBtn) openModalBtn.innerText = 'Adicionar responsável';
+        if (openModalBtn) openModalBtn.innerText = 'Adicionar responsÃ¡vel';
     } else if (age !== null && age >= 18) {
-        guardianAdvice.textContent = 'Paciente maior de idade. Adicionar responsável é opcional.';
+        guardianAdvice.textContent = 'Paciente maior de idade. Adicionar responsÃ¡vel Ã© opcional.';
         guardianSummary.style.display = 'block';
-        if (openModalBtn) openModalBtn.innerText = 'Adicionar responsável (opcional)';
+        if (openModalBtn) openModalBtn.innerText = 'Adicionar responsÃ¡vel (opcional)';
     } else {
-        guardianAdvice.textContent = 'Preencha a data de nascimento para verificar se responsável é necessário.';
+        guardianAdvice.textContent = 'Preencha a data de nascimento para verificar se responsÃ¡vel Ã© necessÃ¡rio.';
         guardianSummary.style.display = 'none';
     }
 
-    // Atualiza o texto do resumo conforme os dados do responsável
+    // Atualiza o texto do resumo conforme os dados do responsÃ¡vel
     updateGuardianSummary();
 }
 
@@ -150,32 +150,32 @@ function validatePatientForm() {
     const isMinor = age !== null && age < 18;
 
     if (!cpf || !name || !dataNascimento || !tipoDeficiencia || !password || !confirmPassword) {
-        showPopup('Preencha todos os campos obrigatórios.');
+        showPopup('Preencha todos os campos obrigatÃ³rios.');
         return false;
     }
 
     if (!validarCPF(cpf)) {
-        showPopup('Insira um CPF válido.');
+        showPopup('Insira um CPF vÃ¡lido.');
         return false;
     }
 
     if (!isStrongPassword(password)) {
-        showPopup('A senha deve ter 8 caracteres, maiúscula, minúscula, número e caractere especial.');
+        showPopup('A senha deve ter 8 caracteres, maiÃºscula, minÃºscula, nÃºmero e caractere especial.');
         return false;
     }
 
     if (!isStrongPassword(confirmPassword)) {
-        showPopup('A senha de confirmação deve obedecer aos mesmos requisitos de segurança.');
+        showPopup('A senha de confirmaÃ§Ã£o deve obedecer aos mesmos requisitos de seguranÃ§a.');
         return false;
     }
 
     if (password !== confirmPassword) {
-        showPopup('As senhas não coincidem.');
+        showPopup('As senhas nÃ£o coincidem.');
         return false;
     }
 
     if (isMinor && !guardianData) {
-        showPopup('Paciente menor de idade deve cadastrar um responsável.');
+        showPopup('Paciente menor de idade deve cadastrar um responsÃ¡vel.');
         return false;
     }
 
@@ -196,8 +196,8 @@ async function registerPatientAPI(data) {
         console.debug('Resposta do cadastro:', response.status, result);
         return { ok: response.ok, data: result };
     } catch (error) {
-        console.error('Erro na requisição:', error);
-        return { ok: false, data: { message: 'Erro de conexão com o servidor' } };
+        console.error('Erro na requisiÃ§Ã£o:', error);
+        return { ok: false, data: { message: 'Erro de conexÃ£o com o servidor' } };
     }
 }
 
@@ -244,17 +244,17 @@ function validateGuardianModalForm() {
     const selectedPermissions = getSelectedGuardianPermissions();
 
     if (!guardianName || !guardianRelationship || !guardianEmail || !guardianPassword) {
-        showPopup('Preencha todos os campos do responsável.');
+        showPopup('Preencha todos os campos do responsÃ¡vel.');
         return false;
     }
 
     if (!isStrongPassword(guardianPassword)) {
-        showPopup('A senha do responsável deve ter 8 caracteres, incluindo maiúscula, minúscula, número e caractere especial.');
+        showPopup('A senha do responsÃ¡vel deve ter 8 caracteres, incluindo maiÃºscula, minÃºscula, nÃºmero e caractere especial.');
         return false;
     }
 
     if (Array.isArray(availablePermissions) && availablePermissions.length && selectedPermissions.length === 0) {
-        showPopup('Selecione pelo menos uma permissão para o responsável.');
+        showPopup('Selecione pelo menos uma permissÃ£o para o responsÃ¡vel.');
         return false;
     }
 
@@ -278,7 +278,7 @@ function handleGuardianModalSubmit(event) {
 
     updateGuardianSummary();
     closeGuardianModal();
-    showPopup('Responsável salvo. Continue com o cadastro do paciente.');
+    showPopup('ResponsÃ¡vel salvo. Continue com o cadastro do paciente.');
 }
 
 async function handlePatientRegistration(event) {
@@ -330,7 +330,7 @@ async function handlePatientRegistration(event) {
         const result = await registerPatientAPI(registrationData);
 
         if (result.ok) {
-            showPopup('Cadastro realizado com sucesso! Você pode fazer login agora.');
+            showPopup('Cadastro realizado com sucesso! VocÃª pode fazer login agora.');
             document.getElementById('registerPatientForm').reset();
             guardianData = null;
             updateGuardianSummary();
@@ -390,3 +390,4 @@ document.addEventListener('DOMContentLoaded', function() {
     `;
     document.head.appendChild(style);
 });
+

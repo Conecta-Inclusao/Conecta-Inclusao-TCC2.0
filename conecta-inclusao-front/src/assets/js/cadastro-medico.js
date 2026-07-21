@@ -1,4 +1,4 @@
-function crmMask(value) {
+﻿function crmMask(value) {
     let v = value.toUpperCase().replace(/[^A-Z0-9]/g, '');
     if (v.length > 7) v = v.slice(0, 7);
     return v;
@@ -18,7 +18,7 @@ function validateDoctorForm() {
     const confirmPassword = document.getElementById('confirmPassword').value;
 
     if (!crm || !name || !unidade || !password || !confirmPassword) {
-        showPopup('Preencha todos os campos obrigatórios.');
+        showPopup('Preencha todos os campos obrigatÃ³rios.');
         return false;
     }
 
@@ -28,12 +28,12 @@ function validateDoctorForm() {
     }
 
     if (!isStrongPassword(password)) {
-        showPopup('A senha deve ter 8 caracteres, maiúscula, minúscula, número e caractere especial.');
+        showPopup('A senha deve ter 8 caracteres, maiÃºscula, minÃºscula, nÃºmero e caractere especial.');
         return false;
     }
 
     if (password !== confirmPassword) {
-        showPopup('As senhas não coincidem.');
+        showPopup('As senhas nÃ£o coincidem.');
         return false;
     }
 
@@ -42,7 +42,7 @@ function validateDoctorForm() {
 
 async function registerDoctorAPI(data) {
     try {
-        const response = await fetch('http://localhost:3000/auth/register/doctor', {
+        const response = await fetch('https://conecta-inclusao-tcc2-0.onrender.com/auth/register/doctor', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -52,8 +52,8 @@ async function registerDoctorAPI(data) {
         const result = await response.json();
         return { ok: response.ok, data: result };
     } catch (error) {
-        console.error('Erro na requisição:', error);
-        return { ok: false, data: { message: 'Erro de conexão com o servidor' } };
+        console.error('Erro na requisiÃ§Ã£o:', error);
+        return { ok: false, data: { message: 'Erro de conexÃ£o com o servidor' } };
     }
 }
 
@@ -72,7 +72,7 @@ function handleDoctorRegistration(event) {
     const bio = document.getElementById('bio').value.trim();
     const password = document.getElementById('password').value;
 
-    showPopup('Deseja confirmar o cadastro deste médico?', 'confirm').then(async (confirmed) => {
+    showPopup('Deseja confirmar o cadastro deste mÃ©dico?', 'confirm').then(async (confirmed) => {
         if (!confirmed) return;
 
         submitButton.disabled = true;
@@ -90,10 +90,10 @@ function handleDoctorRegistration(event) {
         const result = await registerDoctorAPI(registrationData);
 
         if (result.ok) {
-            showPopup('Médico cadastrado com sucesso!');
+            showPopup('MÃ©dico cadastrado com sucesso!');
             document.getElementById('registerDoctorForm').reset();
             
-            // Armazenar dados em localStorage para pré-preenchimento no login
+            // Armazenar dados em localStorage para prÃ©-preenchimento no login
             localStorage.setItem('lastCRM', crm);
             localStorage.setItem('lastUnidade', unidade);
             localStorage.setItem('lastRegisteredCRM', crm);
@@ -109,22 +109,22 @@ function handleDoctorRegistration(event) {
         }
 
         submitButton.disabled = false;
-        submitButton.innerText = 'Cadastrar Médico';
+        submitButton.innerText = 'Cadastrar MÃ©dico';
     });
 }
 
 async function loadClinics() {
-    // Esta função buscaria as clínicas do backend
-    // Por enquanto, será uma lista estática/mock
-    // No futuro, implementar: GET /auth/clinicas (com autenticação)
+    // Esta funÃ§Ã£o buscaria as clÃ­nicas do backend
+    // Por enquanto, serÃ¡ uma lista estÃ¡tica/mock
+    // No futuro, implementar: GET /auth/clinicas (com autenticaÃ§Ã£o)
     const clinicaSelect = document.getElementById('clinicaId');
     if (!clinicaSelect) return;
     
-    // Mock de dados - substitua por chamada real quando endpoint disponível
+    // Mock de dados - substitua por chamada real quando endpoint disponÃ­vel
     const clinicas = [
-        { id: 1, name: 'Clínica Saúde Total' },
-        { id: 2, name: 'Centro Médico Inclusivo' },
-        { id: 3, name: 'Clínica de Reabilitação São Paulo' }
+        { id: 1, name: 'ClÃ­nica SaÃºde Total' },
+        { id: 2, name: 'Centro MÃ©dico Inclusivo' },
+        { id: 3, name: 'ClÃ­nica de ReabilitaÃ§Ã£o SÃ£o Paulo' }
     ];
 
     clinicas.forEach(clinica => {
@@ -153,3 +153,4 @@ document.addEventListener('DOMContentLoaded', function() {
     `;
     document.head.appendChild(style);
 });
+

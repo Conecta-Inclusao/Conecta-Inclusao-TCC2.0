@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
@@ -135,12 +135,12 @@
 
                 <div class="appointments-filter-bar">
                     <div class="appointments-filter-group">
-                        <button id="appointmentsPrevMonth" class="btn-secondary" type="button" aria-label="Mês anterior">◀</button>
-                        <input id="appointmentsMonthPicker" type="month" aria-label="Selecionar mês e ano" />
-                        <button id="appointmentsNextMonth" class="btn-secondary" type="button" aria-label="Próximo mês">▶</button>
+                        <button id="appointmentsPrevMonth" class="btn-secondary" type="button" aria-label="MÃªs anterior">â—€</button>
+                        <input id="appointmentsMonthPicker" type="month" aria-label="Selecionar mÃªs e ano" />
+                        <button id="appointmentsNextMonth" class="btn-secondary" type="button" aria-label="PrÃ³ximo mÃªs">â–¶</button>
                     </div>
                     <div class="appointments-filter-info">
-                        <span id="appointmentsMonthLabel">Mês selecionado</span>
+                        <span id="appointmentsMonthLabel">MÃªs selecionado</span>
                     </div>
                 </div>
 
@@ -188,7 +188,7 @@
                 <section class="table-card">
                     <div class="section-header">
                         <div>
-                            <h3>Especialidades Disponíveis</h3>
+                            <h3>Especialidades DisponÃ­veis</h3>
                             <p>Profissionais e especialidades cadastrados no sistema.</p>
                         </div>
                     </div>
@@ -246,11 +246,11 @@
             <section class="tab-content" id="guardians">
                 <div class="section-header">
                     <div>
-                        <h2>Responsáveis do Paciente</h2>
-                        <p>Gerencie os responsáveis autorizados a acessar informações e agendamentos do paciente.</p>
+                        <h2>ResponsÃ¡veis do Paciente</h2>
+                        <p>Gerencie os responsÃ¡veis autorizados a acessar informaÃ§Ãµes e agendamentos do paciente.</p>
                     </div>
                     <button class="btn-primary" type="button" onclick="openGuardianModal()">
-                        <i class="ph ph-plus"></i> Adicionar Responsável
+                        <i class="ph ph-plus"></i> Adicionar ResponsÃ¡vel
                     </button>
                 </div>
 
@@ -340,7 +340,7 @@
                         <input type="date" id="modalDate" required>
                     </div>
                     <div class="split-field">
-                        <label for="modalTime">Horário</label>
+                        <label for="modalTime">HorÃ¡rio</label>
                         <input type="time" id="modalTime" step="1800" required>
                     </div>
                 </div>
@@ -356,8 +356,8 @@
         <div class="modal-content">
             <div class="modal-header">
                 <div>
-                    <h3>Adicionar Responsável</h3>
-                    <p>Autorize uma pessoa a acessar informações e agendamentos deste paciente.</p>
+                    <h3>Adicionar ResponsÃ¡vel</h3>
+                    <p>Autorize uma pessoa a acessar informaÃ§Ãµes e agendamentos deste paciente.</p>
                 </div>
                 <button class="modal-close" type="button" onclick="closeGuardianModal()" aria-label="Fechar modal">
                     <i class="ph ph-x"></i>
@@ -366,32 +366,32 @@
             <form id="formNewGuardian" class="modal-form">
                 <div class="input-group">
                     <label for="guardianName">Nome Completo</label>
-                    <input type="text" id="guardianName" required placeholder="Digite o nome do responsável">
+                    <input type="text" id="guardianName" required placeholder="Digite o nome do responsÃ¡vel">
                 </div>
                 <div class="input-group">
-                    <label for="guardianRelationship">Parentesco/Relação</label>
+                    <label for="guardianRelationship">Parentesco/RelaÃ§Ã£o</label>
                     <select id="guardianRelationship" required>
                         <option value="">Selecione...</option>
-                        <option value="Mae">Mãe</option>
+                        <option value="Mae">MÃ£e</option>
                         <option value="Pai">Pai</option>
-                        <option value="Avo">Avó</option>
-                        <option value="Avo">Avó</option>
-                        <option value="Irmao">Irmão</option>
-                        <option value="Irma">Irmã</option>
+                        <option value="Avo">AvÃ³</option>
+                        <option value="Avo">AvÃ³</option>
+                        <option value="Irmao">IrmÃ£o</option>
+                        <option value="Irma">IrmÃ£</option>
                         <option value="Tutor">Tutor Legal</option>
                         <option value="Outro">Outro</option>
                     </select>
                 </div>
                 <div class="input-group">
                     <label for="guardianPassword">Senha de acesso</label>
-                    <input type="password" id="guardianPassword" data-password-guidance="true" required placeholder="Senha forte (8+ caracteres, maiúscula, minúscula, número e especial)">
+                    <input type="password" id="guardianPassword" data-password-guidance="true" required placeholder="Senha forte (8+ caracteres, maiÃºscula, minÃºscula, nÃºmero e especial)">
                 </div>
                 <div class="input-group">
                     <label for="guardianEmail">E-mail</label>
                     <input type="email" id="guardianEmail" required placeholder="email@exemplo.com">
                 </div>
                 <div class="input-group">
-                    <label for="guardianPermissions">Permissões</label>
+                    <label for="guardianPermissions">PermissÃµes</label>
                     <div class="permissions-grid">
                         <label class="checkbox-item">
                             <input type="checkbox" name="permissions" value="view_appointments" checked>
@@ -401,7 +401,7 @@
                             <input type="checkbox" name="permissions" value="manage_appointments">
                             <span>Gerenciar agendamentos</span>
                         </label>
-                        <!-- Permissão removida -->
+                        <!-- PermissÃ£o removida -->
                         <label class="checkbox-item">
                             <input type="checkbox" name="permissions" value="send_messages">
                             <span>Enviar mensagens</span>
@@ -410,14 +410,15 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" onclick="closeGuardianModal()" class="btn-secondary">Cancelar</button>
-                    <button type="submit" class="btn-primary">Adicionar Responsável</button>
+                    <button type="submit" class="btn-primary">Adicionar ResponsÃ¡vel</button>
                 </div>
             </form>
         </div>
     </div>
 
     <script src="../assets/js/utils.js"></script>
-    <script src="http://localhost:3000/socket.io/socket.io.js"></script>
+    <script src="https://conecta-inclusao-tcc2-0.onrender.com/socket.io/socket.io.js"></script>
     <script type="module" src="../assets/js/dash-paciente.js"></script>
 </body>
 </html>
+

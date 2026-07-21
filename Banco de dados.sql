@@ -156,9 +156,3 @@ create table responsavel_permissoes(
      insert into permissoes(nome) values(
 		"Gerenciar agendamentos"
     );
-    
-    
-    ALTER TABLE pacientes
-    ADD COLUMN id_responsavel INT,
-    ADD  CONSTRAINT fk_pacientes_responsavel 
-    FOREIGN KEY (id_responsavel) REFERENCES responsavel(id) ON DELETE CASCADE;

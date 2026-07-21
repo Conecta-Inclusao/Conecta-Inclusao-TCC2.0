@@ -32,45 +32,22 @@ export function resolveActorFromAuth(user) {
 }
 
 async function ensureMessagingTable() {
-  await pool.execute(
-    `CREATE TABLE IF NOT EXISTS mensagens (
-      id BIGINT AUTO_INCREMENT PRIMARY KEY,
-      agendamento_id INT NOT NULL,
-      remetente_profile ENUM('paciente', 'medico', 'responsavel', 'clinica') NOT NULL,
-      remetente_profile_id INT NOT NULL,
+  await pool.execute(`
+    CREATE TABLE IF NOT EXISTS mensagens (
+      id BIGSERIAL PRIMARY KEY,
+      agendamento_id INTEGER NOT NULL,
+      remetente_profile VARCHAR(20) NOT NULL,
+      remetente_profile_id INTEGER NOT NULL,
       conteudo TEXT NOT NULL,
       lida BOOLEAN DEFAULT FALSE,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (agendamento_id) REFERENCES agendamentos(id) ON DELETE CASCADE
-    )`
-  );
+      CONSTRAINT fk_mensagens_agendamento FOREIGN KEY (agendamento_id) REFERENCES agendamentos(id) ON DELETE CASCADE
+    )
+  `);
 
-  const [columns] = await pool.execute(
-    `SELECT COLUMN_NAME, COLUMN_TYPE
-     FROM INFORMATION_SCHEMA.COLUMNS
-     WHERE TABLE_SCHEMA = DATABASE()
-       AND TABLE_NAME = 'mensagens'`
-  );
-  const columnNames = new Set(columns.map((column) => column.COLUMN_NAME));
-  const senderProfileColumn = columns.find((column) => column.COLUMN_NAME === "remetente_profile");
-
-  if (columnNames.has("destinatario_profile")) {
-    await pool.execute("ALTER TABLE mensagens DROP COLUMN destinatario_profile");
-  }
-
-  if (columnNames.has("destinatario_profile_id")) {
-    await pool.execute("ALTER TABLE mensagens DROP COLUMN destinatario_profile_id");
-  }
-
-  if (!columnNames.has("lida")) {
-    await pool.execute("ALTER TABLE mensagens ADD COLUMN lida BOOLEAN DEFAULT FALSE AFTER conteudo");
-  }
-
-  if (!String(senderProfileColumn?.COLUMN_TYPE || "").includes("responsavel")) {
-    await pool.execute(
-      "ALTER TABLE mensagens MODIFY COLUMN remetente_profile ENUM('paciente', 'medico', 'responsavel', 'clinica') NOT NULL"
-    );
-  }
+  await pool.execute("ALTER TABLE mensagens ADD COLUMN IF NOT EXISTS lida BOOLEAN DEFAULT FALSE");
+  await pool.execute("ALTER TABLE mensagens ALTER COLUMN remetente_profile TYPE VARCHAR(20)");
+  await pool.execute("ALTER TABLE mensagens ALTER COLUMN remetente_profile SET NOT NULL");
 }
 
 async function findAppointment(agendamentoId) {

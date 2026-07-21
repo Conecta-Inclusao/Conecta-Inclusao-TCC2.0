@@ -1,7 +1,7 @@
-// Gerenciador de Profissionais da Empresa
+﻿// Gerenciador de Profissionais da Empresa
 let api;
 let currentProfessionals = [];
-const AUTH_API_BASE = 'http://localhost:3000/auth';
+const AUTH_API_BASE = 'https://conecta-inclusao-tcc2-0.onrender.com/auth';
 
 async function loadAPI() {
     if (!api) {
@@ -14,7 +14,7 @@ function getClinicAuthToken() {
     return localStorage.getItem('token');
 }
 
-// Máscara de CRM automática
+// MÃ¡scara de CRM automÃ¡tica
 function applyCRMMask(value) {
     let v = value.toUpperCase().replace(/[^A-Z0-9]/g, '');
     if (v.length > 7) v = v.slice(0, 7);
@@ -38,31 +38,31 @@ async function handleRegisterProfessional(event) {
     const email = document.getElementById('professionalEmail').value.trim();
     const bio = document.getElementById('professionalBio').value.trim();
     
-    // Validações
+    // ValidaÃ§Ãµes
     if (!crm || !name || !especialidade || !unidade || !password) {
-        showPopup('Preencha todos os campos obrigatórios.');
+        showPopup('Preencha todos os campos obrigatÃ³rios.');
         return;
     }
     
     if (crm.length < 4) {
-        showPopup('CRM inválido.');
+        showPopup('CRM invÃ¡lido.');
         return;
     }
     
     if (!isStrongPassword(password)) {
-        showPopup('A senha deve ter 8 caracteres, maiúscula, minúscula, número e caractere especial.');
+        showPopup('A senha deve ter 8 caracteres, maiÃºscula, minÃºscula, nÃºmero e caractere especial.');
         return;
     }
 
     if (password !== confirmPassword) {
-        showPopup('As senhas não coincidem.');
+        showPopup('As senhas nÃ£o coincidem.');
         return;
     }
     
     // Obter clinicaId do localStorage
     const userData = localStorage.getItem('user');
     if (!userData) {
-        showPopup('Erro: Dados do usuário não encontrados. Faça login novamente.');
+        showPopup('Erro: Dados do usuÃ¡rio nÃ£o encontrados. FaÃ§a login novamente.');
         return;
     }
     const user = JSON.parse(userData);
@@ -95,7 +95,7 @@ async function handleRegisterProfessional(event) {
         // Sucesso
         showPopup(`Profissional ${name} registrado com sucesso! CRM: ${registeredCRM}`);
         
-        // Limpar formulário
+        // Limpar formulÃ¡rio
         form.reset();
         submitBtn.disabled = false;
         submitBtn.innerText = originalText;
@@ -111,14 +111,14 @@ async function handleRegisterProfessional(event) {
     }
 }
 
-// Buscar ID da clínica pelo ID do usuário
+// Buscar ID da clÃ­nica pelo ID do usuÃ¡rio
 async function getClinicaIdByUserId(userId) {
     try {
         const token = getClinicAuthToken();
         
         if (!token) return null;
         
-        const response = await fetch(`http://localhost:3000/clinic/id/${userId}`, {
+        const response = await fetch(`https://conecta-inclusao-tcc2-0.onrender.com/clinic/id/${userId}`, {
             method: 'GET',
             headers: {
                 'Authorization': `Bearer ${token}`,
@@ -131,7 +131,7 @@ async function getClinicaIdByUserId(userId) {
         const data = await response.json();
         return data.clinicaId || null;
     } catch (error) {
-        console.error('Erro ao buscar ID da clínica:', error);
+        console.error('Erro ao buscar ID da clÃ­nica:', error);
         return null;
     }
 }
@@ -142,7 +142,7 @@ async function loadProfessionalsList() {
         const token = getClinicAuthToken();
         
         if (!token) {
-            console.log('Usuário não autenticado');
+            console.log('UsuÃ¡rio nÃ£o autenticado');
             return;
         }
         
@@ -177,13 +177,13 @@ function displayProfessionalsList(professionals) {
     
     if (!professionals || professionals.length === 0) {
         if (teamBody) {
-            teamBody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #999; padding: 1rem;">Por enquanto não há nenhum profissional cadastrado.</td></tr>';
+            teamBody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #999; padding: 1rem;">Por enquanto nÃ£o hÃ¡ nenhum profissional cadastrado.</td></tr>';
         }
         if (cardsContainer) {
-            cardsContainer.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: #999; padding: 2rem;">Por enquanto não há nenhum profissional cadastrado.</div>';
+            cardsContainer.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: #999; padding: 2rem;">Por enquanto nÃ£o hÃ¡ nenhum profissional cadastrado.</div>';
         }
         if (overviewBody) {
-            overviewBody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #999; padding: 1rem;">Por enquanto não há nenhum profissional cadastrado.</td></tr>';
+            overviewBody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #999; padding: 1rem;">Por enquanto nÃ£o hÃ¡ nenhum profissional cadastrado.</td></tr>';
         }
         updateTeamSummary([]);
         updateUnitFilterOptions([]);
@@ -198,7 +198,7 @@ function displayProfessionalsList(professionals) {
                     ${prof.name || 'N/A'}
                     ${normalizeStatus(prof.status) === 'inativo' ? '<div class="inactive-warning">Profissional desativado</div>' : ''}
                 </td>
-                <td>${prof.especialidade || 'Médico'}</td>
+                <td>${prof.especialidade || 'MÃ©dico'}</td>
                 <td>${prof.crm || 'N/A'}</td>
                 <td><span class="status-dot ${getStatusClass(prof.status)}">${formatProfessionalStatus(prof.status)}</span></td>
                 <td>${prof.unidade || 'N/A'}</td>
@@ -236,7 +236,7 @@ function displayProfessionalsList(professionals) {
                         <i class="ph ph-briefcase"></i>
                         <div class="professional-info-content">
                             <span class="professional-info-label">Especialidade</span>
-                            <span class="professional-info-value">${prof.especialidade || 'Médico'}</span>
+                            <span class="professional-info-value">${prof.especialidade || 'MÃ©dico'}</span>
                         </div>
                     </div>
                     <div class="professional-info-item">
@@ -282,7 +282,7 @@ function displayProfessionalsList(professionals) {
                     ${prof.name || 'N/A'}
                     ${normalizeStatus(prof.status) === 'inativo' ? '<div class="inactive-warning">Profissional desativado</div>' : ''}
                 </td>
-                <td>${prof.especialidade || 'Médico'}</td>
+                <td>${prof.especialidade || 'MÃ©dico'}</td>
                 <td><span class="status-dot ${getStatusClass(prof.status)}">${formatProfessionalStatus(prof.status)}</span></td>
                 <td>${prof.unidade || 'N/A'}</td>
             </tr>
@@ -297,7 +297,7 @@ function getStatusIcon(status) {
     const normalized = normalizeStatus(status);
     if (normalized === 'inativo') return 'ph-x-circle';
     if (normalized === 'trabalhando') return 'ph-check-circle';
-    if (['ferias', 'férias', 'folga', 'licenca', 'licença'].includes(normalized)) return 'ph-sun';
+    if (['ferias', 'fÃ©rias', 'folga', 'licenca', 'licenÃ§a'].includes(normalized)) return 'ph-sun';
     return 'ph-check-circle';
 }
 
@@ -311,7 +311,7 @@ function updateTeamSummary(professionals) {
 
     const active = professionals.filter(prof => isActiveStatus(prof.status)).length;
     const working = professionals.filter(prof => normalizeStatus(prof.status) === 'trabalhando').length;
-    const onBreak = professionals.filter(prof => ['ferias', 'férias', 'folga', 'licenca', 'licença'].includes(normalizeStatus(prof.status))).length;
+    const onBreak = professionals.filter(prof => ['ferias', 'fÃ©rias', 'folga', 'licenca', 'licenÃ§a'].includes(normalizeStatus(prof.status))).length;
 
     if (activeTopEl) activeTopEl.innerText = active;
     if (workingTopEl) workingTopEl.innerText = working;
@@ -335,11 +335,11 @@ function formatProfessionalStatus(status) {
         active: 'Ativo',
         ativo: 'Ativo',
         trabalhando: 'Trabalhando',
-        ferias: 'Férias',
-        'férias': 'Férias',
+        ferias: 'FÃ©rias',
+        'fÃ©rias': 'FÃ©rias',
         folga: 'Folga',
-        licenca: 'Licença',
-        'licença': 'Licença',
+        licenca: 'LicenÃ§a',
+        'licenÃ§a': 'LicenÃ§a',
         inativo: 'Inativo'
     };
     return labels[normalized] || 'Ativo';
@@ -349,7 +349,7 @@ function getStatusClass(status) {
     const normalized = normalizeStatus(status);
     if (normalized === 'inativo') return 'inactive';
     if (normalized === 'trabalhando') return 'working';
-    if (['ferias', 'férias', 'folga', 'licenca', 'licença'].includes(normalized)) return 'break';
+    if (['ferias', 'fÃ©rias', 'folga', 'licenca', 'licenÃ§a'].includes(normalized)) return 'break';
     return 'active';
 }
 
@@ -435,7 +435,7 @@ async function inactivateProfessional(id) {
         const token = getClinicAuthToken();
         
         if (!token) {
-            showPopup('Faça login como empresa para inativar profissionais.');
+            showPopup('FaÃ§a login como empresa para inativar profissionais.');
             return;
         }
         
@@ -472,7 +472,7 @@ async function activateProfessional(id) {
         const token = getClinicAuthToken();
 
         if (!token) {
-            showPopup('Faça login como empresa para ativar profissionais.');
+            showPopup('FaÃ§a login como empresa para ativar profissionais.');
             return;
         }
 
@@ -501,7 +501,7 @@ async function activateProfessional(id) {
     }
 }
 
-// Inicializar quando página carrega
+// Inicializar quando pÃ¡gina carrega
 document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('registerProfessionalForm');
     const crmInput = document.getElementById('professionalCRM');
@@ -521,7 +521,7 @@ document.addEventListener('DOMContentLoaded', function() {
         filterButton.addEventListener('click', applyUnitFilter);
     }
 
-    // Toggle de visualização (Cards vs Tabela)
+    // Toggle de visualizaÃ§Ã£o (Cards vs Tabela)
     const viewButtons = document.querySelectorAll('.view-btn');
     const cardsView = document.getElementById('cardsView');
     const tableView = document.getElementById('tableView');
@@ -530,7 +530,7 @@ document.addEventListener('DOMContentLoaded', function() {
         btn.addEventListener('click', function() {
             const viewType = this.dataset.view;
             
-            // Atualizar botões ativos
+            // Atualizar botÃµes ativos
             viewButtons.forEach(b => b.classList.remove('active'));
             this.classList.add('active');
             
@@ -549,7 +549,7 @@ document.addEventListener('DOMContentLoaded', function() {
     loadProfessionalsList();
     loadCompanyDashboardSummary();
     
-    // Animação de carregamento
+    // AnimaÃ§Ã£o de carregamento
     const style = document.createElement('style');
     style.innerHTML = `
         @keyframes spin {
@@ -559,3 +559,4 @@ document.addEventListener('DOMContentLoaded', function() {
     `;
     document.head.appendChild(style);
 });
+

@@ -1,4 +1,4 @@
-function getTokenFromUrl() {
+﻿function getTokenFromUrl() {
     const params = new URLSearchParams(window.location.search);
     return params.get('token') || '';
 }
@@ -28,17 +28,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const button = form.querySelector('button[type="submit"]');
 
         if (!token) {
-            showPopup('Informe o token de recuperação.');
+            showPopup('Informe o token de recuperaÃ§Ã£o.');
             return;
         }
 
         if (!validateStrongPassword(newPassword)) {
-            showPopup('A senha deve ter 8 caracteres, maiúscula, minúscula, número e caractere especial.');
+            showPopup('A senha deve ter 8 caracteres, maiÃºscula, minÃºscula, nÃºmero e caractere especial.');
             return;
         }
 
         if (newPassword !== confirmPassword) {
-            showPopup('As senhas não coincidem.');
+            showPopup('As senhas nÃ£o coincidem.');
             return;
         }
 
@@ -46,7 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
         button.innerHTML = '<i class="ph ph-circle-notch-bold" style="animation: spin 1s linear infinite;"></i> Salvando...';
 
         try {
-            const response = await fetch('http://localhost:3000/auth/password/reset', {
+            const response = await fetch('https://conecta-inclusao-tcc2-0.onrender.com/auth/password/reset', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ token, newPassword })
@@ -58,13 +58,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            showPopup('Senha redefinida com sucesso. Você já pode fazer login.');
+            showPopup('Senha redefinida com sucesso. VocÃª jÃ¡ pode fazer login.');
             setTimeout(() => {
                 window.location.href = 'lndex.html';
             }, 1200);
         } catch (error) {
             console.error('Erro ao redefinir senha:', error);
-            showPopup('Erro de conexão com o servidor.');
+            showPopup('Erro de conexÃ£o com o servidor.');
         } finally {
             button.disabled = false;
             button.innerText = 'Salvar nova senha';
@@ -80,3 +80,4 @@ style.innerHTML = `
     }
 `;
 document.head.appendChild(style);
+

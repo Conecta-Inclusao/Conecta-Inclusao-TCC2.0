@@ -1,4 +1,4 @@
-import { getUserProfile, getProfessionalAppointments, getClinicProfessionals, getAvailableDoctors, updateAppointmentStatus } from './api.js';
+﻿import { getUserProfile, getProfessionalAppointments, getClinicProfessionals, getAvailableDoctors, updateAppointmentStatus } from './api.js';
 
 let professionalData = null;
 let appointmentsData = [];
@@ -8,7 +8,7 @@ const doctorChatMessages = {};
 
 async function loadProfessionalInfo() {
     try {
-        console.log('Iniciando carregamento de informações do profissional...');
+        console.log('Iniciando carregamento de informaÃ§Ãµes do profissional...');
         const profileResponse = await getUserProfile();
         console.log('Resposta do perfil:', profileResponse);
 
@@ -25,7 +25,7 @@ async function loadProfessionalInfo() {
 
             const displayName = professionalData.name || 'Nome nao informado';
             const registry = professionalData.crm || 'Registro';
-            const unit = professionalData.unidade || 'Unidade não definida';
+            const unit = professionalData.unidade || 'Unidade nÃ£o definida';
 
             const nameEl = document.getElementById('professionalName');
             const registryEl = document.getElementById('professionalRegistry');
@@ -49,13 +49,13 @@ async function loadProfessionalInfo() {
             sessionStorage.setItem('professionalRegistry', registry);
             sessionStorage.setItem('professionalUnit', unit);
 
-            console.log('Informações do profissional atualizadas na UI');
+            console.log('InformaÃ§Ãµes do profissional atualizadas na UI');
         } else {
             console.warn('Erro ao carregar perfil:', profileResponse);
             loadProfessionalInfoFromStorage();
         }
     } catch (error) {
-        console.error('Erro ao carregar informações do profissional:', error);
+        console.error('Erro ao carregar informaÃ§Ãµes do profissional:', error);
         loadProfessionalInfoFromStorage();
     }
 }
@@ -71,7 +71,7 @@ function loadProfessionalInfoFromStorage() {
     const rawName = sessionStorage.getItem('professionalName') || storedUser.name || 'Nome nao informado';
     const registry = sessionStorage.getItem('professionalRegistry') || storedUser.registry || storedUser.crm || 'Registro';
     professionalData = professionalData || storedUser;
-    const unit = sessionStorage.getItem('professionalUnit') || storedUser.unidade || storedUser.unit || 'Unidade não definida';
+    const unit = sessionStorage.getItem('professionalUnit') || storedUser.unidade || storedUser.unit || 'Unidade nÃ£o definida';
 
     const nameEl = document.getElementById('professionalName');
     const registryEl = document.getElementById('professionalRegistry');
@@ -144,7 +144,7 @@ function initDoctorChatSocket() {
     const token = getToken();
     if (!token || typeof io !== 'function' || doctorChatSocket) return;
 
-    doctorChatSocket = io('http://localhost:3000', { auth: { token } });
+    doctorChatSocket = io('https://conecta-inclusao-tcc2-0.onrender.com', { auth: { token } });
     doctorChatSocket.on('chat:message', (message) => {
         const key = `appointment-${message.agendamentoId}`;
         const messages = doctorChatMessages[key] || [];
@@ -184,7 +184,7 @@ async function loadDoctorConversation(contact) {
     if (!token) return;
 
     try {
-        const response = await fetch(`http://localhost:3000/messages/agendamentos/${encodeURIComponent(contact.agendamentoId)}?limit=100`, {
+        const response = await fetch(`https://conecta-inclusao-tcc2-0.onrender.com/messages/agendamentos/${encodeURIComponent(contact.agendamentoId)}?limit=100`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
@@ -332,7 +332,7 @@ function sendDoctorMessage(content) {
         return;
     }
 
-    fetch(`http://localhost:3000/messages/agendamentos/${encodeURIComponent(contact.agendamentoId)}`, {
+    fetch(`https://conecta-inclusao-tcc2-0.onrender.com/messages/agendamentos/${encodeURIComponent(contact.agendamentoId)}`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -389,7 +389,7 @@ async function loadTeam() {
     const teamGrid = document.getElementById('teamGrid');
 
     if (!teamGrid) {
-        console.error('teamGrid element não encontrado');
+        console.error('teamGrid element nÃ£o encontrado');
         return;
     }
 
@@ -400,7 +400,7 @@ async function loadTeam() {
         teamGrid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 20px; color: #64748b;">Carregando equipe...</div>`;
 
         // Tentar carregar profissionais do backend
-        console.log('Buscando profissionais da clínica...');
+        console.log('Buscando profissionais da clÃ­nica...');
         const professionalsResponse = await getTeamProfessionals();
         console.log('Resposta de profissionais:', professionalsResponse);
 
@@ -414,13 +414,13 @@ async function loadTeam() {
 
             console.log('Profissionais carregados do backend:', equipe);
 
-            // Filtrar por unidade se necessário
+            // Filtrar por unidade se necessÃ¡rio
             equipe = equipe
                 .filter(member => normalizeUnitKey(member.unidade || member.unit) === unitKey)
                 .map(member => ({
                 name: member.name || 'Profissional cadastrado',
-                crm: member.crm || member.registry || 'Registro não informado',
-                specialty: member.especialidade || member.specialty || 'Especialidade não informada'
+                crm: member.crm || member.registry || 'Registro nÃ£o informado',
+                specialty: member.especialidade || member.specialty || 'Especialidade nÃ£o informada'
             }));
         } else {
             console.warn('Erro ao carregar do backend:', professionalsResponse);
@@ -440,7 +440,7 @@ async function loadTeam() {
                 <div style="grid-column: 1/-1;">
                     <div class="empty-team-message">
                         <i class="ph ph-users-three"></i>
-                        <p>Por enquanto não há nenhum profissional cadastrado nesta unidade.</p>
+                        <p>Por enquanto nÃ£o hÃ¡ nenhum profissional cadastrado nesta unidade.</p>
                     </div>
                 </div>
             `;
@@ -470,7 +470,7 @@ async function loadTeam() {
 
 document.addEventListener('DOMContentLoaded', async () => {
     try {
-        // Carregar informações do profissional
+        // Carregar informaÃ§Ãµes do profissional
         await loadProfessionalInfo();
         initDoctorChatSocket();
 
@@ -498,7 +498,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         }
 
-        // Configurar navegação da sidebar
+        // Configurar navegaÃ§Ã£o da sidebar
         const navLinks = document.querySelectorAll('.sidebar nav a');
         navLinks.forEach(link => {
             link.addEventListener('click', function (e) {
@@ -511,27 +511,27 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         });
 
-        console.log("Dashboard Médico carregado.");
+        console.log("Dashboard MÃ©dico carregado.");
     } catch (error) {
         console.error('Erro ao carregar dashboard:', error);
     }
 });
 
-// ===== FUNÇÕES PARA AGENDA E PACIENTES =====
+// ===== FUNÃ‡Ã•ES PARA AGENDA E PACIENTES =====
 
-// Função para mostrar a página inicial
+// FunÃ§Ã£o para mostrar a pÃ¡gina inicial
 function showHome(event) {
     event.preventDefault();
     updateSidebarActive(event.target.closest('a'));
 
-    // Esconder todas as seções específicas
+    // Esconder todas as seÃ§Ãµes especÃ­ficas
     document.getElementById('agendaSection').style.display = 'none';
     document.getElementById('pacientesSection').style.display = 'none';
     document.getElementById('messagesSection').style.display = 'none';
     document.getElementById('teamSection').style.display = 'block';
 }
 
-// Função para abrir a agenda médica
+// FunÃ§Ã£o para abrir a agenda mÃ©dica
 function openAgendaMedica(event) {
     if (event) {
         event.preventDefault();
@@ -542,7 +542,7 @@ function openAgendaMedica(event) {
     loadAgendaData();
 }
 
-// Função para toggle da lista de pacientes
+// FunÃ§Ã£o para toggle da lista de pacientes
 async function togglePatientsList(event) {
     if (event) {
         event.preventDefault();
@@ -569,7 +569,7 @@ async function openMessages(event) {
     renderDoctorMessageContacts();
 }
 
-// Função para mostrar/esconder seções
+// FunÃ§Ã£o para mostrar/esconder seÃ§Ãµes
 function showSection(section) {
     // Esconder todas
     document.getElementById('agendaSection').style.display = 'none';
@@ -587,7 +587,7 @@ function showSection(section) {
     }
 }
 
-// Função para atualizar o link ativo no sidebar
+// FunÃ§Ã£o para atualizar o link ativo no sidebar
 function updateSidebarActive(element) {
     document.querySelectorAll('.sidebar nav a').forEach(a => a.classList.remove('active'));
     if (element) element.classList.add('active');
@@ -642,7 +642,7 @@ function markDashboardStatsUnavailable(message = 'Nao foi possivel carregar a ag
     if (scheduleSummary) scheduleSummary.innerText = message;
 }
 
-// Função para carregar dados da agenda
+// FunÃ§Ã£o para carregar dados da agenda
 function getAppointmentAction(status) {
     const statusLower = String(status || '').toLowerCase();
 
@@ -672,7 +672,7 @@ function updateAppointmentInMemory(appointmentId, status) {
 async function loadAgendaData() {
     const agendaContent = document.querySelector('.appointments-table tbody');
     if (!agendaContent) {
-        console.error('Tabela de agendamentos não encontrada');
+        console.error('Tabela de agendamentos nÃ£o encontrada');
         return;
     }
 
@@ -680,12 +680,12 @@ async function loadAgendaData() {
         console.log('Iniciando carregamento de agenda. professionalData:', professionalData);
 
         if (!professionalData || !professionalData.id) {
-            console.warn('Dados do profissional não carregados ou sem ID.');
+            console.warn('Dados do profissional nÃ£o carregados ou sem ID.');
             markDashboardStatsUnavailable('Dados do profissional nao carregados.');
             agendaContent.innerHTML = `
                 <tr>
                     <td colspan="6" style="text-align: center; padding: 20px; color: #64748b;">
-                        Dados do profissional não carregados
+                        Dados do profissional nÃ£o carregados
                     </td>
                 </tr>
             `;
@@ -711,7 +711,7 @@ async function loadAgendaData() {
                 agendaContent.innerHTML = `
                     <tr>
                         <td colspan="6" style="text-align: center; padding: 20px; color: #64748b;">
-                            Por enquanto não há nenhum agendamento cadastrado.
+                            Por enquanto nÃ£o hÃ¡ nenhum agendamento cadastrado.
                         </td>
                     </tr>
                 `;
@@ -738,7 +738,7 @@ async function loadAgendaData() {
                 const isAppointmentToday = isSameDay(getAppointmentDateValue(appointment));
                 const action = getAppointmentAction(appointmentStatus);
                 const actionContent = statusLower === 'realizado'
-                    ? '<span class="action-unavailable">Consulta realizada, ações bloqueadas</span>'
+                    ? '<span class="action-unavailable">Consulta realizada, aÃ§Ãµes bloqueadas</span>'
                     : isAppointmentToday
                     ? `<button class="btn-action" type="button" data-appointment-id="${escapeHtml(appointment.id)}" data-patient-name="${escapeHtml(patientName)}" data-next-status="${escapeHtml(action.nextStatus || '')}" ${action.disabled ? 'disabled' : ''}>
                             ${escapeHtml(action.label)}
@@ -792,7 +792,7 @@ async function loadAgendaData() {
     }
 }
 
-// Função auxiliar para obter classe CSS de status
+// FunÃ§Ã£o auxiliar para obter classe CSS de status
 function getStatusClass(status) {
     const statusLower = String(status || '').toLowerCase();
     if (statusLower === 'confirmado') return 'confirm';
@@ -801,7 +801,7 @@ function getStatusClass(status) {
     return 'waiting';
 }
 
-// Função para gerenciar ações em agendamentos
+// FunÃ§Ã£o para gerenciar aÃ§Ãµes em agendamentos
 async function handleAppointmentAction(button, patientName, appointmentId) {
     const row = button.closest('tr');
     const statusSpan = row.querySelector('.status');
@@ -861,24 +861,24 @@ async function handleAppointmentAction(button, patientName, appointmentId) {
         await showPopup(`Atendimento de ${patientName} finalizado com sucesso!`);
         row.style.opacity = '0.5';
         button.disabled = true;
-        button.innerText = 'ConcluÃ­do';
+        button.innerText = 'ConcluÃƒÂ­do';
         statusSpan.innerText = 'Finalizado';
         statusSpan.className = 'status pending';
     }
 }
 
-// Função para carregar dados dos pacientes
+// FunÃ§Ã£o para carregar dados dos pacientes
 function loadPatientsData() {
     const tableBody = document.getElementById('patientsTableBody');
     if (!tableBody) return;
 
     try {
-        // Usar dados dos agendamentos se estiverem disponíveis
+        // Usar dados dos agendamentos se estiverem disponÃ­veis
         if (!appointmentsData || appointmentsData.length === 0) {
             tableBody.innerHTML = `
                 <tr>
                     <td colspan="4" style="text-align: center; padding: 20px; color: #64748b;">
-                        Por enquanto não há nenhum paciente com agendamentos.
+                        Por enquanto nÃ£o hÃ¡ nenhum paciente com agendamentos.
                     </td>
                 </tr>
             `;
@@ -886,7 +886,7 @@ function loadPatientsData() {
             return;
         }
 
-        // Extrair pacientes únicos dos agendamentos
+        // Extrair pacientes Ãºnicos dos agendamentos
         const patientMap = new Map();
         appointmentsData.forEach(appointment => {
             const pacienteId = getPatientKey(appointment);
@@ -926,7 +926,7 @@ function loadPatientsData() {
     }
 }
 
-// Função auxiliar para atualizar estatísticas de pacientes
+// FunÃ§Ã£o auxiliar para atualizar estatÃ­sticas de pacientes
 function updatePatientStats(total) {
     const totalEl = document.getElementById('totalPatients');
 
@@ -1019,7 +1019,7 @@ function formatAppointmentTime(appointment) {
     });
 }
 
-// Função auxiliar para formatar data e hora
+// FunÃ§Ã£o auxiliar para formatar data e hora
 function formatDateTime(dateString) {
     if (!dateString) return '--';
     try {
@@ -1070,3 +1070,4 @@ window.openAgendaMedica = openAgendaMedica;
 window.togglePatientsList = togglePatientsList;
 window.openMessages = openMessages;
 window.handleAppointmentAction = handleAppointmentAction;
+

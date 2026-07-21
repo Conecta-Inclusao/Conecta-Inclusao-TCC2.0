@@ -1,4 +1,4 @@
-function applyMask(input, maskFn) {
+﻿function applyMask(input, maskFn) {
     input.addEventListener('input', function(event) {
         event.target.value = maskFn(event.target.value);
     });
@@ -118,17 +118,17 @@ function validateCompanyForm() {
     const confirmPassword = document.getElementById('confirmPassword').value;
 
     if (!companyName || !companyLegalName || !cnpj || !email || !phone || !contact || !role || !branch || !address || !streetNumber || !city || !state || !zip || !password || !confirmPassword) {
-        showPopup('Preencha todos os campos obrigatórios antes de continuar.');
+        showPopup('Preencha todos os campos obrigatÃ³rios antes de continuar.');
         return false;
     }
 
     if (cnpj.length < 18) {
-        showPopup('Insira um CNPJ válido.');
+        showPopup('Insira um CNPJ vÃ¡lido.');
         return false;
     }
 
     if (zip.length < 9) {
-        showPopup('Insira um CEP válido.');
+        showPopup('Insira um CEP vÃ¡lido.');
         return false;
     }
 
@@ -138,12 +138,12 @@ function validateCompanyForm() {
     }
 
     if (!isStrongPassword(password)) {
-        showPopup('A senha deve ter 8 caracteres, maiúscula, minúscula, número e caractere especial.');
+        showPopup('A senha deve ter 8 caracteres, maiÃºscula, minÃºscula, nÃºmero e caractere especial.');
         return false;
     }
 
     if (password !== confirmPassword) {
-        showPopup('As senhas não coincidem.');
+        showPopup('As senhas nÃ£o coincidem.');
         return false;
     }
 
@@ -152,7 +152,7 @@ function validateCompanyForm() {
 
 async function registerClinicAPI(data) {
     try {
-        const response = await fetch('http://localhost:3000/auth/register/clinic', {
+        const response = await fetch('https://conecta-inclusao-tcc2-0.onrender.com/auth/register/clinic', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -162,8 +162,8 @@ async function registerClinicAPI(data) {
         const result = await response.json();
         return { ok: response.ok, data: result };
     } catch (error) {
-        console.error('Erro na requisição:', error);
-        return { ok: false, data: { message: 'Erro de conexão' } };
+        console.error('Erro na requisiÃ§Ã£o:', error);
+        return { ok: false, data: { message: 'Erro de conexÃ£o' } };
     }
 }
 
@@ -188,17 +188,17 @@ function handleCompanyRegistration(event) {
     const confirmPassword = document.getElementById('confirmPassword').value;
 
     if (!companyName || !companyLegalName || !cnpj || !email || !phone || !contact || !role || !branch || !address || !streetNumber || !city || !state || !zip || !password || !confirmPassword) {
-        showPopup('Preencha todos os campos obrigatórios antes de continuar.');
+        showPopup('Preencha todos os campos obrigatÃ³rios antes de continuar.');
         return;
     }
 
     if (cnpj.length < 18) {
-        showPopup('Insira um CNPJ válido.');
+        showPopup('Insira um CNPJ vÃ¡lido.');
         return;
     }
 
     if (zip.length < 9) {
-        showPopup('Insira um CEP válido.');
+        showPopup('Insira um CEP vÃ¡lido.');
         return;
     }
 
@@ -208,12 +208,12 @@ function handleCompanyRegistration(event) {
     }
 
     if (!isStrongPassword(password)) {
-        showPopup('A senha deve ter 8 caracteres, maiúscula, minúscula, número e caractere especial.');
+        showPopup('A senha deve ter 8 caracteres, maiÃºscula, minÃºscula, nÃºmero e caractere especial.');
         return;
     }
 
     if (password !== confirmPassword) {
-        showPopup('As senhas não coincidem.');
+        showPopup('As senhas nÃ£o coincidem.');
         return;
     }
 
@@ -243,10 +243,10 @@ function handleCompanyRegistration(event) {
         const result = await registerClinicAPI(registrationData);
 
         if (result.ok) {
-            showPopup('Cadastro realizado com sucesso! Você pode fazer login agora.');
+            showPopup('Cadastro realizado com sucesso! VocÃª pode fazer login agora.');
             document.getElementById('registerCompanyForm').reset();
             
-            // Armazenar CNPJ formatado em localStorage para pré-preencher o login
+            // Armazenar CNPJ formatado em localStorage para prÃ©-preencher o login
             const registeredCnpj = result.data?.identifier || result.data?.cnpj || cnpjDigits;
             localStorage.setItem('lastCNPJ', cnpjMask(registeredCnpj));
             localStorage.setItem('lastRegisteredCNPJ', registeredCnpj);
@@ -285,3 +285,4 @@ document.addEventListener('DOMContentLoaded', function() {
     `;
     document.head.appendChild(style);
 });
+

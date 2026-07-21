@@ -1,12 +1,12 @@
-// API base URL - ajuste conforme necessário
-const API_BASE = 'http://localhost:3000/auth';
+﻿// API base URL - ajuste conforme necessÃ¡rio
+const API_BASE = 'https://conecta-inclusao-tcc2-0.onrender.com/auth';
 
-// Função para obter token do localStorage
+// FunÃ§Ã£o para obter token do localStorage
 export function getToken() {
     return localStorage.getItem('token');
 }
 
-// Função genérica para fazer requisições
+// FunÃ§Ã£o genÃ©rica para fazer requisiÃ§Ãµes
 async function apiRequest(endpoint, options = {}) {
     const url = `${API_BASE}${endpoint}`;
     const defaultOptions = {
@@ -22,12 +22,12 @@ async function apiRequest(endpoint, options = {}) {
         const data = await response.json();
         return { ok: response.ok, status: response.status, data };
     } catch (error) {
-        console.error('Erro na requisição:', error);
-        return { ok: false, status: 0, data: { message: 'Erro de conexão' } };
+        console.error('Erro na requisiÃ§Ã£o:', error);
+        return { ok: false, status: 0, data: { message: 'Erro de conexÃ£o' } };
     }
 }
 
-// Funções de registro
+// FunÃ§Ãµes de registro
 export async function registerPatient(data) {
     return apiRequest('/register/patient', {
         method: 'POST',
@@ -52,7 +52,7 @@ export async function registerClinic(data) {
 export async function registerProfessional(crm, name, especialidade, unidade, password, email, bio) {
     const token = getToken();
     if (!token) {
-        return { ok: false, error: 'Token não encontrado' };
+        return { ok: false, error: 'Token nÃ£o encontrado' };
     }
     return apiRequest('/register/professional', {
         method: 'POST',
@@ -64,7 +64,7 @@ export async function registerProfessional(crm, name, especialidade, unidade, pa
     });
 }
 
-// Funções de login
+// FunÃ§Ãµes de login
 export async function loginUniversal(data) {
     return apiRequest('/login/universal', {
         method: 'POST',
@@ -72,7 +72,7 @@ export async function loginUniversal(data) {
     });
 }
 
-// Função para obter dados do usuário (se necessário)
+// FunÃ§Ã£o para obter dados do usuÃ¡rio (se necessÃ¡rio)
 export async function getUserData(token) {
     return apiRequest('/user', {
         headers: {
@@ -81,11 +81,11 @@ export async function getUserData(token) {
     });
 }
 
-// Função para obter perfil do usuário
+// FunÃ§Ã£o para obter perfil do usuÃ¡rio
 export async function getUserProfile() {
     const token = getToken();
     if (!token) {
-        return { ok: false, error: 'Token não encontrado' };
+        return { ok: false, error: 'Token nÃ£o encontrado' };
     }
     return apiRequest('/profile', {
         headers: {
@@ -94,13 +94,13 @@ export async function getUserProfile() {
     });
 }
 
-// Função para obter agendamentos do paciente
+// FunÃ§Ã£o para obter agendamentos do paciente
 export async function getPatientAppointments(pacienteId) {
     const token = getToken();
     if (!token) {
-        return { ok: false, error: 'Token não encontrado' };
+        return { ok: false, error: 'Token nÃ£o encontrado' };
     }
-    const response = await fetch(`http://localhost:3000/api/agendamentos/paciente/${pacienteId}`, {
+    const response = await fetch(`https://conecta-inclusao-tcc2-0.onrender.com/api/agendamentos/paciente/${pacienteId}`, {
         headers: {
             'Authorization': `Bearer ${token}`,
         }
@@ -109,25 +109,25 @@ export async function getPatientAppointments(pacienteId) {
     return { ok: response.ok, status: response.status, data };
 }
 
-// Função para obter médicos disponíveis
+// FunÃ§Ã£o para obter mÃ©dicos disponÃ­veis
 export async function getAvailableDoctors() {
     const response = await fetch(`${API_BASE}/doctors/available`);
     const data = await response.json();
     return { ok: response.ok, status: response.status, data };
 }
 
-// Função para obter agendamentos do profissional (médico)
+// FunÃ§Ã£o para obter agendamentos do profissional (mÃ©dico)
 export async function getProfessionalAppointments(profissionalId, { limit = 100, offset = 0 } = {}) {
     const token = getToken();
     if (!token) {
-        return { ok: false, error: 'Token não encontrado' };
+        return { ok: false, error: 'Token nÃ£o encontrado' };
     }
     try {
         const params = new URLSearchParams({
             limit: String(limit),
             offset: String(offset)
         });
-        const response = await fetch(`http://localhost:3000/api/agendamentos/profissional/${profissionalId}?${params.toString()}`, {
+        const response = await fetch(`https://conecta-inclusao-tcc2-0.onrender.com/api/agendamentos/profissional/${profissionalId}?${params.toString()}`, {
             headers: {
                 'Authorization': `Bearer ${token}`,
             }
@@ -136,11 +136,11 @@ export async function getProfessionalAppointments(profissionalId, { limit = 100,
         return { ok: response.ok, status: response.status, data };
     } catch (error) {
         console.error('Erro ao buscar agendamentos do profissional:', error);
-        return { ok: false, status: 0, data: { message: 'Erro de conexão' } };
+        return { ok: false, status: 0, data: { message: 'Erro de conexÃ£o' } };
     }
 }
 
-// Função para obter lista de clínicas
+// FunÃ§Ã£o para obter lista de clÃ­nicas
 // Funcao para atualizar status do agendamento
 export async function updateAppointmentStatus(appointmentId, status) {
     const token = getToken();
@@ -149,7 +149,7 @@ export async function updateAppointmentStatus(appointmentId, status) {
     }
 
     try {
-        const response = await fetch(`http://localhost:3000/api/agendamentos/${appointmentId}/status`, {
+        const response = await fetch(`https://conecta-inclusao-tcc2-0.onrender.com/api/agendamentos/${appointmentId}/status`, {
             method: 'PUT',
             headers: {
                 'Authorization': `Bearer ${token}`,
@@ -166,16 +166,16 @@ export async function updateAppointmentStatus(appointmentId, status) {
 }
 
 export async function getClinicas() {
-    const response = await fetch('http://localhost:3000/api/clinicas');
+    const response = await fetch('https://conecta-inclusao-tcc2-0.onrender.com/api/clinicas');
     const data = await response.json();
     return { ok: response.ok, status: response.status, data };
 }
 
-// Função para obter profissionais da clínica
+// FunÃ§Ã£o para obter profissionais da clÃ­nica
 export async function getClinicProfessionals() {
     const token = getToken();
     if (!token) {
-        return { ok: false, error: 'Token não encontrado' };
+        return { ok: false, error: 'Token nÃ£o encontrado' };
     }
     return apiRequest('/clinic/professionals', {
         headers: {
@@ -184,11 +184,11 @@ export async function getClinicProfessionals() {
     });
 }
 
-// Função para obter resumo do dashboard da clínica
+// FunÃ§Ã£o para obter resumo do dashboard da clÃ­nica
 export async function getClinicDashboardSummary() {
     const token = getToken();
     if (!token) {
-        return { ok: false, error: 'Token não encontrado' };
+        return { ok: false, error: 'Token nÃ£o encontrado' };
     }
     return apiRequest('/clinic/dashboard-summary', {
         headers: {
@@ -196,3 +196,4 @@ export async function getClinicDashboardSummary() {
         }
     });
 }
+

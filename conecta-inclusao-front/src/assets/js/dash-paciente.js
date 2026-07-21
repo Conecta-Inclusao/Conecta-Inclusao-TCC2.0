@@ -1,4 +1,4 @@
-import { getUserProfile, getAvailableDoctors, getProfessionalAppointments } from './api.js';
+﻿import { getUserProfile, getAvailableDoctors, getProfessionalAppointments } from './api.js';
 
 const PROFESSIONALS_STORAGE_KEY = 'companyProfessionals';
 const PATIENT_MESSAGES_STORAGE_KEY = 'patientProfessionalMessages';
@@ -119,7 +119,7 @@ function loadPatientData() {
         patientHeaderName.textContent = name;
     }
     if (patientHeaderSubtitle) {
-        patientHeaderSubtitle.textContent = `Olá, ${name}`;
+        patientHeaderSubtitle.textContent = `OlÃ¡, ${name}`;
     }
     if (profilePatientName) {
         profilePatientName.textContent = name;
@@ -172,7 +172,7 @@ function updateAppointmentsMonthPicker(value) {
     }
     const label = document.getElementById('appointmentsMonthLabel');
     if (label) {
-        label.textContent = appointmentsMonthFilter ? formatMonthLabel(appointmentsMonthFilter) : 'Mês selecionado';
+        label.textContent = appointmentsMonthFilter ? formatMonthLabel(appointmentsMonthFilter) : 'MÃªs selecionado';
     }
     refreshDashboard();
 }
@@ -197,7 +197,7 @@ async function fetchAvailableProfessionals() {
     }
 
     try {
-        const response = await fetch('http://localhost:3000/auth/professionals', {
+        const response = await fetch('https://conecta-inclusao-tcc2-0.onrender.com/auth/professionals', {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json',
@@ -282,7 +282,7 @@ async function fetchPatientAppointments() {
     }
 
     try {
-        const response = await fetch('http://localhost:3000/auth/patient/appointments', {
+        const response = await fetch('https://conecta-inclusao-tcc2-0.onrender.com/auth/patient/appointments', {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json',
@@ -323,7 +323,7 @@ async function fetchPatientAppointments() {
     }
 }
 
-// Função para abrir modal de responsável
+// FunÃ§Ã£o para abrir modal de responsÃ¡vel
 function openGuardianModal() {
     const modal = document.getElementById('guardianModal');
     if (modal) {
@@ -361,7 +361,7 @@ function startPatientAppointmentsAutoRefresh() {
     });
 }
 
-// Função para fechar modal de responsável
+// FunÃ§Ã£o para fechar modal de responsÃ¡vel
 function closeGuardianModal() {
     const modal = document.getElementById('guardianModal');
     if (modal) {
@@ -374,23 +374,23 @@ function closeGuardianModal() {
     }
 }
 
-// Carregar responsáveis do localStorage
+// Carregar responsÃ¡veis do localStorage
 function loadGuardians() {
     try {
         const data = localStorage.getItem(GUARDIANS_STORAGE_KEY);
         return data ? JSON.parse(data) : [];
     } catch (error) {
-        console.error('Erro ao carregar responsáveis:', error);
+        console.error('Erro ao carregar responsÃ¡veis:', error);
         return [];
     }
 }
 
-// Salvar responsáveis no localStorage
+// Salvar responsÃ¡veis no localStorage
 function saveGuardians(guardians) {
     localStorage.setItem(GUARDIANS_STORAGE_KEY, JSON.stringify(guardians));
 }
 
-// Renderizar lista de responsáveis
+// Renderizar lista de responsÃ¡veis
 function renderGuardians() {
     const guardiansList = document.getElementById('guardiansList');
     if (!guardiansList) return;
@@ -403,7 +403,7 @@ function renderGuardians() {
         let guardians = [];
         if (token) {
             try {
-                const resp = await fetch('http://localhost:3000/auth/patient/guardians', {
+                const resp = await fetch('https://conecta-inclusao-tcc2-0.onrender.com/auth/patient/guardians', {
                     method: 'GET',
                     headers: {
                         'Content-Type': 'application/json',
@@ -427,7 +427,7 @@ function renderGuardians() {
                     guardians = loadGuardians();
                 }
             } catch (err) {
-                console.error('Erro ao carregar responsáveis do servidor:', err);
+                console.error('Erro ao carregar responsÃ¡veis do servidor:', err);
                 guardians = loadGuardians();
             }
         } else {
@@ -438,7 +438,7 @@ function renderGuardians() {
             guardiansList.innerHTML = `
                 <div class="guardians-empty">
                     <i class="ph ph-users-three"></i>
-                    <p>Nenhum responsável cadastrado ainda.</p>
+                    <p>Nenhum responsÃ¡vel cadastrado ainda.</p>
                 </div>
             `;
             return;
@@ -486,9 +486,9 @@ function renderGuardians() {
                 </div>
             </div>
             <div class="guardian-permissions">
-                <div class="guardian-permissions-label">Permissões concedidas:</div>
+                <div class="guardian-permissions-label">PermissÃµes concedidas:</div>
                 <div class="permissions-list">
-                    ${permissionsText ? permissionsText.split(', ').map(p => `<span class="permission-badge"><i class="ph ph-check-circle"></i>${p}</span>`).join('') : '<span style="color: #64748b;">Nenhuma permissão</span>'}
+                    ${permissionsText ? permissionsText.split(', ').map(p => `<span class="permission-badge"><i class="ph ph-check-circle"></i>${p}</span>`).join('') : '<span style="color: #64748b;">Nenhuma permissÃ£o</span>'}
                 </div>
             </div>
         `;
@@ -497,7 +497,7 @@ function renderGuardians() {
     })();
 }
 
-// Remover responsável
+// Remover responsÃ¡vel
 function removeGuardian(index) {
         const guardians = loadGuardians();
         if (index >= 0 && index < guardians.length) {
@@ -505,39 +505,39 @@ function removeGuardian(index) {
             guardians.splice(index, 1);
             saveGuardians(guardians);
             renderGuardians();
-            showPopup(`Responsável ${guardian.name} removido com sucesso.`);
+            showPopup(`ResponsÃ¡vel ${guardian.name} removido com sucesso.`);
         }
 }
 
-// Editar responsável
+// Editar responsÃ¡vel
 function editGuardian(index) {
     const guardians = loadGuardians();
     if (index >= 0 && index < guardians.length) {
         const guardian = guardians[index];
         
-        // Preencher o formulário com os dados do responsável
+        // Preencher o formulÃ¡rio com os dados do responsÃ¡vel
         document.getElementById('guardianName').value = guardian.name;
         document.getElementById('guardianRelationship').value = guardian.parentesco || guardian.relationship;
         document.getElementById('guardianPassword').value = guardian.password || '';
         document.getElementById('guardianEmail').value = guardian.email;
 
-        // Selecionar as permissões
+        // Selecionar as permissÃµes
         const checkboxes = document.querySelectorAll('input[name="permissions"]');
         const guardianPermissions = Array.isArray(guardian.permissions) ? guardian.permissions : [];
         checkboxes.forEach(checkbox => {
             checkbox.checked = (guardian.permissoes || guardian.permissions || []).includes(checkbox.value);
         });
 
-        // Armazenar o índice para atualização
+        // Armazenar o Ã­ndice para atualizaÃ§Ã£o
         document.getElementById('formNewGuardian').dataset.editIndex = index;
-        document.querySelector('.modal-header div h3').textContent = 'Editar Responsável';
-        document.querySelector('button[type="submit"]').textContent = 'Atualizar Responsável';
+        document.querySelector('.modal-header div h3').textContent = 'Editar ResponsÃ¡vel';
+        document.querySelector('button[type="submit"]').textContent = 'Atualizar ResponsÃ¡vel';
 
         openGuardianModal();
     }
 }
 
-// Renderizar sugestões de atendimento baseadas em profissionais cadastrados
+// Renderizar sugestÃµes de atendimento baseadas em profissionais cadastrados
 function renderSuggestions() {
     const suggestionGrid = document.getElementById('suggestionGrid');
     if (!suggestionGrid) return;
@@ -553,7 +553,7 @@ function renderSuggestions() {
         specialtiesMap.get(prof.especialidade).push(prof);
     });
 
-    // Se não há profissionais, mostrar mensagem vazia
+    // Se nÃ£o hÃ¡ profissionais, mostrar mensagem vazia
     if (specialtiesMap.size === 0) {
         suggestionGrid.innerHTML = `
             <div class="suggestion-empty">
@@ -569,7 +569,7 @@ function renderSuggestions() {
     // Renderizar cards para cada especialidade
     let cardCount = 0;
     specialtiesMap.forEach((professionals, specialty) => {
-        if (cardCount >= 6) return; // Limitar a 6 sugestões
+        if (cardCount >= 6) return; // Limitar a 6 sugestÃµes
 
         const firstProf = professionals[0];
         const countText = professionals.length > 1 ? `${professionals.length} profissionais` : '1 profissional';
@@ -578,8 +578,8 @@ function renderSuggestions() {
         card.className = 'suggestion-card';
         card.innerHTML = `
             <strong>${specialty}</strong>
-            <span>${firstProf.unidade || 'Unidade não informada'}</span>
-            <p>${countText} disponível${professionals.length > 1 ? 's' : ''}. Agenda aberta para agendamentos.</p>
+            <span>${firstProf.unidade || 'Unidade nÃ£o informada'}</span>
+            <p>${countText} disponÃ­vel${professionals.length > 1 ? 's' : ''}. Agenda aberta para agendamentos.</p>
             <button class="btn-schedule-suggestion" type="button" onclick="scrollToSpecialty('${specialty}')">
                 Agendar
             </button>
@@ -589,12 +589,12 @@ function renderSuggestions() {
     });
 }
 
-// Função auxiliar para scroll até a especialidade
+// FunÃ§Ã£o auxiliar para scroll atÃ© a especialidade
 function scrollToSpecialty(specialty) {
     switchTab('appointments');
     const select = document.getElementById('modalProfessional');
     if (select) {
-        // Encontrar a opção correspondente
+        // Encontrar a opÃ§Ã£o correspondente
         const professionals = availableProfessionals;
         const prof = professionals.find(p => p.especialidade === specialty);
         if (prof) {
@@ -858,7 +858,7 @@ function populateProfessionalOptions() {
     if (!professionals.length) {
         const option = document.createElement('option');
         option.value = '';
-        option.textContent = 'Nenhum médico cadastrado disponível';
+        option.textContent = 'Nenhum mÃ©dico cadastrado disponÃ­vel';
         option.disabled = true;
         professionalSelect.appendChild(option);
         updateSelectedProfessionalDetails();
@@ -1025,7 +1025,7 @@ function initPatientChatSocket() {
     const token = getToken();
     if (!token || typeof io !== 'function' || patientChatSocket) return;
 
-    patientChatSocket = io('http://localhost:3000', { auth: { token } });
+    patientChatSocket = io('https://conecta-inclusao-tcc2-0.onrender.com', { auth: { token } });
     patientChatSocket.on('chat:message', (message) => {
         const key = `appointment-${message.agendamentoId}`;
         const messages = backendChatMessages[key] || [];
@@ -1044,7 +1044,7 @@ async function loadBackendConversation(contact) {
     if (!token) return;
 
     try {
-        const response = await fetch(`http://localhost:3000/messages/agendamentos/${encodeURIComponent(contact.agendamentoId)}?limit=100`, {
+        const response = await fetch(`https://conecta-inclusao-tcc2-0.onrender.com/messages/agendamentos/${encodeURIComponent(contact.agendamentoId)}?limit=100`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
@@ -1404,7 +1404,7 @@ function sendPatientMessage(content) {
             return;
         }
 
-        fetch(`http://localhost:3000/messages/agendamentos/${encodeURIComponent(contact.agendamentoId)}`, {
+        fetch(`https://conecta-inclusao-tcc2-0.onrender.com/messages/agendamentos/${encodeURIComponent(contact.agendamentoId)}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -1713,7 +1713,7 @@ function renderAppointmentsList() {
     list.appendChild(dayColumn);
 
     if (!appointments.length) {
-        const monthLabel = appointmentsMonthFilter ? formatMonthLabel(appointmentsMonthFilter) : 'mês selecionado';
+        const monthLabel = appointmentsMonthFilter ? formatMonthLabel(appointmentsMonthFilter) : 'mÃªs selecionado';
         const message = document.createElement('div');
         message.className = 'empty-state';
         message.innerHTML = `
@@ -1754,7 +1754,7 @@ function showAppointmentDetail(appointment) {
     content.appendChild(title);
 
     const p1 = document.createElement('p');
-    p1.textContent = `${getAppointmentTime(appointment.date)} — ${appointment.hospital || ''}`;
+    p1.textContent = `${getAppointmentTime(appointment.date)} â€” ${appointment.hospital || ''}`;
     p1.style.margin = '0 0 8px 0';
     content.appendChild(p1);
 
@@ -1839,13 +1839,13 @@ async function cancelAppointmentById(appointmentId, dateString) {
 
     const token = localStorage.getItem('token');
     if (!token) {
-        await showPopup('Voce precisa estar autenticado para desmarcar esta consulta. Faça login novamente.');
+        await showPopup('Voce precisa estar autenticado para desmarcar esta consulta. FaÃ§a login novamente.');
         return;
     }
 
     if (!String(appointmentId).startsWith('local-')) {
         try {
-            const response = await fetch(`http://localhost:3000/auth/patient/appointments/${encodeURIComponent(appointmentId)}`, {
+            const response = await fetch(`https://conecta-inclusao-tcc2-0.onrender.com/auth/patient/appointments/${encodeURIComponent(appointmentId)}`, {
                 method: 'DELETE',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1975,13 +1975,13 @@ async function cancelAppointment(button) {
 
     const token = localStorage.getItem('token');
     if (!token) {
-        await showPopup('Voce precisa estar autenticado para desmarcar esta consulta. Faça login novamente.');
+        await showPopup('Voce precisa estar autenticado para desmarcar esta consulta. FaÃ§a login novamente.');
         return;
     }
 
     if (!String(appointmentId).startsWith('local-')) {
         try {
-            const response = await fetch(`http://localhost:3000/auth/patient/appointments/${encodeURIComponent(appointmentId)}`, {
+            const response = await fetch(`https://conecta-inclusao-tcc2-0.onrender.com/auth/patient/appointments/${encodeURIComponent(appointmentId)}`, {
                 method: 'DELETE',
                 headers: {
                     'Content-Type': 'application/json',
@@ -2069,17 +2069,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             const professionalCrm = String(selectedProfessional?.registry || '').trim();
 
             if (!date || !time) {
-                await showPopup('Informe a data e o horário do agendamento.');
+                await showPopup('Informe a data e o horÃ¡rio do agendamento.');
                 return;
             }
 
             if (!isValidThirtyMinuteSlot(time)) {
-                await showPopup('Escolha um horário em intervalos de 30 minutos, como 16:00 ou 16:30.');
+                await showPopup('Escolha um horÃ¡rio em intervalos de 30 minutos, como 16:00 ou 16:30.');
                 return;
             }
 
             if (isPastAppointmentDateTime(date, time)) {
-                await showPopup('Não é possível agendar ou remarcar para uma data ou horário no passado. Escolha um horário atual ou futuro.');
+                await showPopup('NÃ£o Ã© possÃ­vel agendar ou remarcar para uma data ou horÃ¡rio no passado. Escolha um horÃ¡rio atual ou futuro.');
                 return;
             }
 
@@ -2091,7 +2091,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Tentar criar ou atualizar agendamento no backend
             const token = localStorage.getItem('token');
             if (!token) {
-                await showPopup('Voce precisa estar autenticado para agendar/remarcar. Faça login novamente.');
+                await showPopup('Voce precisa estar autenticado para agendar/remarcar. FaÃ§a login novamente.');
                 return;
             }
 
@@ -2099,13 +2099,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             try {
                 const slotTaken = await isProfessionalSlotAlreadyTaken(selectedProfessional.id, appointmentDateTime, editId || null);
                 if (slotTaken) {
-                    await showPopup('Este horÃ¡rio jÃ¡ foi marcado por outro paciente para este profissional. Escolha outro horÃ¡rio.');
+                    await showPopup('Este horÃƒÂ¡rio jÃƒÂ¡ foi marcado por outro paciente para este profissional. Escolha outro horÃƒÂ¡rio.');
                     return;
                 }
 
                 if (editId) {
                     // Remarcar (atualizar) um agendamento existente
-                    const url = `http://localhost:3000/auth/patient/appointments/${encodeURIComponent(editId)}`;
+                    const url = `https://conecta-inclusao-tcc2-0.onrender.com/auth/patient/appointments/${encodeURIComponent(editId)}`;
                     const bodyData = { date: appointmentDateTime, time };
                     if (professionalCrm) bodyData.med_crm = professionalCrm;
 
@@ -2151,7 +2151,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     await showPopup(`Remarcacao realizada para ${formatDate(updated.date)} as ${getAppointmentTime(updated.date)}.`);
                 } else {
                     // Criar novo agendamento
-                    const resp = await fetch('http://localhost:3000/auth/patient/appointments', {
+                    const resp = await fetch('https://conecta-inclusao-tcc2-0.onrender.com/auth/patient/appointments', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -2240,19 +2240,19 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const email = document.getElementById('guardianEmail')?.value.trim();
                 const password = document.getElementById('guardianPassword')?.value.trim();
                 if (!isStrongPassword(password)) {
-                    await showPopup('A senha deve ter 8 caracteres, maiúscula, minúscula, número e caractere especial.');
+                    await showPopup('A senha deve ter 8 caracteres, maiÃºscula, minÃºscula, nÃºmero e caractere especial.');
                     return;
                 }
 
                 if (!name || !parentesco || !email || !password) {
-                    await showPopup('Por favor, preencha todos os campos obrigatórios.');
+                    await showPopup('Por favor, preencha todos os campos obrigatÃ³rios.');
                     return;
                 }
             const permissoes = Array.from(document.querySelectorAll('input[name="permissions"]:checked'))
                 .map(checkbox => checkbox.value);
 
             if (permissoes.length === 0) {
-                await showPopup('Selecione pelo menos uma permissão.');
+                await showPopup('Selecione pelo menos uma permissÃ£o.');
                 return;
             }
 
@@ -2260,7 +2260,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const editIndex = guardianForm.dataset.editIndex;
 
             if (editIndex !== undefined && editIndex !== '') {
-                // Atualizar responsável existente
+                // Atualizar responsÃ¡vel existente
                 guardians[parseInt(editIndex)] = {
                     name,
                     parentesco,
@@ -2269,9 +2269,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                     permissoes,
                     dateAdded: guardians[parseInt(editIndex)].dateAdded
                 };
-                await showPopup(`Responsável ${name} atualizado com sucesso.`);
+                await showPopup(`ResponsÃ¡vel ${name} atualizado com sucesso.`);
             } else {
-                // Adicionar novo responsável
+                // Adicionar novo responsÃ¡vel
                 const today = new Date().toLocaleDateString('pt-BR');
                 const newGuardian = {
                     name,
@@ -2286,7 +2286,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const token = localStorage.getItem('token');
                 if (token) {
                     try {
-                        const resp = await fetch('http://localhost:3000/auth/patient/guardians', {
+                        const resp = await fetch('https://conecta-inclusao-tcc2-0.onrender.com/auth/patient/guardians', {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
@@ -2297,7 +2297,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                         const body = await resp.json();
                         if (!resp.ok) {
-                            await showPopup(body.message || 'Erro ao salvar responsável no servidor.');
+                            await showPopup(body.message || 'Erro ao salvar responsÃ¡vel no servidor.');
                         } else {
                             // attach server id
                             newGuardian.id = body.id;
@@ -2305,20 +2305,20 @@ document.addEventListener('DOMContentLoaded', async () => {
                         }
                     } catch (err) {
                         console.error('Erro ao salvar responsavel no servidor:', err);
-                        await showPopup('Erro de conexão ao salvar responsável no servidor.');
+                        await showPopup('Erro de conexÃ£o ao salvar responsÃ¡vel no servidor.');
                     }
                 }
 
                 guardians.push(newGuardian);
-                await showPopup(`Responsável ${name} adicionado com sucesso.`);
+                await showPopup(`ResponsÃ¡vel ${name} adicionado com sucesso.`);
             }
 
             saveGuardians(guardians);
             guardianForm.reset();
             refreshGuardianPasswordFeedback();
             delete guardianForm.dataset.editIndex;
-            document.querySelector('.modal-header div h3').textContent = 'Adicionar Responsável';
-            document.querySelector('button[type="submit"]').textContent = 'Adicionar Responsável';
+            document.querySelector('.modal-header div h3').textContent = 'Adicionar ResponsÃ¡vel';
+            document.querySelector('button[type="submit"]').textContent = 'Adicionar ResponsÃ¡vel';
             closeGuardianModal();
             renderGuardians();
         });
@@ -2337,7 +2337,7 @@ function renderAppointmentsState() {
             emptyState.remove();
         }
         
-        // Atualizar responsável exibido no perfil quando disponível
+        // Atualizar responsÃ¡vel exibido no perfil quando disponÃ­vel
         const profilePatientResponsible = document.getElementById('profilePatientResponsible');
         const responsible = user.responsible || localStorage.getItem('patientResponsible') || '';
         if (profilePatientResponsible) {
@@ -2366,3 +2366,4 @@ window.editGuardian = editGuardian;
 window.renderGuardians = renderGuardians;
 window.scrollToSpecialty = scrollToSpecialty;
 window.openRescheduleModal = openRescheduleModal;
+

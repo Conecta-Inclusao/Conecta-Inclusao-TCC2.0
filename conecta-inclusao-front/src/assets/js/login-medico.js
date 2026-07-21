@@ -1,4 +1,4 @@
-// ===== FUNÇÕES DO MODAL ESQUECEU A SENHA =====
+﻿// ===== FUNÃ‡Ã•ES DO MODAL ESQUECEU A SENHA =====
 function openForgotPasswordModal(event) {
     event.preventDefault();
     document.getElementById('forgotPasswordModal').style.display = 'flex';
@@ -15,7 +15,7 @@ async function sendResetEmail(type) {
     const normalizedIdentifier = identifier.replace(/[\s-]/g, '').replace(/^CRM/i, '').toUpperCase();
 
     if (!normalizedIdentifier || normalizedIdentifier.length < 4) {
-        showPopup("Por favor, digite um Registro válido.");
+        showPopup("Por favor, digite um Registro vÃ¡lido.");
         return;
     }
 
@@ -25,7 +25,7 @@ async function sendResetEmail(type) {
     btn.innerHTML = '<i class="ph ph-circle-notch-bold" style="animation: spin 1s linear infinite;"></i> Enviando...';
 
     try {
-        const response = await fetch('http://localhost:3000/auth/password/forgot', {
+        const response = await fetch('https://conecta-inclusao-tcc2-0.onrender.com/auth/password/forgot', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ type, identifier: normalizedIdentifier })
@@ -33,18 +33,18 @@ async function sendResetEmail(type) {
         const result = await response.json();
 
         if (!response.ok) {
-            showPopup(result.message || 'Erro ao enviar e-mail de recuperação.');
+            showPopup(result.message || 'Erro ao enviar e-mail de recuperaÃ§Ã£o.');
             return;
         }
 
-        showPopup(`Enviamos o token de recuperação para ${result.email}. Verifique sua caixa de entrada.`);
+        showPopup(`Enviamos o token de recuperaÃ§Ã£o para ${result.email}. Verifique sua caixa de entrada.`);
         closeForgotPasswordModal();
     } catch (error) {
-        console.error('Erro ao solicitar recuperação:', error);
-        showPopup('Erro de conexão com o servidor.');
+        console.error('Erro ao solicitar recuperaÃ§Ã£o:', error);
+        showPopup('Erro de conexÃ£o com o servidor.');
     } finally {
         btn.disabled = false;
-        btn.innerHTML = 'Enviar Link de Recuperação';
+        btn.innerHTML = 'Enviar Link de RecuperaÃ§Ã£o';
     }
 }
 
@@ -63,7 +63,7 @@ function formatRegistry(value) {
 
 async function loginMedicoAPI(identifier, password) {
     try {
-        const response = await fetch('http://localhost:3000/auth/login/universal', {
+        const response = await fetch('https://conecta-inclusao-tcc2-0.onrender.com/auth/login/universal', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -73,14 +73,14 @@ async function loginMedicoAPI(identifier, password) {
         const result = await response.json();
         return { ok: response.ok, data: result };
     } catch (error) {
-        console.error('Erro na requisição:', error);
-        return { ok: false, data: { message: 'Erro de conexão' } };
+        console.error('Erro na requisiÃ§Ã£o:', error);
+        return { ok: false, data: { message: 'Erro de conexÃ£o' } };
     }
 }
 
 async function resetTemporaryPasswordAPI(resetToken, newPassword) {
     try {
-        const response = await fetch('http://localhost:3000/auth/professional/reset-temporary-password', {
+        const response = await fetch('https://conecta-inclusao-tcc2-0.onrender.com/auth/professional/reset-temporary-password', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -90,17 +90,17 @@ async function resetTemporaryPasswordAPI(resetToken, newPassword) {
         const result = await response.json();
         return { ok: response.ok, data: result };
     } catch (error) {
-        console.error('Erro na redefinição de senha:', error);
-        return { ok: false, data: { message: 'Erro de conexão' } };
+        console.error('Erro na redefiniÃ§Ã£o de senha:', error);
+        return { ok: false, data: { message: 'Erro de conexÃ£o' } };
     }
 }
 
 function validateStrongPassword(password) {
     const rules = [
-        { valid: password.length >= 8, message: 'mínimo de 8 caracteres' },
-        { valid: /[a-z]/.test(password), message: 'uma letra minúscula' },
-        { valid: /[A-Z]/.test(password), message: 'uma letra maiúscula' },
-        { valid: /\d/.test(password), message: 'um número' },
+        { valid: password.length >= 8, message: 'mÃ­nimo de 8 caracteres' },
+        { valid: /[a-z]/.test(password), message: 'uma letra minÃºscula' },
+        { valid: /[A-Z]/.test(password), message: 'uma letra maiÃºscula' },
+        { valid: /\d/.test(password), message: 'um nÃºmero' },
         { valid: /[^A-Za-z0-9]/.test(password), message: 'um caractere especial' }
     ];
 
@@ -117,7 +117,7 @@ function saveProfessionalSession(data, registryFallback) {
 
     const user = data.user || {};
     const registeredRegistry = user.registry || user.crm || registryFallback;
-    const registeredUnit = user.unidade || user.unit || 'Unidade não definida';
+    const registeredUnit = user.unidade || user.unit || 'Unidade nÃ£o definida';
 
     sessionStorage.setItem('professionalName', user.name || 'Nome cadastrado');
     sessionStorage.setItem('professionalRegistry', registeredRegistry);
@@ -143,7 +143,7 @@ function showTemporaryPasswordModal(resetToken, registryFallback, loginButton) {
             <div class="temporary-password-header">
                 <i class="ph ph-lock-key"></i>
                 <h2>Redefinir senha</h2>
-                <p>Esta é sua primeira entrada com senha temporária. Crie uma senha segura para continuar.</p>
+                <p>Esta Ã© sua primeira entrada com senha temporÃ¡ria. Crie uma senha segura para continuar.</p>
             </div>
             <form id="temporaryPasswordForm">
                 <div class="input-group">
@@ -155,10 +155,10 @@ function showTemporaryPasswordModal(resetToken, registryFallback, loginButton) {
                     <input type="password" id="confirmProfessionalPassword" placeholder="Repita a nova senha" required>
                 </div>
                 <ul class="password-rules">
-                    <li>Mínimo de 8 caracteres</li>
-                    <li>Letra maiúscula e minúscula</li>
-                    <li>Número e caractere especial</li>
-                    <li>Diferente da senha temporária</li>
+                    <li>MÃ­nimo de 8 caracteres</li>
+                    <li>Letra maiÃºscula e minÃºscula</li>
+                    <li>NÃºmero e caractere especial</li>
+                    <li>Diferente da senha temporÃ¡ria</li>
                 </ul>
                 <p id="temporaryPasswordError" class="temporary-password-error"></p>
                 <button type="submit" class="btn-login">Salvar nova senha</button>
@@ -196,7 +196,7 @@ function showTemporaryPasswordModal(resetToken, registryFallback, loginButton) {
         }
 
         if (newPassword !== confirmPassword) {
-            errorEl.textContent = 'As senhas não coincidem.';
+            errorEl.textContent = 'As senhas nÃ£o coincidem.';
             return;
         }
 
@@ -217,7 +217,7 @@ function showTemporaryPasswordModal(resetToken, registryFallback, loginButton) {
         submitButton.innerText = 'Salvar nova senha';
 
         if (loginButton) {
-            loginButton.innerHTML = 'Acessar como Médico';
+            loginButton.innerHTML = 'Acessar como MÃ©dico';
             loginButton.style.opacity = '';
             loginButton.disabled = false;
         }
@@ -235,14 +235,14 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Máscara para o registro
+    // MÃ¡scara para o registro
     const registryInput = document.getElementById('crm');
     if (registryInput) {
-        // Pré-preencher CRM se vindo do cadastro
+        // PrÃ©-preencher CRM se vindo do cadastro
         const lastCRM = localStorage.getItem('lastCRM');
         if (lastCRM) {
             registryInput.value = lastCRM;
-            localStorage.removeItem('lastCRM'); // Limpar após usar
+            localStorage.removeItem('lastCRM'); // Limpar apÃ³s usar
             localStorage.removeItem('lastRegisteredCRM');
         }
         
@@ -252,7 +252,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-// CSS para animação
+// CSS para animaÃ§Ã£o
 const style = document.createElement('style');
 style.innerHTML = `
     @keyframes spin {
@@ -344,7 +344,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
 
-            // Efeito visual no botão
+            // Efeito visual no botÃ£o
             const btn = document.querySelector('.btn-login');
             btn.innerHTML = '<i class="ph ph-circle-notch-bold" style="animation: spin 1s linear infinite;"></i> Autenticando...';
             btn.style.opacity = "0.7";
@@ -355,7 +355,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (result.ok) {
                 if (result.data.user?.profile !== 'medico') {
                     showPopup('Login de profissional deve ser feito somente com o CRM cadastrado pela empresa.');
-                    btn.innerHTML = 'Acessar como MÃ©dico';
+                    btn.innerHTML = 'Acessar como MÃƒÂ©dico';
                     btn.style.opacity = "";
                     btn.disabled = false;
                     return;
@@ -370,10 +370,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 redirectToDoctorDashboard();
             } else {
                 showPopup(result.data.message || "Registro ou senha incorretos.");
-                btn.innerHTML = 'Acessar como Médico';
+                btn.innerHTML = 'Acessar como MÃ©dico';
                 btn.style.opacity = "";
                 btn.disabled = false;
             }
         });
     }
 });
+

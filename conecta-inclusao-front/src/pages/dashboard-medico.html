@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard Médico - Portal Saúde</title>
+    <title>Dashboard MÃ©dico - Portal SaÃºde</title>
     <link rel="stylesheet" href="../assets/css/dashboard-medico.css">
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
 </head>
@@ -12,10 +12,10 @@
         <aside class="sidebar">
             <div class="logo-section">
                 <i class="ph ph-stethoscope"></i>
-                <span>Conecta Inclusão</span>
+                <span>Conecta InclusÃ£o</span>
             </div>
             <nav>
-                <a href="#" class="active" onclick="showHome(event)"><i class="ph ph-house"></i> Início</a>
+                <a href="#" class="active" onclick="showHome(event)"><i class="ph ph-house"></i> InÃ­cio</a>
                 <a href="#" onclick="openAgendaMedica(event)"><i class="ph ph-calendar-blank"></i> Agenda</a>
                 <a href="#" onclick="togglePatientsList(event)"><i class="ph ph-users"></i> Pacientes</a>
                 <a href="#" onclick="openMessages(event)"><i class="ph ph-chat-circle-text"></i> Mensagens</a>
@@ -71,20 +71,20 @@
                
             </div>
 
-            <!-- Seção Agenda -->
+            <!-- SeÃ§Ã£o Agenda -->
             <section class="appointments-section" id="agendaSection" style="display: none;">
                 <div class="section-header">
-                    <h3>Próximos Atendimentos</h3>
+                    <h3>PrÃ³ximos Atendimentos</h3>
                 </div>
                 <table class="appointments-table">
                     <thead>
                         <tr>
                             <th>Paciente</th>
                             <th>Data</th>
-                            <th>Horário</th>
+                            <th>HorÃ¡rio</th>
                             <th>Tipo</th>
                             <th>Status</th>
-                            <th>Ações</th>
+                            <th>AÃ§Ãµes</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -98,7 +98,7 @@
                 </table>
             </section>
 
-            <!-- Seção Pacientes -->
+            <!-- SeÃ§Ã£o Pacientes -->
             <section class="patients-section" id="pacientesSection" style="display: none;">
                 <div class="section-header">
                     <h3>Meus Pacientes</h3>
@@ -116,7 +116,7 @@
                                 <th>Nome</th>
                                 <th>CPF</th>
                                 <th>E-mail</th>
-                                <th>Última Consulta</th>
+                                <th>Ãšltima Consulta</th>
                             </tr>
                         </thead>
                         <tbody id="patientsTableBody">
@@ -180,7 +180,8 @@
         </main>
     </div>
     <script src="../assets/js/utils.js"></script>
-    <script src="http://localhost:3000/socket.io/socket.io.js"></script>
+    <script src="https://conecta-inclusao-tcc2-0.onrender.com/socket.io/socket.io.js"></script>
     <script type="module" src="../assets/js/dashboard-medico.js"></script>
 </body>
 </html>
+

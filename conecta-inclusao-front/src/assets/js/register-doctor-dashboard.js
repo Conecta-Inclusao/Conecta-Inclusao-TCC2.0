@@ -1,4 +1,4 @@
-async function getClinicDetails() {
+﻿async function getClinicDetails() {
     const token = localStorage.getItem('token');
 
     if (!token) {
@@ -6,7 +6,7 @@ async function getClinicDetails() {
     }
 
     try {
-        const response = await fetch('http://localhost:3000/auth/clinic/details', {
+        const response = await fetch('https://conecta-inclusao-tcc2-0.onrender.com/auth/clinic/details', {
             method: 'GET',
             headers: {
                 'Authorization': `Bearer ${token}`
@@ -31,7 +31,7 @@ async function registerDoctorFromDashboard(data) {
     }
 
     try {
-        const response = await fetch('http://localhost:3000/auth/register/professional', {
+        const response = await fetch('https://conecta-inclusao-tcc2-0.onrender.com/auth/register/professional', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -224,7 +224,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (!isStrongPassword(password)) {
-            showPopup('A senha deve ter 8 caracteres, maiúscula, minúscula, número e caractere especial.');
+            showPopup('A senha deve ter 8 caracteres, maiÃºscula, minÃºscula, nÃºmero e caractere especial.');
             return;
         }
 
@@ -306,3 +306,4 @@ document.addEventListener('DOMContentLoaded', () => {
     `;
     document.head.appendChild(style);
 });
+

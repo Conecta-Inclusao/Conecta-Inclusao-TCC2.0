@@ -799,7 +799,8 @@ export async function registerUser({ identifier, password, name, profile, userDa
             const values = permissionIds.flatMap((permissionId) => [permissionId, responsavelId]);
 
             await connection.execute(
-              `INSERT IGNORE INTO responsavel_permissoes (id_permissao, id_responsavel) VALUES ${placeholders}`,
+              `INSERT INTO responsavel_permissoes (id_permissao, id_responsavel) VALUES ${placeholders}
+               ON CONFLICT (id_permissao, id_responsavel) DO NOTHING`,
               values
             );
           }
@@ -848,7 +849,7 @@ export async function registerUser({ identifier, password, name, profile, userDa
   } catch (err) {
     console.error("Erro em registerUser:", err);
 
-    if (err.code === "ER_DUP_ENTRY") {
+    if (err.code === "23505" || err.message?.includes("duplicate") || err.code === "ER_DUP_ENTRY") {
       return { ok: false, statusCode: 409, message: "Identificador ou email ja cadastrado." };
     }
 
@@ -898,7 +899,7 @@ export async function registerProfessional({ crm, name, especialidade, clinicaId
   } catch (err) {
     console.error("Erro em registerProfessional:", err);
 
-    if (err.code === "ER_DUP_ENTRY") {
+    if (err.code === "23505" || err.message?.includes("duplicate") || err.code === "ER_DUP_ENTRY") {
       return { ok: false, statusCode: 409, message: "CRM ou email ja cadastrado." };
     }
 

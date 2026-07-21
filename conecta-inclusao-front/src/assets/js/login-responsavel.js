@@ -1,6 +1,6 @@
-async function loginResponsavelAPI(email, password) {
+﻿async function loginResponsavelAPI(email, password) {
     try {
-        const response = await fetch('http://localhost:3000/auth/login/responsavel', {
+        const response = await fetch('https://conecta-inclusao-tcc2-0.onrender.com/auth/login/responsavel', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -10,8 +10,8 @@ async function loginResponsavelAPI(email, password) {
         const result = await response.json();
         return { ok: response.ok, data: result };
     } catch (error) {
-        console.error('Erro na requisição:', error);
-        return { ok: false, data: { message: 'Erro de conexão' } };
+        console.error('Erro na requisiÃ§Ã£o:', error);
+        return { ok: false, data: { message: 'Erro de conexÃ£o' } };
     }
 }
 
@@ -28,7 +28,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const password = document.getElementById('password').value;
 
         if (!email || password.length < 8) {
-            showPopup('Por favor, preencha e-mail válido e senha com no mínimo 8 caracteres.');
+            showPopup('Por favor, preencha e-mail vÃ¡lido e senha com no mÃ­nimo 8 caracteres.');
             return;
         }
 
@@ -64,3 +64,4 @@ style.innerHTML = `
     }
 `;
 document.head.appendChild(style);
+
