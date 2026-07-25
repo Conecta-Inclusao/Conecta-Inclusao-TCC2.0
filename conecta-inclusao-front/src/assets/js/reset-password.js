@@ -46,7 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
         button.innerHTML = '<i class="ph ph-circle-notch-bold" style="animation: spin 1s linear infinite;"></i> Salvando...';
 
         try {
-            const response = await fetch('https://conecta-inclusao-tcc2-0.onrender.com/auth/password/reset', {
+            const response = await fetch('https://conecta-inclusao.onrender.com/auth/password/reset', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ token, newPassword })

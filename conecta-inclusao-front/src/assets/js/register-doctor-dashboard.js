@@ -6,7 +6,7 @@
     }
 
     try {
-        const response = await fetch('https://conecta-inclusao-tcc2-0.onrender.com/auth/clinic/details', {
+        const response = await fetch('https://conecta-inclusao.onrender.com/auth/clinic/details', {
             method: 'GET',
             headers: {
                 'Authorization': `Bearer ${token}`
@@ -31,7 +31,7 @@ async function registerDoctorFromDashboard(data) {
     }
 
     try {
-        const response = await fetch('https://conecta-inclusao-tcc2-0.onrender.com/auth/register/professional', {
+        const response = await fetch('https://conecta-inclusao.onrender.com/auth/register/professional', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

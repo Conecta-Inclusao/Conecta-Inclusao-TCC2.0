@@ -152,7 +152,7 @@ function validateCompanyForm() {
 
 async function registerClinicAPI(data) {
     try {
-        const response = await fetch('https://conecta-inclusao-tcc2-0.onrender.com/auth/register/clinic', {
+        const response = await fetch('https://conecta-inclusao.onrender.com/auth/register/clinic', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -163,7 +163,7 @@ async function registerClinicAPI(data) {
         return { ok: response.ok, data: result };
     } catch (error) {
         console.error('Erro na requisiÃ§Ã£o:', error);
-        return { ok: false, data: { message: 'Erro de conexÃ£o' } };
+        return { ok: false, data: { message: 'Erro de conexão' } };
     }
 }
 

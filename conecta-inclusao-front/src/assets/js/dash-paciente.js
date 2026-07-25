@@ -197,7 +197,7 @@ async function fetchAvailableProfessionals() {
     }
 
     try {
-        const response = await fetch('https://conecta-inclusao-tcc2-0.onrender.com/auth/professionals', {
+        const response = await fetch('https://conecta-inclusao.onrender.com/auth/professionals', {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json',
@@ -282,7 +282,7 @@ async function fetchPatientAppointments() {
     }
 
     try {
-        const response = await fetch('https://conecta-inclusao-tcc2-0.onrender.com/auth/patient/appointments', {
+        const response = await fetch('https://conecta-inclusao.onrender.com/auth/patient/appointments', {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json',
@@ -403,7 +403,7 @@ function renderGuardians() {
         let guardians = [];
         if (token) {
             try {
-                const resp = await fetch('https://conecta-inclusao-tcc2-0.onrender.com/auth/patient/guardians', {
+                const resp = await fetch('https://conecta-inclusao.onrender.com/auth/patient/guardians', {
                     method: 'GET',
                     headers: {
                         'Content-Type': 'application/json',
@@ -1025,7 +1025,7 @@ function initPatientChatSocket() {
     const token = getToken();
     if (!token || typeof io !== 'function' || patientChatSocket) return;
 
-    patientChatSocket = io('https://conecta-inclusao-tcc2-0.onrender.com', { auth: { token } });
+    patientChatSocket = io('https://conecta-inclusao.onrender.com', { auth: { token } });
     patientChatSocket.on('chat:message', (message) => {
         const key = `appointment-${message.agendamentoId}`;
         const messages = backendChatMessages[key] || [];
@@ -1044,7 +1044,7 @@ async function loadBackendConversation(contact) {
     if (!token) return;
 
     try {
-        const response = await fetch(`https://conecta-inclusao-tcc2-0.onrender.com/messages/agendamentos/${encodeURIComponent(contact.agendamentoId)}?limit=100`, {
+        const response = await fetch(`https://conecta-inclusao.onrender.com/messages/agendamentos/${encodeURIComponent(contact.agendamentoId)}?limit=100`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
@@ -1404,7 +1404,7 @@ function sendPatientMessage(content) {
             return;
         }
 
-        fetch(`https://conecta-inclusao-tcc2-0.onrender.com/messages/agendamentos/${encodeURIComponent(contact.agendamentoId)}`, {
+        fetch(`https://conecta-inclusao.onrender.com/messages/agendamentos/${encodeURIComponent(contact.agendamentoId)}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -1845,7 +1845,7 @@ async function cancelAppointmentById(appointmentId, dateString) {
 
     if (!String(appointmentId).startsWith('local-')) {
         try {
-            const response = await fetch(`https://conecta-inclusao-tcc2-0.onrender.com/auth/patient/appointments/${encodeURIComponent(appointmentId)}`, {
+            const response = await fetch(`https://conecta-inclusao.onrender.com/auth/patient/appointments/${encodeURIComponent(appointmentId)}`, {
                 method: 'DELETE',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1981,7 +1981,7 @@ async function cancelAppointment(button) {
 
     if (!String(appointmentId).startsWith('local-')) {
         try {
-            const response = await fetch(`https://conecta-inclusao-tcc2-0.onrender.com/auth/patient/appointments/${encodeURIComponent(appointmentId)}`, {
+            const response = await fetch(`https://conecta-inclusao.onrender.com/auth/patient/appointments/${encodeURIComponent(appointmentId)}`, {
                 method: 'DELETE',
                 headers: {
                     'Content-Type': 'application/json',
@@ -2105,7 +2105,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 if (editId) {
                     // Remarcar (atualizar) um agendamento existente
-                    const url = `https://conecta-inclusao-tcc2-0.onrender.com/auth/patient/appointments/${encodeURIComponent(editId)}`;
+                    const url = `https://conecta-inclusao.onrender.com/auth/patient/appointments/${encodeURIComponent(editId)}`;
                     const bodyData = { date: appointmentDateTime, time };
                     if (professionalCrm) bodyData.med_crm = professionalCrm;
 
@@ -2151,7 +2151,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     await showPopup(`Remarcacao realizada para ${formatDate(updated.date)} as ${getAppointmentTime(updated.date)}.`);
                 } else {
                     // Criar novo agendamento
-                    const resp = await fetch('https://conecta-inclusao-tcc2-0.onrender.com/auth/patient/appointments', {
+                    const resp = await fetch('https://conecta-inclusao.onrender.com/auth/patient/appointments', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -2286,7 +2286,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const token = localStorage.getItem('token');
                 if (token) {
                     try {
-                        const resp = await fetch('https://conecta-inclusao-tcc2-0.onrender.com/auth/patient/guardians', {
+                        const resp = await fetch('https://conecta-inclusao.onrender.com/auth/patient/guardians', {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',

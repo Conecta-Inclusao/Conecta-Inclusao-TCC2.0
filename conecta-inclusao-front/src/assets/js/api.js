@@ -1,5 +1,5 @@
 ﻿// API base URL - ajuste conforme necessÃ¡rio
-const API_BASE = 'https://conecta-inclusao-tcc2-0.onrender.com/auth';
+const API_BASE = 'https://conecta-inclusao.onrender.com/auth';
 
 // FunÃ§Ã£o para obter token do localStorage
 export function getToken() {
@@ -100,7 +100,7 @@ export async function getPatientAppointments(pacienteId) {
     if (!token) {
         return { ok: false, error: 'Token nÃ£o encontrado' };
     }
-    const response = await fetch(`https://conecta-inclusao-tcc2-0.onrender.com/api/agendamentos/paciente/${pacienteId}`, {
+    const response = await fetch(`https://conecta-inclusao.onrender.com/api/agendamentos/paciente/${pacienteId}`, {
         headers: {
             'Authorization': `Bearer ${token}`,
         }
@@ -127,7 +127,7 @@ export async function getProfessionalAppointments(profissionalId, { limit = 100,
             limit: String(limit),
             offset: String(offset)
         });
-        const response = await fetch(`https://conecta-inclusao-tcc2-0.onrender.com/api/agendamentos/profissional/${profissionalId}?${params.toString()}`, {
+        const response = await fetch(`https://conecta-inclusao.onrender.com/api/agendamentos/profissional/${profissionalId}?${params.toString()}`, {
             headers: {
                 'Authorization': `Bearer ${token}`,
             }
@@ -149,7 +149,7 @@ export async function updateAppointmentStatus(appointmentId, status) {
     }
 
     try {
-        const response = await fetch(`https://conecta-inclusao-tcc2-0.onrender.com/api/agendamentos/${appointmentId}/status`, {
+        const response = await fetch(`https://conecta-inclusao.onrender.com/api/agendamentos/${appointmentId}/status`, {
             method: 'PUT',
             headers: {
                 'Authorization': `Bearer ${token}`,
@@ -166,7 +166,7 @@ export async function updateAppointmentStatus(appointmentId, status) {
 }
 
 export async function getClinicas() {
-    const response = await fetch('https://conecta-inclusao-tcc2-0.onrender.com/api/clinicas');
+    const response = await fetch('https://conecta-inclusao.onrender.com/api/clinicas');
     const data = await response.json();
     return { ok: response.ok, status: response.status, data };
 }

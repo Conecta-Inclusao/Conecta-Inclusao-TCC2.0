@@ -1,6 +1,6 @@
 ﻿let guardianData = null;
 let availablePermissions = null;
-const API = 'https://conecta-inclusao-tcc2-0.onrender.com'; 
+const API = 'https://conecta-inclusao.onrender.com'; 
 
 function refreshGuardianPasswordFeedback() {
     const guardianPassword = document.getElementById('guardianPassword');

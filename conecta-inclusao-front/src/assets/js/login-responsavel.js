@@ -1,6 +1,6 @@
 ﻿async function loginResponsavelAPI(email, password) {
     try {
-        const response = await fetch('https://conecta-inclusao-tcc2-0.onrender.com/auth/login/responsavel', {
+        const response = await fetch('https://conecta-inclusao.onrender.com/auth/login/responsavel', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

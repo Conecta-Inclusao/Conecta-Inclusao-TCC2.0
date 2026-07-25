@@ -144,7 +144,7 @@ function initDoctorChatSocket() {
     const token = getToken();
     if (!token || typeof io !== 'function' || doctorChatSocket) return;
 
-    doctorChatSocket = io('https://conecta-inclusao-tcc2-0.onrender.com', { auth: { token } });
+    doctorChatSocket = io('https://conecta-inclusao.onrender.com', { auth: { token } });
     doctorChatSocket.on('chat:message', (message) => {
         const key = `appointment-${message.agendamentoId}`;
         const messages = doctorChatMessages[key] || [];
@@ -184,7 +184,7 @@ async function loadDoctorConversation(contact) {
     if (!token) return;
 
     try {
-        const response = await fetch(`https://conecta-inclusao-tcc2-0.onrender.com/messages/agendamentos/${encodeURIComponent(contact.agendamentoId)}?limit=100`, {
+        const response = await fetch(`https://conecta-inclusao.onrender.com/messages/agendamentos/${encodeURIComponent(contact.agendamentoId)}?limit=100`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
@@ -332,7 +332,7 @@ function sendDoctorMessage(content) {
         return;
     }
 
-    fetch(`https://conecta-inclusao-tcc2-0.onrender.com/messages/agendamentos/${encodeURIComponent(contact.agendamentoId)}`, {
+    fetch(`https://conecta-inclusao.onrender.com/messages/agendamentos/${encodeURIComponent(contact.agendamentoId)}`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
