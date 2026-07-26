@@ -1,4 +1,4 @@
-function applyMask(input, maskFn) {
+﻿function applyMask(input, maskFn) {
     input.addEventListener('input', function(event) {
         event.target.value = maskFn(event.target.value);
     });
@@ -151,7 +151,7 @@ function validateCompanyForm() {
 
 async function registerClinicAPI(data) {
     try {
-        const response = await fetch('http://localhost:3000/auth/register/clinic', {
+        const response = await fetch('https://conecta-inclusao.onrender.com/auth/register/clinic', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

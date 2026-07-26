@@ -98,7 +98,7 @@ function normalizeIdentifierByType(type, identifier) {
 }
 
 function buildResetUrl(token) {
-  const baseUrl = process.env.FRONTEND_BASE_URL || process.env.SMTP_FRONTEND_URL || "http://localhost:3000";
+  const baseUrl = process.env.FRONTEND_BASE_URL || process.env.SMTP_FRONTEND_URL || "https://conecta-inclusao.onrender.com";
   return `${baseUrl.replace(/\/$/, "")}/reset-password.html?token=${encodeURIComponent(token)}`;
 }
 

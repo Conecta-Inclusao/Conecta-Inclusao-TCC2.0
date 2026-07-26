@@ -153,7 +153,7 @@ async function fetchAvailableProfessionals() {
     }
 
     try {
-        const response = await fetch('http://localhost:3000/auth/professionals', {
+        const response = await fetch('https://conecta-inclusao.onrender.com/auth/professionals', {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json',
@@ -200,7 +200,7 @@ async function fetchPatientAppointments() {
     }
 
     try {
-        const response = await fetch('http://localhost:3000/auth/patient/appointments', {
+        const response = await fetch('https://conecta-inclusao.onrender.com/auth/patient/appointments', {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json',
@@ -284,7 +284,7 @@ function renderGuardians() {
         let guardians = [];
         if (token) {
             try {
-                const resp = await fetch('http://localhost:3000/auth/patient/guardians', {
+                const resp = await fetch('https://conecta-inclusao.onrender.com/auth/patient/guardians', {
                     method: 'GET',
                     headers: {
                         'Content-Type': 'application/json',
@@ -1527,7 +1527,7 @@ async function cancelAppointmentById(appointmentId, dateString) {
 
     if (!String(appointmentId).startsWith('local-')) {
         try {
-            const response = await fetch(`http://localhost:3000/auth/patient/appointments/${encodeURIComponent(appointmentId)}`, {
+            const response = await fetch(`https://conecta-inclusao.onrender.com/auth/patient/appointments/${encodeURIComponent(appointmentId)}`, {
                 method: 'DELETE',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1664,7 +1664,7 @@ async function cancelAppointment(button) {
 
     if (!String(appointmentId).startsWith('local-')) {
         try {
-            const response = await fetch(`http://localhost:3000/auth/patient/appointments/${encodeURIComponent(appointmentId)}`, {
+            const response = await fetch(`https://conecta-inclusao.onrender.com/auth/patient/appointments/${encodeURIComponent(appointmentId)}`, {
                 method: 'DELETE',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1759,7 +1759,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             try {
                 if (editId) {
                     // Remarcar (atualizar) um agendamento existente
-                    const url = `http://localhost:3000/auth/patient/appointments/${encodeURIComponent(editId)}`;
+                    const url = `https://conecta-inclusao.onrender.com/auth/patient/appointments/${encodeURIComponent(editId)}`;
                     const bodyData = { date };
                     if (professionalCrm) bodyData.med_crm = professionalCrm;
 
@@ -1808,7 +1808,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         return;
                     }
 
-                    const resp = await fetch('http://localhost:3000/auth/patient/appointments', {
+                    const resp = await fetch('https://conecta-inclusao.onrender.com/auth/patient/appointments', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -1941,7 +1941,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const token = localStorage.getItem('token');
                 if (token) {
                     try {
-                        const resp = await fetch('http://localhost:3000/auth/patient/guardians', {
+                        const resp = await fetch('https://conecta-inclusao.onrender.com/auth/patient/guardians', {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',

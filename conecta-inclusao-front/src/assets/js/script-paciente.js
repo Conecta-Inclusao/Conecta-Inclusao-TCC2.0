@@ -25,7 +25,7 @@ async function sendResetEmail(type) {
     btn.innerHTML = '<i class="ph ph-circle-notch-bold" style="animation: spin 1s linear infinite;"></i> Enviando...';
 
     try {
-        const response = await fetch('http://localhost:3000/auth/password/forgot', {
+        const response = await fetch('https://conecta-inclusao.onrender.com/auth/password/forgot', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ type, identifier: identifierDigits })
@@ -50,7 +50,7 @@ async function sendResetEmail(type) {
 
 async function loginPacienteAPI(identifier, password) {
     try {
-        const response = await fetch('http://localhost:3000/auth/login/universal', {
+        const response = await fetch('https://conecta-inclusao.onrender.com/auth/login/universal', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

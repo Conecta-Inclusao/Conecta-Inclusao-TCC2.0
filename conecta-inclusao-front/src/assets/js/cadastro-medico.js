@@ -42,7 +42,7 @@ function validateDoctorForm() {
 
 async function registerDoctorAPI(data) {
     try {
-        const response = await fetch('http://localhost:3000/auth/register/doctor', {
+        const response = await fetch('https://conecta-inclusao.onrender.com/auth/register/doctor', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

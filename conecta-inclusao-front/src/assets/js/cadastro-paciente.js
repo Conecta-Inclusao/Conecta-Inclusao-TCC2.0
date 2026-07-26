@@ -114,7 +114,7 @@ function validatePatientForm() {
 
 async function registerPatientAPI(data) {
     try {
-        const response = await fetch('http://localhost:3000/auth/register/patient', {
+        const response = await fetch('https://conecta-inclusao.onrender.com/auth/register/patient', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
