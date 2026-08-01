@@ -1,0 +1,7 @@
+{
+  "name": "conecta-inclusao-front",
+  "private": true,
+  "scripts": {
+    "build": "node scripts/generate-config.js"
+  }
+}
