@@ -1,7 +1,7 @@
 // Gerenciador de Profissionais da Empresa
 let api;
 let currentProfessionals = [];
-const AUTH_API_BASE = 'https://conecta-inclusao.onrender.com/auth';
+const AUTH_API_BASE = window.APP_CONFIG?.AUTH_API_URL || '/auth';
 
 async function loadAPI() {
     if (!api) {
@@ -118,7 +118,7 @@ async function getClinicaIdByUserId(userId) {
         
         if (!token) return null;
         
-        const response = await fetch(`https://conecta-inclusao.onrender.com/clinic/id/${userId}`, {
+        const response = await fetch(`${window.APP_CONFIG?.API_BASE_URL || ''}/clinic/id/${userId}`, {
             method: 'GET',
             headers: {
                 'Authorization': `Bearer ${token}`,

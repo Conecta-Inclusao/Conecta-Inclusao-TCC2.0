@@ -1,5 +1,5 @@
-// API base URL - ajuste conforme necessário
-const API_BASE = 'https://conecta-inclusao.onrender.com/auth';
+// API base URL - centralizada pelo arquivo config.js
+const API_BASE = window.APP_CONFIG?.AUTH_API_URL || '/auth';
 
 // Função para obter token do localStorage
 export function getToken() {
@@ -100,7 +100,7 @@ export async function getPatientAppointments(pacienteId) {
     if (!token) {
         return { ok: false, error: 'Token não encontrado' };
     }
-    const response = await fetch(`https://conecta-inclusao.onrender.com/api/agendamentos/paciente/${pacienteId}`, {
+    const response = await fetch(`${window.APP_CONFIG?.API_URL || '/api'}/agendamentos/paciente/${pacienteId}`, {
         headers: {
             'Authorization': `Bearer ${token}`,
         }
@@ -127,7 +127,7 @@ export async function getProfessionalAppointments(profissionalId, { limit = 100,
             limit: String(limit),
             offset: String(offset)
         });
-        const response = await fetch(`https://conecta-inclusao.onrender.com/api/agendamentos/profissional/${profissionalId}?${params.toString()}`, {
+        const response = await fetch(`${window.APP_CONFIG?.API_URL || '/api'}/agendamentos/profissional/${profissionalId}?${params.toString()}`, {
             headers: {
                 'Authorization': `Bearer ${token}`,
             }
@@ -149,7 +149,7 @@ export async function updateAppointmentStatus(appointmentId, status) {
     }
 
     try {
-        const response = await fetch(`https://conecta-inclusao.onrender.com/api/agendamentos/${appointmentId}/status`, {
+        const response = await fetch(`${window.APP_CONFIG?.API_URL || '/api'}/agendamentos/${appointmentId}/status`, {
             method: 'PUT',
             headers: {
                 'Authorization': `Bearer ${token}`,
@@ -166,7 +166,7 @@ export async function updateAppointmentStatus(appointmentId, status) {
 }
 
 export async function getClinicas() {
-    const response = await fetch('https://conecta-inclusao.onrender.com/api/clinica');
+    const response = await fetch(`${window.APP_CONFIG?.API_URL || '/api'}/clinica`);
     const data = await response.json();
     return { ok: response.ok, status: response.status, data };
 }
