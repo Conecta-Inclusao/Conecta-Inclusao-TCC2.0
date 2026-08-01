@@ -18,6 +18,10 @@
     {
       "src": "/(.*\\.html)",
       "dest": "/conecta-inclusao-front/src/pages/$1"
+    },
+    {
+      "src": "/assets/(.*)",
+      "dest": "/conecta-inclusao-front/src/assets/$1"
     }
   ]
 }
