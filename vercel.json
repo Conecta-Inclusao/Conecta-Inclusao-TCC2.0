@@ -12,7 +12,11 @@
       "dest": "/conecta-inclusao-front/src/pages/lndex.html"
     },
     {
-      "src": "/(.*)",
+      "src": "/index.html",
+      "dest": "/conecta-inclusao-front/src/pages/lndex.html"
+    },
+    {
+      "src": "/(.*\\.html)",
       "dest": "/conecta-inclusao-front/src/pages/$1"
     }
   ]
