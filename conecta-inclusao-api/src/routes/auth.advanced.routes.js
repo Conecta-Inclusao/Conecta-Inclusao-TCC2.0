@@ -293,12 +293,13 @@ router.post("/register/professional", authenticateToken, registerLimiter, async 
       return res.status(clinicResult.statusCode).json({ message: clinicResult.message });
     }
 
+    const clinicId = clinicResult.data?.clinicaId ?? clinicResult.data?.id ?? Number(req.user.sub);
     const { crm, name, especialidade, bio, password, unidade, email } = req.body;
 
-    if (!crm || !name) {
+    if (!crm || !name || !unidade || !password) {
       return res.status(400).json({
         message: "Dados invalidos",
-        errors: [{ message: "CRM e nome sao obrigatorios" }]
+        errors: [{ message: "CRM, nome, unidade, senha e email sao obrigatorios" }]
       });
     }
 
@@ -306,7 +307,7 @@ router.post("/register/professional", authenticateToken, registerLimiter, async 
       crm,
       name,
       especialidade,
-      clinicaId: clinicResult.data.clinicaId,
+      clinicaId: clinicId,
       bio,
       password,
       unidade,
