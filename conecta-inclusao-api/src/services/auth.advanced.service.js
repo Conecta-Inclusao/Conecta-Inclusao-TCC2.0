@@ -744,19 +744,19 @@ export async function registerUser({ identifier, password, name, profile, userDa
           const guardianPasswordHash = await bcrypt.hash(String(userData.responsavel.password).trim(), SALT_ROUNDS);
           const [insertedGuardian] = await connection.execute(
             `INSERT INTO responsavel (nome, email, senha, status)
-             VALUES (?, ?, ?, 'ACTIVE')`,
+             VALUES (?, ?, ?, 'ACTIVE') RETURNING id`,
             [
               userData.responsavel.name,
               userData.responsavel.email,
               guardianPasswordHash
             ]
           );
-          responsavelId = insertedGuardian.insertId;
+          responsavelId = insertedGuardian.rows?.[0]?.id ?? insertedGuardian.insertId ?? null;
         }
 
         const [insertedPatient] = await connection.execute(
           `INSERT INTO pacientes (nome_paciente, cpf, email, tipo_deficiencia, data_nascimento, senha, id_responsavel, status)
-           VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE')`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE') RETURNING id`,
           [
             name,
             identifierInfo.value,
@@ -767,13 +767,14 @@ export async function registerUser({ identifier, password, name, profile, userDa
             responsavelId
           ]
         );
+        const patientId = insertedPatient.rows?.[0]?.id ?? insertedPatient.insertId ?? null;
 
         if (responsavelId) {
           await connection.execute(
             `INSERT INTO paciente_responsavel (id_paciente, id_responsavel, parentesco, permissions)
              VALUES (?, ?, ?, ?)`,
             [
-              insertedPatient.insertId,
+              patientId,
               responsavelId,
               userData.responsavel.relationship,
               JSON.stringify(userData.responsavel.permissions || [])
@@ -782,7 +783,7 @@ export async function registerUser({ identifier, password, name, profile, userDa
         }
 
         await connection.commit();
-        result = insertedPatient;
+        result = { insertId: patientId };
       } catch (err) {
         await connection.rollback();
         throw err;
@@ -792,13 +793,13 @@ export async function registerUser({ identifier, password, name, profile, userDa
     } else if (profile === "medico") {
       [result] = await pool.execute(
         `INSERT INTO medicos (name, crm, email, especialidade, clinica_id, bio, unidade, senha, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE')`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE') RETURNING id`,
         [name, identifierInfo.value, userData?.email || null, userData?.especialidade || null, userData?.clinicaId || null, userData?.bio || null, userData?.unidade, passwordHash]
       );
     } else {
       [result] = await pool.execute(
         `INSERT INTO clinicas (nome, cnpj, email, razao_social, endereco, cidade, estado, cep, telefone, responsavel, senha, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE')`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE') RETURNING id`,
         [
           name,
           identifierInfo.value,
@@ -855,7 +856,7 @@ export async function registerProfessional({ crm, name, especialidade, clinicaId
     const [result] = await pool.execute(
       `INSERT INTO medicos
        (name, clinica_id, crm, especialidade, bio, unidade, email, senha, status, must_change_password, temporary_password_token, temporary_password_expires_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', TRUE, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', TRUE, ?, ?) RETURNING id`,
       [name, clinicaId, crmInfo.value, especialidade || null, bio || null, unidade, email, passwordHash, passwordHash, nowPlusMinutes(60 * 24 * 7)]
     );
 
