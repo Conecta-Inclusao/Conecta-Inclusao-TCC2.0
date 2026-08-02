@@ -1,7 +1,9 @@
 // Importa o framework Express para criar a aplicação web 
 import path from "path";
 import { fileURLToPath } from "url";
+import http from "http";
 import express from "express"; 
+import { Server } from "socket.io";
 // Importa o Helmet, que adiciona headers de segurança HTTP à aplicação 
 import helmet from "helmet"; 
 // Importa o CORS (Cross-Origin Resource Sharing) para permitir requisições de outros domínios 
@@ -16,6 +18,41 @@ import agendamentosRoutes from "./routes/agendamentos.routes.js";
 
 // Exporta como named export para ser usada em outros arquivos (como server.js) 
 export const app = express(); 
+export const server = http.createServer(app);
+export const io = new Server(server, {
+  cors: {
+    origin: true,
+    methods: ["GET", "POST"],
+    credentials: true
+  }
+});
+
+io.on("connection", (socket) => {
+  socket.on("joinConversation", ({ roomId, userId, profile }) => {
+    if (!roomId) return;
+    socket.join(roomId);
+    socket.data.roomId = roomId;
+    socket.data.userId = userId;
+    socket.data.profile = profile;
+  });
+
+  socket.on("sendConversationMessage", ({ roomId, message, userId, profile }) => {
+    if (!roomId || !message) return;
+    io.to(roomId).emit("conversationMessage", {
+      roomId,
+      message,
+      userId,
+      profile,
+      createdAt: new Date().toISOString()
+    });
+  });
+
+  socket.on("disconnect", () => {
+    if (socket.data.roomId) {
+      socket.leave(socket.data.roomId);
+    }
+  });
+});
 
 // ============================================ 
 // MIDDLEWARES DE SEGURANÇA 

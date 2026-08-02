@@ -1,6 +1,6 @@
 import { pool } from "../db.js";
 
-async function resolveActor(reqUser) {
+export async function resolveActor(reqUser) {
   const profileId = Number(reqUser?.sub);
   const profile = reqUser?.profile;
 
@@ -54,7 +54,7 @@ async function ensureMessagingTable() {
   );
 }
 
-async function findLinkBetweenProfiles(actor, targetProfileId) {
+export async function findLinkBetweenProfiles(actor, targetProfileId) {
   if (actor.profile === "paciente") {
     const [rows] = await pool.execute(
       `SELECT
@@ -224,14 +224,10 @@ export async function getConversationWithUser(reqUser, targetProfileId) {
   }
 }
 
-export async function sendMessageToUser(reqUser, targetProfileId, content) {
+export async function saveMessageForConversation(actor, targetProfileId, content, appointmentId = null) {
   try {
     await ensureMessagingTable();
 
-    const actorResult = await resolveActor(reqUser);
-    if (!actorResult.ok) return actorResult;
-
-    const actor = actorResult.data;
     const normalizedTargetProfileId = Number(targetProfileId);
     const normalizedContent = String(content || "").trim();
 
@@ -252,11 +248,12 @@ export async function sendMessageToUser(reqUser, targetProfileId, content) {
       };
     }
 
+    const effectiveAppointmentId = Number(appointmentId || allowedLink.appointmentId);
     const [result] = await pool.execute(
       `INSERT INTO mensagens
        (agendamento_id, remetente_profile, remetente_profile_id, destinatario_profile, destinatario_profile_id, conteudo)
        VALUES (?, ?, ?, ?, ?, ?)`,
-      [allowedLink.appointmentId, actor.profile, actor.profileId, allowedLink.targetProfile, normalizedTargetProfileId, normalizedContent]
+      [effectiveAppointmentId, actor.profile, actor.profileId, allowedLink.targetProfile, normalizedTargetProfileId, normalizedContent]
     );
 
     return {
@@ -264,7 +261,7 @@ export async function sendMessageToUser(reqUser, targetProfileId, content) {
       statusCode: 201,
       data: {
         id: result.insertId,
-        appointmentId: allowedLink.appointmentId,
+        appointmentId: effectiveAppointmentId,
         senderProfile: actor.profile,
         senderProfileId: actor.profileId,
         senderUserId: actor.profileId,
@@ -274,6 +271,18 @@ export async function sendMessageToUser(reqUser, targetProfileId, content) {
         content: normalizedContent
       }
     };
+  } catch (error) {
+    console.error("Erro ao salvar mensagem da conversa:", error);
+    return { ok: false, statusCode: 500, message: "Erro interno do servidor." };
+  }
+}
+
+export async function sendMessageToUser(reqUser, targetProfileId, content) {
+  try {
+    const actorResult = await resolveActor(reqUser);
+    if (!actorResult.ok) return actorResult;
+
+    return saveMessageForConversation(actorResult.data, targetProfileId, content);
   } catch (error) {
     console.error("Erro em sendMessageToUser:", error);
     return { ok: false, statusCode: 500, message: "Erro interno do servidor." };

@@ -520,13 +520,15 @@ function initializeDebugPanel() {
     wrapper.id = 'debugPanelWrapper';
     wrapper.className = 'debug-panel-wrapper';
 
-    const button = document.createElement('button');
+
+    // BOTÃO DE DEBUG
+    /* const button = document.createElement('button');
     button.id = 'debugPanelToggle';
     button.type = 'button';
     button.textContent = 'DEBUG';
     button.title = 'Abrir painel de debug';
     button.className = 'debug-panel-toggle';
-    wrapper.appendChild(button);
+    wrapper.appendChild(button); */
 
     const panel = document.createElement('div');
     panel.id = 'debugPanel';
