@@ -8,23 +8,23 @@ function requiredEnv(name) {
   return value;
 }
 
-function createTransporter() {
-  return nodemailer.createTransport({
-    host: requiredEnv("SMTP_HOST"),
-    port: Number(process.env.SMTP_PORT || 587),
-    secure: String(process.env.SMTP_SECURE || "false").toLowerCase() === "true",
-    family: 4,
-    auth: {
-      user: requiredEnv("SMTP_USER"),
-      pass: requiredEnv("SMTP_PASS")
-    }
-  });
-}
+
 
 export async function sendPasswordResetEmail({ to, name, token, resetUrl }) {
   const transporter = createTransporter();
   const from = process.env.SMTP_FROM || process.env.SMTP_USER;
 
+return nodemailer.createTransport({
+  host: requiredEnv("SMTP_HOST"),
+  port: Number(process.env.SMTP_PORT || 587),
+  secure: String(process.env.SMTP_SECURE || "false").toLowerCase() === "true",
+  family: 4,
+  auth: {
+    user: requiredEnv("SMTP_USER"),
+    pass: requiredEnv("SMTP_PASS")
+  }
+
+});
   await transporter.sendMail({
     from,
     to,
