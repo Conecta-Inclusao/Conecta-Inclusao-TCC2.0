@@ -676,11 +676,11 @@ router.post("/patient/appointments", authenticateToken, async (req, res, next) =
 
     const [insertResult] = await pool.execute(
       `INSERT INTO agendamentos (clinica_id, paciente_id, medico_id, data_agendamento, status)
-       VALUES (?, ?, ?, ?, 'pendente')`,
+       VALUES (?, ?, ?, ?, 'pendente') RETURNING id`,
       [clinicaId, pacienteId, medico.id, appointmentDate]
     );
 
-    const createdId = insertResult.insertId;
+    const createdId = insertResult.rows?.[0]?.id ?? insertResult.insertId;
     if (!createdId) {
       return res.status(500).json({ message: 'Nao foi possivel criar o agendamento no banco de dados.' });
     }
@@ -719,13 +719,11 @@ router.post("/patient/guardians", authenticateToken, async (req, res, next) => {
       // Inserir na tabela responsavel
       const passwordHash = await bcrypt.hash(String(password), 10);
       const [insertResp] = await conn.execute(
-        `INSERT INTO responsavel (nome, email, senha) VALUES (?, ?, ?)`,
+        `INSERT INTO responsavel (nome, email, senha) VALUES (?, ?, ?) RETURNING id`,
         [name, email, passwordHash]
       );
-      console.log("Resultado da inserção do responsável:", insertResp);
 
-      const responsavelId = insertResp.insertId;
-      console.log("Responsavel criado com ID:", responsavelId);
+      const responsavelId = insertResp.rows?.[0]?.id ?? insertResp.insertId;
       if (!responsavelId) {
         await conn.rollback();
         return res.status(500).json({ message: 'Nao foi possivel criar o responsavel no banco de dados.' });
