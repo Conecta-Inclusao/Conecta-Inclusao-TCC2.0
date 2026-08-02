@@ -26,33 +26,47 @@ let appointmentsMonthFilter = '';
 let user = null;
 
 async function loadUserInfo() {
-    const profileResult = await getUserProfile();
-    if (profileResult.ok && profileResult.data) {
-        user = profileResult.data;
-        if (user.id) {
-            localStorage.setItem('patientId', String(user.id));
-        }
-    } else {
-        console.error('Falha ao carregar perfil do paciente:', profileResult);
-        user = {};
-    }
-
-    const patientId = user?.id || localStorage.getItem('patientId');
-    if (patientId) {
-        const appointmentsResult = await getPatientAppointments(patientId);
-        if (appointmentsResult.ok && Array.isArray(appointmentsResult.data)) {
-            patientAppointments = appointmentsResult.data;
+    try {
+        const profileResult = await getUserProfile();
+        if (profileResult.ok && profileResult.data) {
+            user = profileResult.data;
+            if (user.id) {
+                localStorage.setItem('patientId', String(user.id));
+            }
         } else {
-            console.error('Falha ao carregar agendamentos do paciente:', appointmentsResult);
-            patientAppointments = [];
+            console.error('Falha ao carregar perfil do paciente:', profileResult);
+            user = {};
         }
-        patientAppointmentsLoaded = true;
-    }
 
-    await fetchAvailableProfessionals();
-    renderGuardians();
-    loadPatientData();
-    refreshDashboard();
+        const patientId = user?.id || localStorage.getItem('patientId');
+        if (patientId) {
+            try {
+                const appointmentsResult = await getPatientAppointments(patientId);
+                if (appointmentsResult.ok && Array.isArray(appointmentsResult.data)) {
+                    patientAppointments = appointmentsResult.data;
+                } else {
+                    console.error('Falha ao carregar agendamentos do paciente:', appointmentsResult);
+                    patientAppointments = [];
+                }
+            } catch (error) {
+                console.error('Erro ao buscar agendamentos do paciente:', error);
+                patientAppointments = [];
+            }
+            patientAppointmentsLoaded = true;
+        }
+
+        await fetchAvailableProfessionals();
+        renderGuardians();
+        loadPatientData();
+        refreshDashboard();
+    } catch (error) {
+        console.error('Erro ao carregar dados do dashboard do paciente:', error);
+        user = {};
+        patientAppointments = [];
+        patientAppointmentsLoaded = true;
+        loadPatientData();
+        refreshDashboard();
+    }
 }
 
 function loadPatientData() {
@@ -1693,7 +1707,6 @@ async function cancelAppointment(button) {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-    await loadUserInfo();
     const navButtons = document.querySelectorAll('.nav-link');
     navButtons.forEach(button => {
         button.addEventListener('click', () => switchTab(button.dataset.tab));
@@ -1723,6 +1736,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         appointmentsMonthPicker.addEventListener('change', event => {
             updateAppointmentsMonthPicker(event.target.value);
         });
+    }
+
+    try {
+        await loadUserInfo();
+    } catch (error) {
+        console.error('Erro ao inicializar dashboard do paciente:', error);
+        loadPatientData();
+        refreshDashboard();
     }
 });
 
