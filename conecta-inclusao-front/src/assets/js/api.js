@@ -100,13 +100,20 @@ export async function getPatientAppointments(pacienteId) {
     if (!token) {
         return { ok: false, error: 'Token não encontrado' };
     }
-    const response = await fetch(`${window.APP_CONFIG?.API_URL || '/api'}/agendamentos/paciente/${pacienteId}`, {
-        headers: {
-            'Authorization': `Bearer ${token}`,
-        }
-    });
-    const data = await response.json();
-    return { ok: response.ok, status: response.status, data };
+
+    try {
+        const response = await fetch(`${window.APP_CONFIG?.API_URL || '/api'}/agendamentos/paciente/${pacienteId}`, {
+            headers: {
+                'Authorization': `Bearer ${token}`,
+            }
+        });
+        const data = await response.json();
+        const payload = Array.isArray(data) ? data : (data?.data && Array.isArray(data.data) ? data.data : []);
+        return { ok: response.ok, status: response.status, data: payload };
+    } catch (error) {
+        console.error('Erro ao buscar agendamentos do paciente:', error);
+        return { ok: false, status: 0, data: [] };
+    }
 }
 
 // Função para obter médicos disponíveis

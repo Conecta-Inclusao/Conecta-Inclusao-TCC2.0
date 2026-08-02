@@ -30,7 +30,10 @@ async function loadUserInfo() {
         const profileResult = await getUserProfile();
         if (profileResult.ok && profileResult.data) {
             user = profileResult.data;
-            if (user.id) {
+            if (user?.name) {
+                localStorage.setItem('patientName', String(user.name));
+            }
+            if (user?.id) {
                 localStorage.setItem('patientId', String(user.id));
             }
         } else {
@@ -42,8 +45,12 @@ async function loadUserInfo() {
         if (patientId) {
             try {
                 const appointmentsResult = await getPatientAppointments(patientId);
-                if (appointmentsResult.ok && Array.isArray(appointmentsResult.data)) {
-                    patientAppointments = appointmentsResult.data;
+                const appointmentsData = Array.isArray(appointmentsResult.data)
+                    ? appointmentsResult.data
+                    : (appointmentsResult.data?.data && Array.isArray(appointmentsResult.data.data) ? appointmentsResult.data.data : []);
+
+                if (appointmentsResult.ok && Array.isArray(appointmentsData)) {
+                    patientAppointments = appointmentsData;
                 } else {
                     console.error('Falha ao carregar agendamentos do paciente:', appointmentsResult);
                     patientAppointments = [];
@@ -768,7 +775,7 @@ function getAppointmentData() {
 }
 
 function getPatientName() {
-    return userProfile ? userProfile.name : 'Paciente';
+    return user?.name || localStorage.getItem('patientName') || 'Paciente';
 }
 
 function loadStoredConversations() {
