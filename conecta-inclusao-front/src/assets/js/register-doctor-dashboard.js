@@ -274,9 +274,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
 
+            // A senha exibida e a que a clinica acabou de digitar neste
+            // formulario. A API deixou de devolve-la no corpo da resposta -
+            // ecoar senha em texto claro deixa rastro em log de proxy.
             showCredentialsModal({
                 identifier: credentials.crm,
-                password: credentials.defaultPassword,
+                password,
                 name: credentials.name
             });
 

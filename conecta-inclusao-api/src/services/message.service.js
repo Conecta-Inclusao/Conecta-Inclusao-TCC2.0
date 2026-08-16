@@ -1,10 +1,21 @@
 import { pool } from "../db.js";
 
+// A tabela `mensagens` do schema real nao tem colunas de destinatario: uma
+// mensagem pertence a um agendamento, e o destinatario e sempre "a outra parte"
+// daquele atendimento. A conversa entre um paciente e um medico e, portanto, o
+// conjunto de mensagens de todos os agendamentos que ligam os dois.
+//
+// A versao anterior deste arquivo consultava remetente_profile/destinatario_*
+// e ainda rodava um CREATE TABLE com DDL de MySQL (AUTO_INCREMENT/ENUM) contra
+// o Postgres, o que fazia toda rota /messages responder 500.
+
+const MESSAGE_PROFILES = ["paciente", "medico"];
+
 export async function resolveActor(reqUser) {
   const profileId = Number(reqUser?.sub);
   const profile = reqUser?.profile;
 
-  if (!profileId || !["paciente", "medico"].includes(profile)) {
+  if (!profileId || !MESSAGE_PROFILES.includes(profile)) {
     return {
       ok: false,
       statusCode: 403,
@@ -12,90 +23,100 @@ export async function resolveActor(reqUser) {
     };
   }
 
-  if (profile === "paciente") {
-    const [rows] = await pool.execute(
-      `SELECT id, nome_paciente AS name FROM pacientes WHERE id = ? LIMIT 1`,
-      [profileId]
-    );
+  const [rows] = profile === "paciente"
+    ? await pool.execute(
+        `SELECT id, nome_paciente AS name FROM pacientes WHERE id = ? LIMIT 1`,
+        [profileId]
+      )
+    : await pool.execute(
+        `SELECT id, name FROM medicos WHERE id = ? LIMIT 1`,
+        [profileId]
+      );
 
-    if (!rows[0]) {
-      return { ok: false, statusCode: 404, message: "Paciente nao encontrado." };
-    }
-  } else {
-    const [rows] = await pool.execute(
-      `SELECT id, name FROM medicos WHERE id = ? LIMIT 1`,
-      [profileId]
-    );
-
-    if (!rows[0]) {
-      return { ok: false, statusCode: 404, message: "Medico nao encontrado." };
-    }
+  if (!rows[0]) {
+    return {
+      ok: false,
+      statusCode: 404,
+      message: profile === "paciente" ? "Paciente nao encontrado." : "Medico nao encontrado."
+    };
   }
 
   return {
     ok: true,
-    data: { profile, profileId }
+    data: { profile, profileId, name: rows[0].name }
   };
 }
 
-async function ensureMessagingTable() {
-  await pool.execute(
-    `CREATE TABLE IF NOT EXISTS mensagens (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      agendamento_id INT NOT NULL,
-      remetente_profile ENUM('paciente', 'medico') NOT NULL,
-      remetente_profile_id INT NOT NULL,
-      destinatario_profile ENUM('paciente', 'medico') NOT NULL,
-      destinatario_profile_id INT NOT NULL,
-      conteudo TEXT NOT NULL,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (agendamento_id) REFERENCES agendamentos(id) ON DELETE CASCADE
-    )`
-  );
-}
-
+/**
+ * Retorna o vinculo entre o ator e o outro perfil, ou null se eles nunca
+ * compartilharam um atendimento. Esta funcao e a unica autorizacao de
+ * mensagens: sem vinculo, nao ha conversa.
+ */
 export async function findLinkBetweenProfiles(actor, targetProfileId) {
-  if (actor.profile === "paciente") {
-    const [rows] = await pool.execute(
-      `SELECT
-          a.id AS appointmentId,
-          m.id AS targetProfileId,
-          'medico' AS targetProfile,
-          m.name AS targetName,
-          m.especialidade AS targetSpecialty,
-          m.unidade AS targetUnit
-       FROM agendamentos a
-       INNER JOIN medicos m ON m.id = a.medico_id
-       WHERE a.paciente_id = ? AND m.id = ?
-       ORDER BY a.data_agendamento DESC
-       LIMIT 1`,
-      [actor.profileId, targetProfileId]
-    );
+  const normalizedTargetProfileId = Number(targetProfileId);
 
-    return rows[0] || null;
+  if (!Number.isInteger(normalizedTargetProfileId) || normalizedTargetProfileId <= 0) {
+    return null;
   }
 
-  const [rows] = await pool.execute(
-    `SELECT
-        a.id AS appointmentId,
-        p.id AS targetProfileId,
-        'paciente' AS targetProfile,
-        p.nome_paciente AS targetName
-     FROM agendamentos a
-     INNER JOIN pacientes p ON p.id = a.paciente_id
-     WHERE a.medico_id = ? AND p.id = ?
-     ORDER BY a.data_agendamento DESC
-     LIMIT 1`,
-    [actor.profileId, targetProfileId]
-  );
+  const [rows] = actor.profile === "paciente"
+    ? await pool.execute(
+        `SELECT a.id AS appointment_id,
+                a.data_agendamento,
+                m.id AS target_id,
+                m.name AS target_name,
+                m.especialidade AS target_specialty,
+                m.unidade AS target_unit,
+                m.crm AS target_registry
+         FROM agendamentos a
+         INNER JOIN medicos m ON m.id = a.medico_id
+         WHERE a.paciente_id = ? AND a.medico_id = ?
+         ORDER BY a.data_agendamento DESC`,
+        [actor.profileId, normalizedTargetProfileId]
+      )
+    : await pool.execute(
+        `SELECT a.id AS appointment_id,
+                a.data_agendamento,
+                p.id AS target_id,
+                p.nome_paciente AS target_name,
+                NULL AS target_specialty,
+                NULL AS target_unit,
+                p.cpf AS target_registry
+         FROM agendamentos a
+         INNER JOIN pacientes p ON p.id = a.paciente_id
+         WHERE a.medico_id = ? AND a.paciente_id = ?
+         ORDER BY a.data_agendamento DESC`,
+        [actor.profileId, normalizedTargetProfileId]
+      );
 
-  return rows[0] || null;
+  if (!rows.length) return null;
+
+  return {
+    // Todos os agendamentos entre as duas partes compoem uma unica thread.
+    appointmentIds: rows.map((row) => Number(row.appointment_id)),
+    // Mensagens novas sao gravadas no atendimento mais recente.
+    appointmentId: Number(rows[0].appointment_id),
+    targetProfile: actor.profile === "paciente" ? "medico" : "paciente",
+    targetProfileId: Number(rows[0].target_id),
+    targetName: rows[0].target_name,
+    targetSpecialty: rows[0].target_specialty || null,
+    targetUnit: rows[0].target_unit || null,
+    targetRegistry: rows[0].target_registry || null
+  };
+}
+
+/**
+ * Nome canonico da sala de socket. Sempre derivado do par (paciente, medico)
+ * no servidor - o cliente nunca escolhe a sala em que entra.
+ */
+export function conversationRoom(actor, link) {
+  const pacienteId = actor.profile === "paciente" ? actor.profileId : link.targetProfileId;
+  const medicoId = actor.profile === "medico" ? actor.profileId : link.targetProfileId;
+  return `conversa:paciente:${pacienteId}:medico:${medicoId}`;
 }
 
 export async function listAllowedMessageContacts(reqUser) {
   try {
-    await ensureMessagingTable();
-
     const actorResult = await resolveActor(reqUser);
     if (!actorResult.ok) return actorResult;
 
@@ -103,20 +124,23 @@ export async function listAllowedMessageContacts(reqUser) {
 
     if (actor.profile === "paciente") {
       const [rows] = await pool.execute(
-        `SELECT
-            DISTINCT m.id AS profileId,
-            m.id AS userId,
-            'medico' AS profile,
-            m.name,
-            m.crm AS registry,
-            m.especialidade AS specialty,
-            m.unidade AS unit,
-            MAX(a.data_agendamento) AS lastAppointmentAt
+        `SELECT m.id AS "profileId",
+                m.id AS "userId",
+                'medico' AS profile,
+                m.name,
+                m.crm AS registry,
+                m.especialidade AS specialty,
+                m.unidade AS unit,
+                MAX(a.data_agendamento) AS "lastAppointmentAt",
+                COUNT(msg.id) FILTER (
+                  WHERE msg.remetente_profile = 'medico' AND msg.lida = FALSE
+                ) AS "unreadCount"
          FROM agendamentos a
          INNER JOIN medicos m ON m.id = a.medico_id
+         LEFT JOIN mensagens msg ON msg.agendamento_id = a.id
          WHERE a.paciente_id = ?
          GROUP BY m.id, m.name, m.crm, m.especialidade, m.unidade
-         ORDER BY lastAppointmentAt DESC, m.name ASC`,
+         ORDER BY "lastAppointmentAt" DESC, m.name ASC`,
         [actor.profileId]
       );
 
@@ -124,18 +148,20 @@ export async function listAllowedMessageContacts(reqUser) {
     }
 
     const [rows] = await pool.execute(
-      `SELECT
-          DISTINCT p.id AS profileId,
-          p.id AS userId,
-          'paciente' AS profile,
-          p.nome_paciente AS name,
-          p.cpf,
-          MAX(a.data_agendamento) AS lastAppointmentAt
+      `SELECT p.id AS "profileId",
+              p.id AS "userId",
+              'paciente' AS profile,
+              p.nome_paciente AS name,
+              MAX(a.data_agendamento) AS "lastAppointmentAt",
+              COUNT(msg.id) FILTER (
+                WHERE msg.remetente_profile = 'paciente' AND msg.lida = FALSE
+              ) AS "unreadCount"
        FROM agendamentos a
        INNER JOIN pacientes p ON p.id = a.paciente_id
+       LEFT JOIN mensagens msg ON msg.agendamento_id = a.id
        WHERE a.medico_id = ?
-       GROUP BY p.id, p.nome_paciente, p.cpf
-       ORDER BY lastAppointmentAt DESC, p.nome_paciente ASC`,
+       GROUP BY p.id, p.nome_paciente
+       ORDER BY "lastAppointmentAt" DESC, p.nome_paciente ASC`,
       [actor.profileId]
     );
 
@@ -146,22 +172,39 @@ export async function listAllowedMessageContacts(reqUser) {
   }
 }
 
+function serializeMessage(row, actor) {
+  return {
+    id: Number(row.id),
+    appointmentId: Number(row.appointmentId),
+    senderProfile: row.senderProfile,
+    senderProfileId: Number(row.senderProfileId),
+    content: row.content,
+    read: row.read === true,
+    createdAt: row.createdAt,
+    mine: row.senderProfile === actor.profile && Number(row.senderProfileId) === actor.profileId
+  };
+}
+
+async function markIncomingAsRead(actor, appointmentIds) {
+  await pool.execute(
+    `UPDATE mensagens
+     SET lida = TRUE
+     WHERE agendamento_id = ANY(?)
+       AND remetente_profile <> ?
+       AND lida = FALSE`,
+    [appointmentIds, actor.profile]
+  );
+}
+
 export async function getConversationWithUser(reqUser, targetProfileId) {
   try {
-    await ensureMessagingTable();
-
     const actorResult = await resolveActor(reqUser);
     if (!actorResult.ok) return actorResult;
 
     const actor = actorResult.data;
-    const normalizedTargetProfileId = Number(targetProfileId);
+    const link = await findLinkBetweenProfiles(actor, targetProfileId);
 
-    if (!normalizedTargetProfileId) {
-      return { ok: false, statusCode: 400, message: "Destino invalido." };
-    }
-
-    const allowedLink = await findLinkBetweenProfiles(actor, normalizedTargetProfileId);
-    if (!allowedLink) {
+    if (!link) {
       return {
         ok: false,
         statusCode: 403,
@@ -169,53 +212,36 @@ export async function getConversationWithUser(reqUser, targetProfileId) {
       };
     }
 
-    const [messages] = await pool.execute(
-      `SELECT
-          id,
-          agendamento_id AS appointmentId,
-          remetente_profile AS senderProfile,
-          remetente_profile_id AS senderProfileId,
-          remetente_profile_id AS senderUserId,
-          destinatario_profile AS recipientProfile,
-          destinatario_profile_id AS recipientProfileId,
-          destinatario_profile_id AS recipientUserId,
-          conteudo AS content,
-          created_at AS createdAt
+    const [rows] = await pool.execute(
+      `SELECT id,
+              agendamento_id AS "appointmentId",
+              remetente_profile AS "senderProfile",
+              remetente_profile_id AS "senderProfileId",
+              conteudo AS content,
+              lida AS read,
+              created_at AS "createdAt"
        FROM mensagens
-       WHERE agendamento_id = ?
-         AND (
-           (remetente_profile = ? AND remetente_profile_id = ? AND destinatario_profile = ? AND destinatario_profile_id = ?)
-           OR
-           (remetente_profile = ? AND remetente_profile_id = ? AND destinatario_profile = ? AND destinatario_profile_id = ?)
-         )
+       WHERE agendamento_id = ANY(?)
        ORDER BY created_at ASC, id ASC`,
-      [
-        allowedLink.appointmentId,
-        actor.profile,
-        actor.profileId,
-        allowedLink.targetProfile,
-        normalizedTargetProfileId,
-        allowedLink.targetProfile,
-        normalizedTargetProfileId,
-        actor.profile,
-        actor.profileId
-      ]
+      [link.appointmentIds]
     );
+
+    await markIncomingAsRead(actor, link.appointmentIds);
 
     return {
       ok: true,
       statusCode: 200,
       data: {
         contact: {
-          profileId: normalizedTargetProfileId,
-          userId: normalizedTargetProfileId,
-          profile: allowedLink.targetProfile,
-          name: allowedLink.targetName,
-          specialty: allowedLink.targetSpecialty || null,
-          unit: allowedLink.targetUnit || null
+          profileId: link.targetProfileId,
+          userId: link.targetProfileId,
+          profile: link.targetProfile,
+          name: link.targetName,
+          specialty: link.targetSpecialty,
+          unit: link.targetUnit
         },
-        appointmentId: allowedLink.appointmentId,
-        messages
+        appointmentId: link.appointmentId,
+        messages: rows.map((row) => serializeMessage(row, actor))
       }
     };
   } catch (error) {
@@ -224,23 +250,24 @@ export async function getConversationWithUser(reqUser, targetProfileId) {
   }
 }
 
-export async function saveMessageForConversation(actor, targetProfileId, content, appointmentId = null) {
+/**
+ * Persiste uma mensagem. Recebe o `actor` ja resolvido e revalida o vinculo,
+ * de modo que REST e socket compartilham exatamente a mesma autorizacao.
+ */
+export async function saveMessageForConversation(actor, targetProfileId, content) {
   try {
-    await ensureMessagingTable();
-
-    const normalizedTargetProfileId = Number(targetProfileId);
     const normalizedContent = String(content || "").trim();
-
-    if (!normalizedTargetProfileId) {
-      return { ok: false, statusCode: 400, message: "Destino invalido." };
-    }
 
     if (!normalizedContent) {
       return { ok: false, statusCode: 400, message: "A mensagem nao pode ser vazia." };
     }
 
-    const allowedLink = await findLinkBetweenProfiles(actor, normalizedTargetProfileId);
-    if (!allowedLink) {
+    if (normalizedContent.length > 2000) {
+      return { ok: false, statusCode: 400, message: "Mensagem muito longa." };
+    }
+
+    const link = await findLinkBetweenProfiles(actor, targetProfileId);
+    if (!link) {
       return {
         ok: false,
         statusCode: 403,
@@ -248,27 +275,30 @@ export async function saveMessageForConversation(actor, targetProfileId, content
       };
     }
 
-    const effectiveAppointmentId = Number(appointmentId || allowedLink.appointmentId);
     const [result] = await pool.execute(
-      `INSERT INTO mensagens
-       (agendamento_id, remetente_profile, remetente_profile_id, destinatario_profile, destinatario_profile_id, conteudo)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [effectiveAppointmentId, actor.profile, actor.profileId, allowedLink.targetProfile, normalizedTargetProfileId, normalizedContent]
+      `INSERT INTO mensagens (agendamento_id, remetente_profile, remetente_profile_id, conteudo, lida)
+       VALUES (?, ?, ?, ?, FALSE)
+       RETURNING id, created_at`,
+      [link.appointmentId, actor.profile, actor.profileId, normalizedContent]
     );
+
+    const inserted = result.rows?.[0] || {};
 
     return {
       ok: true,
       statusCode: 201,
       data: {
-        id: result.insertId,
-        appointmentId: effectiveAppointmentId,
-        senderProfile: actor.profile,
-        senderProfileId: actor.profileId,
-        senderUserId: actor.profileId,
-        recipientProfile: allowedLink.targetProfile,
-        recipientProfileId: normalizedTargetProfileId,
-        recipientUserId: normalizedTargetProfileId,
-        content: normalizedContent
+        message: {
+          id: Number(inserted.id),
+          appointmentId: link.appointmentId,
+          senderProfile: actor.profile,
+          senderProfileId: actor.profileId,
+          senderName: actor.name,
+          content: normalizedContent,
+          read: false,
+          createdAt: inserted.created_at || new Date().toISOString()
+        },
+        link
       }
     };
   } catch (error) {
@@ -282,7 +312,14 @@ export async function sendMessageToUser(reqUser, targetProfileId, content) {
     const actorResult = await resolveActor(reqUser);
     if (!actorResult.ok) return actorResult;
 
-    return saveMessageForConversation(actorResult.data, targetProfileId, content);
+    const result = await saveMessageForConversation(actorResult.data, targetProfileId, content);
+    if (!result.ok) return result;
+
+    return {
+      ok: true,
+      statusCode: 201,
+      data: result.data.message
+    };
   } catch (error) {
     console.error("Erro em sendMessageToUser:", error);
     return { ok: false, statusCode: 500, message: "Erro interno do servidor." };

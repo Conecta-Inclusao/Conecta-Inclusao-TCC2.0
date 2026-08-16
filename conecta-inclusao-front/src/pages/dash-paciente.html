@@ -406,20 +406,10 @@
                 </div>
                 <div class="input-group">
                     <label for="guardianPermissions">Permissões</label>
-                    <div class="permissions-grid">
-                        <label class="checkbox-item">
-                            <input type="checkbox" name="permissions" value="view_appointments" checked>
-                            <span>Ver agendamentos</span>
-                        </label>
-                        <label class="checkbox-item">
-                            <input type="checkbox" name="permissions" value="manage_appointments">
-                            <span>Gerenciar agendamentos</span>
-                        </label>
-                        <!-- Permissão removida -->
-                        <label class="checkbox-item">
-                            <input type="checkbox" name="permissions" value="send_messages">
-                            <span>Enviar mensagens</span>
-                        </label>
+                    <!-- Preenchido a partir de GET /auth/permissoes: os valores
+                         sao os ids da tabela `permissoes`, nao strings fixas. -->
+                    <div class="permissions-grid" id="guardianPermissionsGrid">
+                        <span style="color: #64748b;">Carregando permissões...</span>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -432,6 +422,25 @@
 
     <script src="../assets/js/config.js"></script>
     <script src="../assets/js/utils.js"></script>
-    <script type="module" src="../assets/js/dash-paciente.js"></script>
+    <!-- socket.io-client servido pelo proprio backend: cliente e servidor ficam
+         sempre na mesma versao e nao dependemos de CDN externa. O modulo do
+         dashboard so e carregado depois (ou apos falha), para nao travar a pagina. -->
+    <script>
+        (function () {
+            const base = window.APP_CONFIG?.API_BASE_URL || '';
+            const dashboard = document.createElement('script');
+            dashboard.type = 'module';
+            dashboard.src = '../assets/js/dash-paciente.js';
+
+            const socketScript = document.createElement('script');
+            socketScript.src = `${base}/socket.io/socket.io.js`;
+            socketScript.onload = () => document.body.appendChild(dashboard);
+            socketScript.onerror = () => {
+                console.warn('socket.io indisponivel; o chat usara apenas requisicoes REST.');
+                document.body.appendChild(dashboard);
+            };
+            document.body.appendChild(socketScript);
+        })();
+    </script>
 </body>
 </html>

@@ -2,13 +2,22 @@ import bcrypt from "bcrypt";
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import { pool } from "../db.js";
+import { env } from "../env.js";
 import { sendPasswordResetEmail } from "./email.service.js";
 
-const MAX = Number(process.env.MAX_LOGIN_ATTEMPTS || 3);
-const LOCK_MINUTES = Number(process.env.LOCK_MINUTES || 5);
-const TEMP_PASSWORD_RESET_EXPIRES_IN = process.env.TEMP_PASSWORD_RESET_EXPIRES_IN || "15m";
+const MAX = env.MAX_LOGIN_ATTEMPTS;
+const LOCK_MINUTES = env.LOCK_MINUTES;
+const TEMP_PASSWORD_RESET_EXPIRES_IN = env.TEMP_PASSWORD_RESET_EXPIRES_IN;
 const SALT_ROUNDS = 10;
-const PASSWORD_RESET_MINUTES = Number(process.env.PASSWORD_RESET_MINUTES || 30);
+const PASSWORD_RESET_MINUTES = env.PASSWORD_RESET_MINUTES;
+
+// Perfis que possuem colunas de bloqueio por tentativa. `responsavel` nao tem
+// failed_attempts/locked_until no schema, entao qualquer UPDATE nessas colunas
+// para esse perfil quebraria a query.
+const PROFILES_WITH_LOCKOUT = new Set(["paciente", "medico", "clinica"]);
+
+// Perfis cujo status e textual. `responsavel.status` e SMALLINT (1 = ativo).
+const ACTIVE_TEXT_STATUSES = ["active", "ativo", "trabalhando"];
 
 function nowPlusMinutes(min) {
   return new Date(Date.now() + min * 60 * 1000);
@@ -23,11 +32,18 @@ function isStrongPassword(password) {
     /[^A-Za-z0-9]/.test(password);
 }
 
+function isActiveRecord(record) {
+  if (record.profile === "responsavel") {
+    return Number(record.status) === 1;
+  }
+  return ACTIVE_TEXT_STATUSES.includes(String(record.status || "").toLowerCase());
+}
+
 function signAccessToken(record) {
   return jwt.sign(
     { sub: String(record.id), profile: record.profile },
-    process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRES_IN || "1h" }
+    env.JWT_SECRET,
+    { expiresIn: env.JWT_EXPIRES_IN }
   );
 }
 
@@ -98,8 +114,15 @@ function normalizeIdentifierByType(type, identifier) {
 }
 
 function buildResetUrl(token) {
-  const baseUrl = process.env.FRONTEND_BASE_URL || process.env.SMTP_FRONTEND_URL || "https://conecta-inclusao.onrender.com";
+  const baseUrl = env.FRONTEND_BASE_URL || "https://conecta-inclusao.onrender.com";
   return `${baseUrl.replace(/\/$/, "")}/reset-password.html?token=${encodeURIComponent(token)}`;
+}
+
+// Tokens de recuperacao sao 32 bytes aleatorios. Com essa entropia, guardar o
+// SHA-256 e suficiente e permite busca indexada por igualdade. O bcrypt anterior
+// obrigava a varrer todas as linhas com token pendente comparando uma a uma.
+function hashResetToken(token) {
+  return crypto.createHash("sha256").update(String(token)).digest("hex");
 }
 
 export function authenticateToken(req, res, next) {
@@ -110,9 +133,15 @@ export function authenticateToken(req, res, next) {
     return res.status(401).json({ message: "Token de acesso nao fornecido." });
   }
 
-  jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
+  jwt.verify(token, env.JWT_SECRET, (err, decoded) => {
     if (err) {
       return res.status(403).json({ message: "Token invalido ou expirado." });
+    }
+
+    // Tokens especiais (reset de senha temporaria, acesso a prontuario) nao
+    // valem como token de sessao.
+    if (decoded.type) {
+      return res.status(403).json({ message: "Token nao autorizado para esta operacao." });
     }
 
     req.user = decoded;
@@ -120,10 +149,23 @@ export function authenticateToken(req, res, next) {
   });
 }
 
+/**
+ * Middleware de autorizacao por perfil. Evita repetir o mesmo `if (req.user.profile
+ * !== 'x') return 403` em cada rota.
+ */
+export function requireProfile(...profiles) {
+  return (req, res, next) => {
+    if (!profiles.includes(req.user?.profile)) {
+      return res.status(403).json({ message: "Acesso negado para este perfil." });
+    }
+    next();
+  };
+}
+
 export async function getClinicDetails(clinicaId) {
   try {
     const [rows] = await pool.execute(
-      `SELECT id AS clinicaId, cnpj, nome, razao_social, endereco, cidade, estado, cep, telefone, responsavel
+      `SELECT id AS "clinicaId", cnpj, nome, razao_social, endereco, cidade, estado, cep, telefone, responsavel
        FROM clinicas
        WHERE id = ? LIMIT 1`,
       [clinicaId]
@@ -283,6 +325,9 @@ async function updateAuthState(profile, id, fields) {
   const table = tableForProfile(profile);
   if (!table) return;
 
+  // `responsavel` nao tem colunas de bloqueio; ignorar em vez de quebrar a query.
+  if (!PROFILES_WITH_LOCKOUT.has(profile)) return;
+
   const entries = Object.entries(fields);
   if (!entries.length) return;
 
@@ -298,7 +343,7 @@ async function validatePassword(record, password, expectedProfile = null) {
     return { ok: false, statusCode: 401, message: "Credenciais invalidas." };
   }
 
-  if (!["active", "ativo", "trabalhando"].includes(String(record.status || "").toLowerCase())) {
+  if (!isActiveRecord(record)) {
     return { ok: false, statusCode: 403, message: "Conta inativa." };
   }
 
@@ -316,7 +361,11 @@ async function validatePassword(record, password, expectedProfile = null) {
         failed_attempts: newFails,
         locked_until: nowPlusMinutes(LOCK_MINUTES)
       });
-      return { ok: false, statusCode: 423, message: "Multiplas tentativas incorretas. Conta bloqueada por 5 minutos." };
+      return {
+        ok: false,
+        statusCode: 423,
+        message: `Multiplas tentativas incorretas. Conta bloqueada por ${LOCK_MINUTES} minutos.`
+      };
     }
 
     await updateAuthState(record.profile, record.id, { failed_attempts: newFails });
@@ -337,7 +386,7 @@ async function validatePassword(record, password, expectedProfile = null) {
 
     const resetToken = jwt.sign(
       { sub: String(record.id), profile: "medico", type: "temporary_password_reset" },
-      process.env.JWT_SECRET,
+      env.JWT_SECRET,
       { expiresIn: TEMP_PASSWORD_RESET_EXPIRES_IN }
     );
 
@@ -410,7 +459,7 @@ export async function resetTemporaryProfessionalPassword({ resetToken, newPasswo
 
     let decoded;
     try {
-      decoded = jwt.verify(resetToken, process.env.JWT_SECRET);
+      decoded = jwt.verify(resetToken, env.JWT_SECRET);
     } catch {
       return { ok: false, statusCode: 401, message: "Token temporario invalido ou expirado." };
     }
@@ -432,7 +481,7 @@ export async function resetTemporaryProfessionalPassword({ resetToken, newPasswo
     }
 
     const doctor = rows[0];
-    if (!["active", "ativo", "trabalhando"].includes(String(doctor.status || "").toLowerCase())) {
+    if (!isActiveRecord(doctor)) {
       return { ok: false, statusCode: 403, message: "Conta inativa." };
     }
 
@@ -504,31 +553,17 @@ async function findPasswordResetAccount(type, identifier) {
   return null;
 }
 
-export async function getResponsavelPermissions(responsavelId) {
-  try {
-    const [rows] = await pool.execute(
-      `SELECT pr.id_paciente AS pacienteId, pr.parentesco AS relationship, pr.permissions
-       FROM paciente_responsavel pr
-       WHERE pr.id_responsavel = ?`,
-      [responsavelId]
-    );
-
-    const permissions = rows.map(row => ({
-      pacienteId: row.pacienteId,
-      relationship: row.relationship,
-      permissions: row.permissions
-        ? typeof row.permissions === 'string'
-          ? JSON.parse(row.permissions)
-          : row.permissions
-        : []
-    }));
-
-    return { ok: true, statusCode: 200, data: { permissions } };
-  } catch (err) {
-    console.error("Erro em getResponsavelPermissions:", err);
-    return { ok: false, statusCode: 500, message: "Erro interno do servidor." };
-  }
-}
+// ---------------------------------------------------------------------------
+// Permissoes de responsaveis
+//
+// O schema modela permissao por responsavel (tabela responsavel_permissoes),
+// nao por par paciente/responsavel. O codigo antigo lia uma coluna
+// `paciente_responsavel.permissions` que nunca existiu.
+//
+// Alem disso, quem concede permissao e o paciente - nao o proprio responsavel.
+// A rota antiga deixava o responsavel editar as proprias permissoes, o que e
+// escalonamento de privilegio.
+// ---------------------------------------------------------------------------
 
 export async function getAvailablePermissions() {
   try {
@@ -536,63 +571,145 @@ export async function getAvailablePermissions() {
       `SELECT id, nome FROM permissoes ORDER BY id ASC`
     );
 
-    const permissions = rows.map(row => ({
-      key: String(row.id),
-      label: row.nome
-    }));
-
-    return { ok: true, statusCode: 200, data: { permissions } };
+    return {
+      ok: true,
+      statusCode: 200,
+      data: {
+        permissions: rows.map((row) => ({ id: row.id, key: String(row.id), label: row.nome }))
+      }
+    };
   } catch (err) {
     console.error("Erro em getAvailablePermissions:", err);
     return { ok: false, statusCode: 500, message: "Erro interno do servidor." };
   }
 }
 
-export async function updateResponsavelPermissions(responsavelId, pacienteId, permissions) {
+export async function getResponsavelPermissions(responsavelId) {
   try {
-    if (!Array.isArray(permissions)) {
-      return { ok: false, statusCode: 400, message: "Permissions deve ser um array." };
-    }
-
-    const [result] = await pool.execute(
-      `UPDATE paciente_responsavel
-       SET permissions = ?
-       WHERE id_responsavel = ? AND id_paciente = ?`,
-      [JSON.stringify(permissions), responsavelId, pacienteId]
+    const [permissionRows] = await pool.execute(
+      `SELECT p.id, p.nome
+       FROM responsavel_permissoes rp
+       INNER JOIN permissoes p ON p.id = rp.id_permissao
+       WHERE rp.id_responsavel = ?
+       ORDER BY p.id ASC`,
+      [responsavelId]
     );
 
-    if (result.affectedRows === 0) {
-      return { ok: false, statusCode: 404, message: "Relacionamento nao encontrado ou nao autorizado." };
-    }
+    const [patientRows] = await pool.execute(
+      `SELECT pr.id_paciente AS "pacienteId",
+              pr.parentesco AS relationship,
+              pac.nome_paciente AS "pacienteName"
+       FROM paciente_responsavel pr
+       INNER JOIN pacientes pac ON pac.id = pr.id_paciente
+       WHERE pr.id_responsavel = ?`,
+      [responsavelId]
+    );
 
     return {
       ok: true,
       statusCode: 200,
       data: {
-        pacienteId,
-        permissions
+        permissions: permissionRows.map((row) => ({ id: row.id, key: String(row.id), label: row.nome })),
+        patients: patientRows
       }
     };
   } catch (err) {
-    console.error("Erro em updateResponsavelPermissions:", err);
+    console.error("Erro em getResponsavelPermissions:", err);
     return { ok: false, statusCode: 500, message: "Erro interno do servidor." };
   }
 }
 
+/**
+ * Substitui o conjunto de permissoes de um responsavel. So pode ser chamada
+ * apos confirmar que o responsavel esta vinculado ao paciente autenticado.
+ */
+export async function setGuardianPermissions(pacienteId, responsavelId, permissionIds) {
+  const connection = await pool.getConnection();
+
+  try {
+    if (!Array.isArray(permissionIds)) {
+      return { ok: false, statusCode: 400, message: "permissions deve ser um array de ids." };
+    }
+
+    const normalizedIds = [...new Set(
+      permissionIds
+        .map((id) => Number(id))
+        .filter((id) => Number.isInteger(id) && id > 0)
+    )];
+
+    await connection.beginTransaction();
+
+    const [linkRows] = await connection.execute(
+      `SELECT 1 FROM paciente_responsavel
+       WHERE id_paciente = ? AND id_responsavel = ? LIMIT 1`,
+      [pacienteId, responsavelId]
+    );
+
+    if (!linkRows.length) {
+      await connection.rollback();
+      return { ok: false, statusCode: 404, message: "Responsavel nao vinculado a este paciente." };
+    }
+
+    if (normalizedIds.length) {
+      const [validRows] = await connection.execute(
+        `SELECT id FROM permissoes WHERE id = ANY(?)`,
+        [normalizedIds]
+      );
+
+      if (validRows.length !== normalizedIds.length) {
+        await connection.rollback();
+        return { ok: false, statusCode: 400, message: "Uma ou mais permissoes nao existem." };
+      }
+    }
+
+    await connection.execute(
+      `DELETE FROM responsavel_permissoes WHERE id_responsavel = ?`,
+      [responsavelId]
+    );
+
+    for (const permissionId of normalizedIds) {
+      await connection.execute(
+        `INSERT INTO responsavel_permissoes (id_permissao, id_responsavel)
+         VALUES (?, ?) ON CONFLICT DO NOTHING`,
+        [permissionId, responsavelId]
+      );
+    }
+
+    await connection.commit();
+
+    return {
+      ok: true,
+      statusCode: 200,
+      data: { responsavelId, permissions: normalizedIds }
+    };
+  } catch (err) {
+    await connection.rollback();
+    console.error("Erro em setGuardianPermissions:", err);
+    return { ok: false, statusCode: 500, message: "Erro interno do servidor." };
+  } finally {
+    connection.release();
+  }
+}
+
 export async function requestPasswordReset({ type, identifier }) {
+  // Resposta sempre generica: retornar 404 quando o cadastro nao existe permite
+  // enumerar CPF/CNPJ/CRM validos do sistema.
+  const genericResponse = {
+    ok: true,
+    statusCode: 200,
+    message: "Se houver um cadastro com esse identificador, enviaremos um e-mail com as instrucoes.",
+    data: { email: null }
+  };
+
   try {
     const account = await findPasswordResetAccount(type, identifier);
 
-    if (!account) {
-      return { ok: false, statusCode: 404, message: "Cadastro nao encontrado para o identificador informado." };
-    }
-
-    if (!account.email) {
-      return { ok: false, statusCode: 400, message: "Este cadastro nao possui e-mail para recuperacao de senha." };
+    if (!account || !account.email) {
+      return genericResponse;
     }
 
     const token = crypto.randomBytes(32).toString("hex");
-    const tokenHash = await bcrypt.hash(token, SALT_ROUNDS);
+    const tokenHash = hashResetToken(token);
     const expiresAt = nowPlusMinutes(PASSWORD_RESET_MINUTES);
     const table = tableForProfile(account.profile);
 
@@ -603,56 +720,40 @@ export async function requestPasswordReset({ type, identifier }) {
       [tokenHash, expiresAt, account.id]
     );
 
-    const resetUrl = buildResetUrl(token);
     await sendPasswordResetEmail({
       to: account.email,
       name: account.name,
       token,
-      resetUrl
+      resetUrl: buildResetUrl(token)
     });
 
-    return {
-      ok: true,
-      statusCode: 200,
-      message: "Token de recuperacao enviado para o e-mail cadastrado.",
-      data: { email: maskEmail(account.email) }
-    };
+    return { ...genericResponse, data: { email: maskEmail(account.email) } };
   } catch (err) {
     console.error("Erro em requestPasswordReset:", err);
-    return { ok: false, statusCode: 500, message: "Erro ao enviar e-mail de recuperacao." };
+    // Mesmo em falha de envio, nao revela se o cadastro existe.
+    return genericResponse;
   }
 }
 
 async function findAccountByResetToken(token) {
-  const queries = [
-    {
-      profile: "paciente",
-      table: "pacientes",
-      sql: `SELECT id, nome_paciente AS name, email, password_reset_token, password_reset_expires_at
-            FROM pacientes
-            WHERE password_reset_token IS NOT NULL`
-    },
-    {
-      profile: "medico",
-      table: "medicos",
-      sql: `SELECT id, name, email, password_reset_token, password_reset_expires_at
-            FROM medicos
-            WHERE password_reset_token IS NOT NULL`
-    },
-    {
-      profile: "clinica",
-      table: "clinicas",
-      sql: `SELECT id, nome AS name, email, password_reset_token, password_reset_expires_at
-            FROM clinicas
-            WHERE password_reset_token IS NOT NULL`
-    }
+  const tokenHash = hashResetToken(token);
+
+  const sources = [
+    { profile: "paciente", table: "pacientes", nameColumn: "nome_paciente" },
+    { profile: "medico", table: "medicos", nameColumn: "name" },
+    { profile: "clinica", table: "clinicas", nameColumn: "nome" }
   ];
 
-  for (const query of queries) {
-    const [rows] = await pool.execute(query.sql);
-    for (const row of rows) {
-      const matches = await bcrypt.compare(token, row.password_reset_token);
-      if (matches) return { ...row, profile: query.profile, table: query.table };
+  for (const source of sources) {
+    const [rows] = await pool.execute(
+      `SELECT id, ${source.nameColumn} AS name, email, password_reset_expires_at
+       FROM ${source.table}
+       WHERE password_reset_token = ? LIMIT 1`,
+      [tokenHash]
+    );
+
+    if (rows[0]) {
+      return { ...rows[0], profile: source.profile, table: source.table };
     }
   }
 
@@ -742,9 +843,10 @@ export async function registerUser({ identifier, password, name, profile, userDa
         let responsavelId = null;
         if (userData?.responsavel) {
           const guardianPasswordHash = await bcrypt.hash(String(userData.responsavel.password).trim(), SALT_ROUNDS);
+          // responsavel.status e SMALLINT (1 = ativo). Antes era gravado 'ACTIVE'.
           const [insertedGuardian] = await connection.execute(
             `INSERT INTO responsavel (nome, email, senha, status)
-             VALUES (?, ?, ?, 'ACTIVE') RETURNING id`,
+             VALUES (?, ?, ?, 1) RETURNING id`,
             [
               userData.responsavel.name,
               userData.responsavel.email,
@@ -771,15 +873,23 @@ export async function registerUser({ identifier, password, name, profile, userDa
 
         if (responsavelId) {
           await connection.execute(
-            `INSERT INTO paciente_responsavel (id_paciente, id_responsavel, parentesco, permissions)
-             VALUES (?, ?, ?, ?)`,
-            [
-              patientId,
-              responsavelId,
-              userData.responsavel.relationship,
-              JSON.stringify(userData.responsavel.permissions || [])
-            ]
+            `INSERT INTO paciente_responsavel (id_paciente, id_responsavel, parentesco)
+             VALUES (?, ?, ?)`,
+            [patientId, responsavelId, userData.responsavel.relationship]
           );
+
+          // Permissoes vivem em responsavel_permissoes, nao numa coluna JSON.
+          const permissionIds = (userData.responsavel.permissions || [])
+            .map((id) => Number(id))
+            .filter((id) => Number.isInteger(id) && id > 0);
+
+          for (const permissionId of permissionIds) {
+            await connection.execute(
+              `INSERT INTO responsavel_permissoes (id_permissao, id_responsavel)
+               VALUES (?, ?) ON CONFLICT DO NOTHING`,
+              [permissionId, responsavelId]
+            );
+          }
         }
 
         await connection.commit();
@@ -825,7 +935,9 @@ export async function registerUser({ identifier, password, name, profile, userDa
   } catch (err) {
     console.error("Erro em registerUser:", err);
 
-    if (err.code === "ER_DUP_ENTRY") {
+    // 23505 = unique_violation no Postgres (o codigo antigo checava ER_DUP_ENTRY,
+    // que e do MySQL e nunca casava).
+    if (err.code === "23505") {
       return { ok: false, statusCode: 409, message: "Identificador ou email ja cadastrado." };
     }
 
@@ -845,13 +957,11 @@ export async function registerProfessional({ crm, name, especialidade, clinicaId
     }
 
     const passwordTrimmed = password.trim();
-    const strongPasswordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
-    if (!strongPasswordRegex.test(passwordTrimmed)) {
-      return { ok: false, statusCode: 400, message: "Senha deve ter 8 caracteres, maiúscula, minúscula, número e caractere especial." };
+    if (!isStrongPassword(passwordTrimmed)) {
+      return { ok: false, statusCode: 400, message: "Senha deve ter 8 caracteres, maiuscula, minuscula, numero e caractere especial." };
     }
 
-    const defaultPassword = passwordTrimmed;
-    const passwordHash = await bcrypt.hash(defaultPassword, SALT_ROUNDS);
+    const passwordHash = await bcrypt.hash(passwordTrimmed, SALT_ROUNDS);
 
     const [result] = await pool.execute(
       `INSERT INTO medicos
@@ -864,10 +974,11 @@ export async function registerProfessional({ crm, name, especialidade, clinicaId
       ok: true,
       statusCode: 201,
       message: "Profissional registrado com sucesso.",
+      // A senha nao volta no corpo da resposta: quem chamou acabou de defini-la,
+      // e ecoar senha em texto claro deixa rastro em log de proxy e no devtools.
       data: {
         id: result.insertId,
         crm: crmInfo.value,
-        defaultPassword,
         name,
         unidade
       }
@@ -875,11 +986,11 @@ export async function registerProfessional({ crm, name, especialidade, clinicaId
   } catch (err) {
     console.error("Erro em registerProfessional:", err);
 
-    if (err.code === "ER_DUP_ENTRY") {
+    if (err.code === "23505") {
       return { ok: false, statusCode: 409, message: "CRM ou email ja cadastrado." };
     }
 
-    if (err.message?.includes("FK_medicos_clinica")) {
+    if (err.code === "23503") {
       return { ok: false, statusCode: 404, message: "Clinica nao encontrada." };
     }
 

@@ -147,7 +147,6 @@ export async function getProfessionalAppointments(profissionalId, { limit = 100,
     }
 }
 
-// Função para obter lista de clínicas
 // Funcao para atualizar status do agendamento
 export async function updateAppointmentStatus(appointmentId, status) {
     const token = getToken();
@@ -172,11 +171,9 @@ export async function updateAppointmentStatus(appointmentId, status) {
     }
 }
 
-export async function getClinicas() {
-    const response = await fetch(`${window.APP_CONFIG?.API_URL || '/api'}/clinica`);
-    const data = await response.json();
-    return { ok: response.ok, status: response.status, data };
-}
+// getClinicas foi removida: apontava para /api/clinica (rota inexistente) e o
+// modulo /api/clinicas do backend era codigo morto, escrito contra tabelas
+// (`usuarios`, `clinica_especialidades`) que nao existem no schema.
 
 // Função para obter profissionais da clínica
 export async function getClinicProfessionals() {

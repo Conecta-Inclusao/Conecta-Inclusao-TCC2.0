@@ -100,9 +100,12 @@ export async function createAgendamento(data) {
             };
         }
 
+        // RETURNING id e obrigatorio: sem ele o mapResult de db.js le rows[0].id
+        // de um resultado vazio e o insertId volta sempre null.
         const [result] = await pool.execute(
             `INSERT INTO agendamentos (clinica_id, paciente_id, medico_id, data_agendamento, status)
-             VALUES (?, ?, ?, ?, 'pendente')`,
+             VALUES (?, ?, ?, ?, 'pendente')
+             RETURNING id`,
             [
                 clinica.id,
                 paciente.id,
@@ -116,7 +119,7 @@ export async function createAgendamento(data) {
             statusCode: 201,
             message: "Agendamento criado com sucesso",
             data: {
-                id: result.insertId,
+                id: result.rows?.[0]?.id ?? result.insertId,
                 clinica_id: clinica.id,
                 paciente_id: paciente.id,
                 medico_id: profissional.id,

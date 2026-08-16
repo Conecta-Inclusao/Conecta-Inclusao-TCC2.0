@@ -1,4 +1,10 @@
 import { getUserProfile, getPatientAppointments, getAvailableDoctors } from './api.js';
+import {
+    createChatClient,
+    fetchContacts,
+    fetchConversation,
+    formatMessageTime
+} from './realtime-chat.js';
 
 const PROFESSIONALS_STORAGE_KEY = 'companyProfessionals';
 const PATIENT_MESSAGES_STORAGE_KEY = 'patientProfessionalMessages';
@@ -19,6 +25,14 @@ const CHATBOT_QUICK_ACTIONS = [
 ];
 let activeChatContactKey = CHATBOT_CONTACT.key;
 let chatbotScheduleDraft = null;
+
+// --- Chat com profissionais (tempo real, persistido no backend) -------------
+// O chatbot continua sendo local (localStorage). Conversas com medicos passaram
+// a vir de /messages + socket autenticado, em vez de respostas simuladas.
+let professionalContacts = [];
+let activeConversationMessages = [];
+let chatConnectionStatus = 'desconectado';
+let chatClient = null;
 let patientAppointments = [];
 let patientAppointmentsLoaded = false;
 let availableProfessionals = [];
@@ -276,6 +290,45 @@ function closeGuardianModal() {
     }
 }
 
+// Catalogo de permissoes vindo do banco (tabela `permissoes`).
+let availablePermissions = [];
+
+async function loadAvailablePermissions() {
+    const grid = document.getElementById('guardianPermissionsGrid');
+    const token = localStorage.getItem('token');
+
+    if (!grid || !token) return;
+
+    try {
+        const response = await fetch(`${window.APP_CONFIG?.AUTH_API_URL || '/auth'}/permissoes`, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+
+        const body = await response.json();
+        availablePermissions = Array.isArray(body?.permissions) ? body.permissions : [];
+    } catch (error) {
+        console.error('Erro ao carregar permissões:', error);
+        availablePermissions = [];
+    }
+
+    if (!availablePermissions.length) {
+        grid.innerHTML = '<span style="color: #64748b;">Nenhuma permissão disponível.</span>';
+        return;
+    }
+
+    grid.innerHTML = availablePermissions.map((permission, index) => `
+        <label class="checkbox-item">
+            <input type="checkbox" name="permissions" value="${permission.id}"${index === 0 ? ' checked' : ''}>
+            <span>${escapeHTML(permission.label)}</span>
+        </label>
+    `).join('');
+}
+
+function permissionLabelById(id) {
+    const found = availablePermissions.find(permission => String(permission.id) === String(id));
+    return found ? found.label : String(id);
+}
+
 // Carregar responsáveis do localStorage
 function loadGuardians() {
     try {
@@ -349,14 +402,7 @@ function renderGuardians() {
 
         guardians.forEach((guardian, index) => {
         const permissionsText = (guardian.permissions || [])
-            .map(p => {
-                const permissionMap = {
-                    'view_appointments': 'Ver agendamentos',
-                    'manage_appointments': 'Gerenciar agendamentos',
-                    'send_messages': 'Enviar mensagens'
-                };
-                return permissionMap[p] || p;
-            })
+            .map(permissionLabelById)
             .join(', ');
 
         const card = document.createElement('div');
@@ -364,8 +410,8 @@ function renderGuardians() {
         card.innerHTML = `
             <div class="guardian-card-header">
                 <div class="guardian-info">
-                    <strong>${guardian.name}</strong>
-                    <span>${guardian.relationship}</span>
+                    <strong>${escapeHTML(guardian.name || '')}</strong>
+                    <span>${escapeHTML(guardian.relationship || '')}</span>
                 </div>
                 <div class="guardian-actions">
                     <button class="btn-secondary" type="button" onclick="editGuardian(${index})">
@@ -379,17 +425,17 @@ function renderGuardians() {
             <div class="guardian-details">
                 <div class="guardian-detail">
                     <label>E-mail</label>
-                    <p>${guardian.email}</p>
+                    <p>${escapeHTML(guardian.email || '')}</p>
                 </div>
                 <div class="guardian-detail">
                     <label>Acesso desde</label>
-                    <p>${guardian.dateAdded || 'Hoje'}</p>
+                    <p>${escapeHTML(guardian.dateAdded || 'Hoje')}</p>
                 </div>
             </div>
             <div class="guardian-permissions">
                 <div class="guardian-permissions-label">Permissões concedidas:</div>
                 <div class="permissions-list">
-                    ${permissionsText ? permissionsText.split(', ').map(p => `<span class="permission-badge"><i class="ph ph-check-circle"></i>${p}</span>`).join('') : '<span style="color: #64748b;">Nenhuma permissão</span>'}
+                    ${permissionsText ? permissionsText.split(', ').map(p => `<span class="permission-badge"><i class="ph ph-check-circle"></i>${escapeHTML(p)}</span>`).join('') : '<span style="color: #64748b;">Nenhuma permissão</span>'}
                 </div>
             </div>
         `;
@@ -477,13 +523,19 @@ function renderSuggestions() {
         const card = document.createElement('div');
         card.className = 'suggestion-card';
         card.innerHTML = `
-            <strong>${specialty}</strong>
-            <span>${firstProf.unidade || 'Unidade não informada'}</span>
+            <strong>${escapeHTML(specialty)}</strong>
+            <span>${escapeHTML(firstProf.unidade || 'Unidade não informada')}</span>
             <p>${countText} disponível${professionals.length > 1 ? 's' : ''}. Agenda aberta para agendamentos.</p>
-            <button class="btn-schedule-suggestion" type="button" onclick="scrollToSpecialty('${specialty}')">
+            <button class="btn-schedule-suggestion" type="button" data-specialty="${escapeHTML(specialty)}">
                 Agendar
             </button>
         `;
+        // Listener no lugar de onclick="scrollToSpecialty('...')": a
+        // especialidade vem do banco e quebrava (ou injetava) o atributo inline
+        // quando continha aspas.
+        card.querySelector('.btn-schedule-suggestion')
+            ?.addEventListener('click', () => scrollToSpecialty(specialty));
+
         suggestionGrid.appendChild(card);
         cardCount++;
     });
@@ -809,57 +861,39 @@ function normalizeText(value) {
         .replace(/[\u0300-\u036f]/g, '');
 }
 
+// Os contatos de profissional vem do backend: sao exatamente aqueles com quem
+// o paciente compartilha um atendimento. Antes eram derivados de um campo
+// `appointment.contactKey` que nunca era preenchido.
 function getMessageContacts() {
-    const contactsMap = new Map();
+    const professionals = professionalContacts.map(contact => ({
+        key: `pro-${contact.profileId}`,
+        profileId: contact.profileId,
+        name: contact.name || 'Profissional',
+        specialty: contact.specialty || 'Especialidade nao informada',
+        hospital: contact.unit || 'Unidade nao informada',
+        unreadCount: Number(contact.unreadCount || 0),
+        type: 'professional'
+    }));
 
-    getAppointmentData().forEach(appointment => {
-        if (!appointment.doctor) return;
-
-        if (!contactsMap.has(appointment.contactKey)) {
-            contactsMap.set(appointment.contactKey, {
-                key: appointment.contactKey,
-                name: appointment.doctor,
-                specialty: appointment.specialty,
-                hospital: appointment.hospital,
-                date: appointment.date
-            });
-        }
-    });
-
-    const appointmentContacts = Array.from(contactsMap.values())
-        .sort((first, second) => first.name.localeCompare(second.name, 'pt-BR'));
-
-    return [CHATBOT_CONTACT, ...appointmentContacts];
+    return [CHATBOT_CONTACT, ...professionals];
 }
 
-function createInitialConversation(contact) {
-    if (contact.type === 'bot') {
-        return [
-            {
-                sender: 'bot',
-                content: `Ola, ${getPatientName()}. Sou a Assistente Conecta. Posso te ajudar com agendamentos, preparo para consultas, documentos, responsaveis e orientacoes gerais do portal.`,
-                timestamp: formatDateTime()
-            }
-        ];
-    }
-
+function createInitialBotConversation() {
     return [
         {
-            sender: 'professional',
-            content: `Ola, eu sou a assistente virtual de ${contact.name}. Posso te ajudar com orientacoes sobre sua consulta de ${contact.specialty.toLowerCase()} em ${contact.hospital}.`,
+            sender: 'bot',
+            content: `Ola, ${getPatientName()}. Sou a Assistente Conecta. Posso te ajudar com agendamentos, preparo para consultas, documentos, responsaveis e orientacoes gerais do portal.`,
             timestamp: formatDateTime()
         }
     ];
 }
 
 function ensureConversationExists(contactKey) {
-    const contacts = getMessageContacts();
-    const contact = contacts.find(item => item.key === contactKey);
-    if (!contact) return [];
+    if (contactKey !== CHATBOT_CONTACT.key) return [];
 
     const conversations = loadStoredConversations();
     if (!Array.isArray(conversations[contactKey]) || conversations[contactKey].length === 0) {
-        conversations[contactKey] = createInitialConversation(contact);
+        conversations[contactKey] = createInitialBotConversation();
         saveStoredConversations(conversations);
     }
 
@@ -870,31 +904,96 @@ function getActiveContact() {
     return getMessageContacts().find(contact => contact.key === activeChatContactKey) || null;
 }
 
-function buildAiReply(contact, userMessage) {
-    if (contact.type === 'bot') {
-        return buildChatbotReply(userMessage);
+/** Carrega contatos reais do backend e reaproveita a conversa ativa. */
+async function loadProfessionalContacts() {
+    try {
+        professionalContacts = await fetchContacts();
+    } catch (error) {
+        console.error('Erro ao carregar contatos de mensagens:', error);
+        professionalContacts = [];
     }
 
-    const normalizedMessage = userMessage.toLowerCase();
-
-    if (normalizedMessage.includes('horario') || normalizedMessage.includes('hora') || normalizedMessage.includes('dia')) {
-        return `Verifiquei aqui: o ideal e manter o horario ja agendado para ${formatDate(contact.date)}. Se quiser remarcacao, eu posso te orientar a procurar outro horario disponivel com ${contact.name}.`;
-    }
-
-    if (normalizedMessage.includes('exame') || normalizedMessage.includes('documento')) {
-        return `Para a consulta com ${contact.name}, leve seus documentos pessoais e, se tiver, exames recentes relacionados a ${contact.specialty.toLowerCase()}. Isso ajuda bastante no atendimento.`;
-    }
-
-    if (normalizedMessage.includes('dor') || normalizedMessage.includes('sintoma') || normalizedMessage.includes('febre')) {
-        return `Entendi. Vou registrar sua queixa para o atendimento com ${contact.name}. Se os sintomas piorarem antes da consulta, procure atendimento imediato na unidade mais proxima.`;
-    }
-
-    if (normalizedMessage.includes('obrigad')) {
-        return `Por nada. Sempre que precisar, pode me chamar por aqui e eu te ajudo com informacoes sobre seu atendimento com ${contact.name}.`;
-    }
-
-    return `Recebi sua mensagem e deixei tudo organizado para o atendimento com ${contact.name}. Se quiser, me diga se sua duvida e sobre preparo, horario, documentos ou sintomas antes da consulta.`;
+    renderMessageContacts();
+    renderActiveConversation();
 }
+
+/** Abre a conversa com um profissional: historico via REST + sala via socket. */
+async function openProfessionalConversation(contact) {
+    activeConversationMessages = [];
+    renderActiveConversation();
+
+    const conversation = await fetchConversation(contact.profileId);
+    activeConversationMessages = conversation?.messages || [];
+
+    if (chatClient) {
+        const joinResult = await chatClient.join(contact.profileId);
+        if (!joinResult.ok) {
+            console.warn('Nao foi possivel entrar na conversa:', joinResult.message);
+        }
+    }
+
+    // Ao abrir, as mensagens recebidas ficam lidas no servidor.
+    const target = professionalContacts.find(item => item.profileId === contact.profileId);
+    if (target) target.unreadCount = 0;
+
+    renderMessageContacts();
+    renderActiveConversation();
+}
+
+function initChatClient() {
+    if (chatClient) return;
+
+    chatClient = createChatClient({
+        onMessage: (message) => {
+            const contact = getActiveContact();
+            if (!contact || contact.type !== 'professional') return;
+
+            // Ignora eco de mensagem que ja esta na lista (envio otimista).
+            if (activeConversationMessages.some(item => item.id === message.id)) return;
+
+            activeConversationMessages.push(message);
+            renderActiveConversation();
+        },
+        onNotification: (notice) => {
+            const target = professionalContacts.find(
+                item => Number(item.profileId) === Number(notice.fromProfileId)
+            );
+
+            const active = getActiveContact();
+            const isActiveConversation = active?.type === 'professional'
+                && Number(active.profileId) === Number(notice.fromProfileId);
+
+            if (target && !isActiveConversation) {
+                target.unreadCount = Number(target.unreadCount || 0) + 1;
+                renderMessageContacts();
+            }
+        },
+        onStatus: (state, detail) => {
+            chatConnectionStatus = state;
+            if (state === 'erro') console.warn('Chat:', detail);
+            updateChatStatusPill();
+        }
+    });
+
+    chatClient.connect();
+}
+
+function updateChatStatusPill() {
+    const pill = document.querySelector('.chat-status-pill');
+    if (!pill) return;
+
+    const contact = getActiveContact();
+
+    if (!contact || contact.type === 'bot') {
+        pill.textContent = 'Online';
+        return;
+    }
+
+    pill.textContent = chatConnectionStatus === 'conectado' ? 'Online' : 'Reconectando...';
+}
+
+// buildAiReply foi removida: as respostas de profissional eram simuladas no
+// proprio navegador. Agora quem responde e o medico, pelo painel dele.
 
 function handleChatbotScheduling(userMessage) {
     const professionals = availableProfessionals;
@@ -1066,18 +1165,26 @@ function renderMessageContacts() {
     contacts.forEach(contact => {
         ensureConversationExists(contact.key);
 
+        const unread = Number(contact.unreadCount || 0);
         const button = document.createElement('button');
         button.type = 'button';
         button.className = `chat-contact-card${contact.key === activeChatContactKey ? ' active' : ''}`;
         button.innerHTML = `
-            <strong>${escapeHTML(contact.name)}</strong>
+            <strong>${escapeHTML(contact.name)}${unread ? ` <span class="chat-unread-badge">${unread}</span>` : ''}</strong>
             <span>${escapeHTML(contact.specialty)}</span>
             <small>${escapeHTML(contact.hospital)}</small>
         `;
         button.addEventListener('click', () => {
             activeChatContactKey = contact.key;
             renderMessageContacts();
-            renderActiveConversation();
+
+            if (contact.type === 'professional') {
+                openProfessionalConversation(contact);
+            } else {
+                activeConversationMessages = [];
+                if (chatClient) chatClient.leave();
+                renderActiveConversation();
+            }
         });
         contactsContainer.appendChild(button);
     });
@@ -1111,27 +1218,50 @@ function renderActiveConversation() {
         return;
     }
 
-    const messages = ensureConversationExists(contact.key);
     contactName.textContent = contact.name;
     contactMeta.textContent = contact.type === 'bot'
         ? 'Chatbot de apoio ao paciente. Para urgencias, procure atendimento imediato.'
-        : `${contact.specialty} - ${contact.hospital} - Resposta assistida por IA.`;
+        : `${contact.specialty} - ${contact.hospital}`;
     messageInput.disabled = false;
     sendMessageButton.disabled = false;
-
     messagesList.innerHTML = '';
 
-    messages.forEach(message => {
+    // O chatbot continua local; a conversa com profissional vem do backend.
+    const bubbles = contact.type === 'bot'
+        ? ensureConversationExists(contact.key).map(message => ({
+            mine: message.sender === 'patient',
+            author: message.sender === 'patient' ? getPatientName() : contact.name,
+            content: message.content,
+            timestamp: message.timestamp
+        }))
+        : activeConversationMessages.map(message => ({
+            mine: message.senderProfile === 'paciente',
+            author: message.senderProfile === 'paciente' ? getPatientName() : contact.name,
+            content: message.content,
+            timestamp: formatMessageTime(message.createdAt)
+        }));
+
+    if (!bubbles.length) {
+        messagesList.innerHTML = `
+            <div class="chat-empty">
+                <i class="ph ph-chat-circle-dots"></i>
+                <p>Nenhuma mensagem ainda. Escreva a primeira.</p>
+            </div>
+        `;
+    }
+
+    bubbles.forEach(bubbleData => {
         const bubble = document.createElement('div');
-        bubble.className = `chat-bubble ${message.sender}`;
+        bubble.className = `chat-bubble ${bubbleData.mine ? 'patient' : 'professional'}`;
         bubble.innerHTML = `
-            <div>${escapeHTML(message.content)}</div>
-            <span class="chat-bubble-meta">${escapeHTML(message.sender === 'patient' ? getPatientName() : contact.name)} - ${escapeHTML(message.timestamp)}</span>
+            <div>${escapeHTML(bubbleData.content)}</div>
+            <span class="chat-bubble-meta">${escapeHTML(bubbleData.author)} - ${escapeHTML(bubbleData.timestamp)}</span>
         `;
         messagesList.appendChild(bubble);
     });
 
     renderChatbotQuickActions(contact);
+    updateChatStatusPill();
     messagesList.scrollTop = messagesList.scrollHeight;
 }
 
@@ -1166,27 +1296,48 @@ function appendMessageToConversation(contactKey, message) {
     saveStoredConversations(conversations);
 }
 
-function sendPatientMessage(content) {
+async function sendPatientMessage(content) {
     const contact = getActiveContact();
     if (!contact) return;
 
-    appendMessageToConversation(contact.key, {
-        sender: 'patient',
-        content,
-        timestamp: formatDateTime()
-    });
-
-    renderActiveConversation();
-    renderMessageContacts();
-
-    window.setTimeout(() => {
+    // Chatbot: fluxo local, com resposta simulada.
+    if (contact.type === 'bot') {
         appendMessageToConversation(contact.key, {
-            sender: contact.type === 'bot' ? 'bot' : 'professional',
-            content: buildAiReply(contact, content),
+            sender: 'patient',
+            content,
             timestamp: formatDateTime()
         });
+
         renderActiveConversation();
-    }, 900);
+
+        window.setTimeout(() => {
+            appendMessageToConversation(contact.key, {
+                sender: 'bot',
+                content: buildChatbotReply(content),
+                timestamp: formatDateTime()
+            });
+            renderActiveConversation();
+        }, 900);
+
+        return;
+    }
+
+    // Profissional: envia pelo socket (ou REST se o socket estiver fora) e deixa
+    // o servidor persistir. A bolha so aparece depois da confirmacao.
+    const result = chatClient
+        ? await chatClient.send(contact.profileId, content)
+        : { ok: false, message: 'Chat indisponivel no momento.' };
+
+    if (!result.ok) {
+        await showPopup(result.message || 'Nao foi possivel enviar a mensagem.');
+        return;
+    }
+
+    if (result.message && !activeConversationMessages.some(item => item.id === result.message.id)) {
+        activeConversationMessages.push(result.message);
+    }
+
+    renderActiveConversation();
 }
 
 function renderOverviewAppointments() {
@@ -1719,6 +1870,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         button.addEventListener('click', () => switchTab(button.dataset.tab));
     });
 
+    // Chat em tempo real: conecta o socket (JWT no handshake) e busca os
+    // profissionais com quem o paciente tem atendimento.
+    initChatClient();
+    loadProfessionalContacts();
+    loadAvailablePermissions();
+
     const overviewButton = document.getElementById('btnOverviewNewAppointment');
     if (overviewButton) {
         overviewButton.addEventListener('click', openModal);
@@ -1931,8 +2088,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                     await showPopup('Por favor, preencha todos os campos obrigatórios.');
                     return;
                 }
+            // Os valores agora sao ids da tabela `permissoes`.
             const permissions = Array.from(document.querySelectorAll('input[name="permissions"]:checked'))
-                .map(checkbox => checkbox.value);
+                .map(checkbox => Number(checkbox.value))
+                .filter(Number.isInteger);
 
             if (permissions.length === 0) {
                 await showPopup('Selecione pelo menos uma permissão.');
@@ -1975,7 +2134,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                                 'Content-Type': 'application/json',
                                 'Authorization': `Bearer ${token}`
                             },
-                            body: JSON.stringify({ name, relationship, email, password })
+                            body: JSON.stringify({ name, relationship, email, password, permissions })
                         });
 
                         const body = await resp.json();

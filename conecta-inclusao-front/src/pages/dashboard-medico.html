@@ -18,6 +18,7 @@
                 <a href="#" class="active" onclick="showHome(event)"><i class="ph ph-house"></i> Início</a>
                 <a href="#" onclick="openAgendaMedica(event)"><i class="ph ph-calendar-blank"></i> Agenda</a>
                 <a href="#" onclick="togglePatientsList(event)"><i class="ph ph-users"></i> Pacientes</a>
+                <a href="#" onclick="openMensagens(event)"><i class="ph ph-chat-circle-text"></i> Mensagens</a>
             </nav>
             <div class="sidebar-footer">
                 <button class="btn-logout" onclick="handleLogout()"><i class="ph ph-sign-out"></i> Sair</button>
@@ -137,6 +138,47 @@
                 </div>
             </section>
 
+            <!-- Seção Mensagens -->
+            <section class="messages-section" id="mensagensSection" style="display: none;">
+                <div class="section-header">
+                    <h3>Mensagens</h3>
+                    <span class="chat-status-pill" id="doctorChatStatus">Conectando...</span>
+                </div>
+                <div class="chat-layout">
+                    <aside class="chat-sidebar">
+                        <div class="chat-sidebar-header">
+                            <strong>Pacientes</strong>
+                            <span>Somente com atendimento vinculado</span>
+                        </div>
+                        <div id="doctorChatContacts" class="chat-contacts"></div>
+                    </aside>
+
+                    <div class="chat-panel">
+                        <div class="chat-panel-header">
+                            <div>
+                                <strong id="doctorChatContactName">Selecione um paciente</strong>
+                                <span id="doctorChatContactMeta">As conversas ficam disponiveis apenas com pacientes que possuem atendimento com voce.</span>
+                            </div>
+                        </div>
+
+                        <div id="doctorChatMessages" class="chat-messages">
+                            <div class="chat-empty">
+                                <i class="ph ph-chat-circle-dots"></i>
+                                <p>Escolha um paciente na lista ao lado.</p>
+                            </div>
+                        </div>
+
+                        <form id="doctorMessageForm" class="chat-form">
+                            <label class="sr-only" for="doctorMessageInput">Digite sua mensagem</label>
+                            <textarea id="doctorMessageInput" rows="3" placeholder="Escreva uma mensagem para o paciente..." disabled></textarea>
+                            <button type="submit" class="btn-primary" id="doctorSendMessageButton" disabled>
+                                <i class="ph ph-paper-plane-tilt"></i> Enviar
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </section>
+
             <section class="team-section">
                 <div class="section-header">
                     <h3>Equipe da Unidade</h3>
@@ -154,6 +196,24 @@
 
     <script src="../assets/js/config.js"></script>
     <script src="../assets/js/utils.js"></script>
-    <script type="module" src="../assets/js/dashboard-medico.js"></script>
+    <!-- socket.io-client vem do proprio backend, mantendo cliente e servidor na
+         mesma versao sem depender de CDN externa. -->
+    <script>
+        (function () {
+            const base = window.APP_CONFIG?.API_BASE_URL || '';
+            const dashboard = document.createElement('script');
+            dashboard.type = 'module';
+            dashboard.src = '../assets/js/dashboard-medico.js';
+
+            const socketScript = document.createElement('script');
+            socketScript.src = `${base}/socket.io/socket.io.js`;
+            socketScript.onload = () => document.body.appendChild(dashboard);
+            socketScript.onerror = () => {
+                console.warn('socket.io indisponivel; o chat usara apenas requisicoes REST.');
+                document.body.appendChild(dashboard);
+            };
+            document.body.appendChild(socketScript);
+        })();
+    </script>
 </body>
 </html>

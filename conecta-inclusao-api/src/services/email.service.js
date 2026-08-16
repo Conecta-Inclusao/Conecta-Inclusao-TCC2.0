@@ -1,29 +1,36 @@
 import nodemailer from "nodemailer";
+import { env } from "../env.js";
 
-function requiredEnv(name) {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`Variavel de ambiente ${name} nao configurada.`);
-  }
-  return value;
+// O nome vem do banco e e interpolado no corpo HTML do e-mail.
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
 function createTransporter() {
+  if (!env.SMTP_HOST || !env.SMTP_USER || !env.SMTP_PASS) {
+    throw new Error("SMTP nao configurado (SMTP_HOST, SMTP_USER e SMTP_PASS sao obrigatorios para envio de e-mail).");
+  }
+
   return nodemailer.createTransport({
-    host: requiredEnv("SMTP_HOST"),
-    port: Number(process.env.SMTP_PORT || 587),
-    secure: String(process.env.SMTP_SECURE || "false").toLowerCase() === "true",
+    host: env.SMTP_HOST,
+    port: env.SMTP_PORT,
+    secure: env.SMTP_SECURE,
     family: 4,
     auth: {
-      user: requiredEnv("SMTP_USER"),
-      pass: requiredEnv("SMTP_PASS")
+      user: env.SMTP_USER,
+      pass: env.SMTP_PASS
     }
   });
 }
 
 export async function sendPasswordResetEmail({ to, name, token, resetUrl }) {
   const transporter = createTransporter();
-  const from = process.env.SMTP_FROM || process.env.SMTP_USER;
+  const from = env.SMTP_FROM || env.SMTP_USER;
 
   await transporter.sendMail({
     from,
@@ -41,7 +48,7 @@ export async function sendPasswordResetEmail({ to, name, token, resetUrl }) {
     html: `
       <div style="font-family: Arial, sans-serif; line-height: 1.5; color: #1f2937;">
         <h2>Recuperacao de senha</h2>
-        <p>Ola, ${name || "usuario"}.</p>
+        <p>Ola, ${escapeHtml(name || "usuario")}.</p>
         <p>Recebemos uma solicitacao para redefinir sua senha.</p>
         <p><strong>Token de recuperacao:</strong></p>
         <p style="font-size: 20px; letter-spacing: 1px; font-weight: 700;">${token}</p>

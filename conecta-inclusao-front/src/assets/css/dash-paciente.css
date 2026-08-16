@@ -1472,3 +1472,25 @@ body {
         max-width: 92%;
     }
 }
+
+/* Badge de mensagens nao lidas na lista de contatos do chat */
+.chat-unread-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    margin-left: 6px;
+    border-radius: 999px;
+    background: #dc2626;
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 700;
+    vertical-align: middle;
+}
+
+.chat-status-pill.offline {
+    background: #fef3c7;
+    color: #b45309;
+}

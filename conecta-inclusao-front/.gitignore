@@ -1,2 +1,9 @@
 .vercel
 .env*
+
+# ATENCAO: src/assets/js/config.js CONTINUA versionado de proposito.
+# O deploy da Vercel usa @vercel/static, que nao executa build step - logo
+# scripts/generate-config.js nao roda la. Se o arquivo nao estiver no repo,
+# window.APP_CONFIG fica indefinido em producao e todas as paginas quebram.
+# O generate-config.js serve para sobrescrever a URL via variavel de ambiente
+# quando existir um pipeline com build; hoje nao existe.

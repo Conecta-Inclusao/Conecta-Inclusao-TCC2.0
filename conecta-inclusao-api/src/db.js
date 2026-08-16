@@ -1,9 +1,7 @@
-import dotenv from "dotenv";
 import { Pool } from "pg";
+import { env } from "./env.js";
 
-dotenv.config();
-
-const connectionString = process.env.DATABASE_URL || process.env.PG_CONNECTION_STRING || "";
+const connectionString = env.DATABASE_URL;
 
 function convertPlaceholders(query, params = []) {
   let index = 0;
@@ -33,11 +31,15 @@ function mapResult(result) {
   };
 }
 
+// Neon (e qualquer Postgres gerenciado) exige TLS. Bancos locais nao.
+const isLocalDatabase = /@(localhost|127\.0\.0\.1)/.test(connectionString);
+
 const pgPool = new Pool({
   connectionString,
-  ssl: connectionString.includes("sslmode=require")
-    ? { rejectUnauthorized: false }
-    : undefined
+  ssl: isLocalDatabase ? undefined : { rejectUnauthorized: false },
+  max: 10,
+  idleTimeoutMillis: 30_000,
+  connectionTimeoutMillis: 10_000
 });
 
 export const pool = {

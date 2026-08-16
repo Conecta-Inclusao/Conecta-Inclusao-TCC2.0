@@ -1,16 +1,16 @@
-// Importa dotenv para carregar variáveis de ambiente do arquivo .env 
-import dotenv from "dotenv"; 
-// Carrega as variáveis de ambiente antes de qualquer outra configuração 
-// Isso garante que process.env.PORT e outras variáveis estejam disponíveis 
-dotenv.config(); 
-// Importa a aplicação Express já configurada com middlewares e rotas 
-import { server } from "./app.js"; 
-// Define a porta em que a aplicação vai rodar 
-// Usa a variável de ambiente PORT se estiver definida, caso contrário usa 3000 como padrão 
-const port = Number(process.env.PORT || 3000); 
-// Inicia o servidor Express na porta especificada 
-// O callback é executado quando o servidor está escutando com sucesso 
-server.listen(port, () => { 
-// Exibe mensagem de sucesso no console informando a URL da API 
-console.log(`API rodando em http://localhost:${port}`); 
+// env.js carrega o dotenv e valida as variaveis obrigatorias. Precisa vir antes
+// de qualquer import que leia configuracao.
+import { env } from "./env.js";
+import { server } from "./app.js";
+
+server.listen(env.PORT, () => {
+  console.log(`API rodando em http://localhost:${env.PORT}`);
 });
+
+// Encerra o pool de conexoes de forma limpa quando o Render reinicia o servico.
+for (const signal of ["SIGTERM", "SIGINT"]) {
+  process.on(signal, () => {
+    console.log(`Recebido ${signal}, encerrando servidor...`);
+    server.close(() => process.exit(0));
+  });
+}

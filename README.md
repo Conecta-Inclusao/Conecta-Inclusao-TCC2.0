@@ -79,36 +79,49 @@ A plataforma foi projetada com foco em inclusão digital:
 
 O sistema segue uma arquitetura em camadas:
 
-Usuário → Frontend → Backend (API REST) → Banco de Dados
+Usuário → Frontend → Backend (API REST + WebSocket) → Banco de Dados
 
 ### 📂 Estrutura do Projeto
 
-/controllers → Controle das requisições
-/services → Regras de negócio
-/models → Modelos de dados
-/routes → Rotas da aplicação
+```
+conecta-inclusao-api/          Backend (Node.js + Express)
+  src/
+    env.js                     Carrega e valida variáveis de ambiente (falha no boot se faltar)
+    app.js                     Middlewares, CORS, rotas e arquivos estáticos
+    server.js                  Sobe o servidor HTTP
+    realtime.js                Socket.io com handshake autenticado por JWT
+    db.js                      Pool PostgreSQL (adapta placeholders `?` para `$n`)
+    routes/                    Rotas HTTP
+    services/                  Regras de negócio e acesso a dados
+    validators/                Schemas Zod
+    utils/                     Validação de CPF/CNPJ
+
+conecta-inclusao-front/        Frontend (HTML/CSS/JS puro)
+  src/pages/                   Páginas
+  src/assets/js/               Scripts (realtime-chat.js é o cliente do chat)
+  scripts/generate-config.js   Gera src/assets/js/config.js no build
+
+Banco de dados.sql             Schema PostgreSQL canônico
+```
 
 ---
 
 ## 🛠️ Tecnologias Utilizadas
 
-### Backend:
+### Backend
 
-* Node.js
-* Express
+* Node.js + Express 5
+* PostgreSQL (Neon) via `pg`
+* Socket.io (chat em tempo real, autenticado por JWT)
+* JWT + bcrypt para autenticação
+* Zod para validação
+* Helmet, CORS por allowlist e rate limiting
+* Nodemailer para recuperação de senha
 
-### Banco de Dados:
+### Frontend
 
-* MySQL
-
-### Estrutura de Dados:
-
-* JSON
-
-### Frontend:
-
-* HTML / CSS / JavaScript
-  *(ou React, se aplicável)*
+* HTML / CSS / JavaScript (sem framework)
+* socket.io-client servido pelo próprio backend
 
 ---
 
@@ -116,38 +129,57 @@ Usuário → Frontend → Backend (API REST) → Banco de Dados
 
 ### 🔧 Pré-requisitos
 
-Antes de iniciar, você precisa ter instalado:
-
-* Node.js
-* MySQL
+* Node.js 18+
+* Um banco PostgreSQL (local ou Neon)
 * npm
 
 ---
 
 ### 📥 Passos para execução
 
-```bash id="b2kq7n"
+```bash
 # Clonar o repositório
 git clone https://github.com/MatheusLima022/Conecta-Inclusao-TCC2.0.git
-
-# Acessar a pasta do projeto
 cd Conecta-Inclusao-TCC2.0
 
-# Instalar dependências
+# Instalar dependências da API
+cd conecta-inclusao-api
 npm install
 
-# Iniciar o servidor
-npm start
+# Configurar o ambiente
+cp .env.exemple .env
+# Preencha DATABASE_URL e gere um JWT_SECRET:
+node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
+
+# Subir a API (serve também o front em http://localhost:3000)
+npm run dev
 ```
+
+> A API **não inicia** sem `JWT_SECRET` (mínimo 32 caracteres) e `DATABASE_URL`.
+> Isso é proposital: antes existia um segredo padrão no código, e a aplicação
+> subia em produção assinando tokens com uma chave pública.
 
 ---
 
 ### 🗄️ Configuração do Banco de Dados
 
-1. Instale e configure o MySQL
-2. Crie um banco de dados (ex: conecta_inclusao)
-3. Configure as credenciais no projeto
-4. Execute os scripts SQL (se houver)
+1. Crie um banco PostgreSQL (ou um projeto no [Neon](https://neon.tech))
+2. Execute o script `Banco de dados.sql` nele
+3. Coloque a connection string em `DATABASE_URL` no `.env`
+
+---
+
+## 💬 Chat em tempo real
+
+O chat entre paciente e médico usa Socket.io com autorização no servidor:
+
+* o **handshake exige o mesmo JWT** usado no REST — conexão sem token é recusada;
+* o cliente informa **com quem** quer falar (`targetProfileId`), nunca em qual sala entrar;
+* o servidor resolve a sala a partir de um **atendimento real** entre as duas partes;
+* toda mensagem é persistida em `mensagens` e passa pela mesma autorização do REST;
+* se o WebSocket cair, o front continua funcionando via REST (`/messages`).
+
+Sem um agendamento ligando paciente e médico, não existe conversa.
 
 ---
 
@@ -177,7 +209,9 @@ O desenvolvimento do projeto seguiu:
 * Sistema de recomendação de médicos
 * Aplicativo mobile
 * Recursos avançados de acessibilidade
-* 
+* Suíte de testes automatizados (o projeto ainda não possui testes)
+* Auditoria de acesso a dados sensíveis (exigência prática de LGPD para dados de saúde)
+
 
 ---
 

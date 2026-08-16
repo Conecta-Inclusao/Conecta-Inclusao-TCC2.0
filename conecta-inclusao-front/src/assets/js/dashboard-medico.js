@@ -289,8 +289,7 @@ function showHome(event) {
     updateSidebarActive(event.target.closest('a'));
 
     // Esconder todas as seções específicas
-    document.getElementById('agendaSection').style.display = 'none';
-    document.getElementById('pacientesSection').style.display = 'none';
+    showSection(null);
 }
 
 // Função para abrir a agenda médica
@@ -318,18 +317,40 @@ async function togglePatientsList(event) {
     loadPatientsData();
 }
 
-// Função para mostrar/esconder seções
-function showSection(section) {
-    // Esconder todas
-    document.getElementById('agendaSection').style.display = 'none';
-    document.getElementById('pacientesSection').style.display = 'none';
+// Função para abrir o painel de mensagens
+let doctorChatInitialized = false;
 
-    // Mostrar a selecionada
-    if (section === 'agenda') {
-        document.getElementById('agendaSection').style.display = 'block';
-    } else if (section === 'pacientes') {
-        document.getElementById('pacientesSection').style.display = 'block';
+async function openMensagens(event) {
+    if (event) {
+        event.preventDefault();
+        updateSidebarActive(event.target.closest('a'));
     }
+
+    showSection('mensagens');
+
+    // O chat so conecta quando o medico abre a aba pela primeira vez.
+    if (!doctorChatInitialized) {
+        doctorChatInitialized = true;
+        const { initDoctorChat } = await import('./dashboard-medico-chat.js');
+        await initDoctorChat();
+    }
+}
+
+// Função para mostrar/esconder seções
+const DASHBOARD_SECTIONS = {
+    agenda: 'agendaSection',
+    pacientes: 'pacientesSection',
+    mensagens: 'mensagensSection'
+};
+
+function showSection(section) {
+    Object.values(DASHBOARD_SECTIONS).forEach(id => {
+        const element = document.getElementById(id);
+        if (element) element.style.display = 'none';
+    });
+
+    const target = document.getElementById(DASHBOARD_SECTIONS[section]);
+    if (target) target.style.display = 'block';
 }
 
 // Função para atualizar o link ativo no sidebar
@@ -700,4 +721,5 @@ window.handleLogout = handleLogout;
 window.showHome = showHome;
 window.openAgendaMedica = openAgendaMedica;
 window.togglePatientsList = togglePatientsList;
+window.openMensagens = openMensagens;
 window.handleAppointmentAction = handleAppointmentAction;

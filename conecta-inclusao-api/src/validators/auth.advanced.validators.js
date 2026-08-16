@@ -1,5 +1,6 @@
 // Validadores avançados de autenticação com Zod
 import { z } from "zod";
+import { validateCPF, validateCNPJ } from "../utils/documents.js";
 
 // Schema para login universal (aceita CRM, CNPJ, CPF ou Email)
 export const universalLoginSchema = z.object({
@@ -65,11 +66,12 @@ export const resetPasswordSchema = z.object({
 
 // Schema para registro de paciente (CPF)
 export const registerPatientSchema = z.object({
+  // Alem do formato, valida o digito verificador.
   cpf: z
     .string()
     .trim()
     .refine(
-      (value) => /^\d{3}\.\d{3}\.\d{3}-\d{2}$|^\d{11}$/.test(value),
+      (value) => /^\d{3}\.\d{3}\.\d{3}-\d{2}$|^\d{11}$/.test(value) && validateCPF(value),
       "CPF inválido"
     ),
   password: strongPasswordSchema,
@@ -88,7 +90,9 @@ export const registerPatientSchema = z.object({
       relationship: z.string().trim().min(2, "Parentesco muito curto").max(100),
       email: z.string().email("Email inválido"),
       password: strongPasswordSchema,
-      permissions: z.array(z.string()).optional()
+      // Ids da tabela `permissoes`. Antes eram strings livres gravadas numa
+      // coluna JSON `paciente_responsavel.permissions` que nao existe no schema.
+      permissions: z.array(z.coerce.number().int().positive()).optional()
     })
     .optional(),
   tipoDeficiencia: z
@@ -154,7 +158,7 @@ export const registerClinicSchema = z.object({
     .string()
     .trim()
     .refine(
-      (value) => /^\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}$|^\d{14}$/.test(value),
+      (value) => /^\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}$|^\d{14}$/.test(value) && validateCNPJ(value),
       "CNPJ inválido"
     ),
   password: strongPasswordSchema,
@@ -201,17 +205,4 @@ export const registerClinicSchema = z.object({
     .trim()
     .max(100)
     .optional()
-});
-
-// Schema original de login (para compatibilidade)
-export const loginSchema = z.object({
-  email: z
-    .string()
-    .trim()
-    .toLowerCase()
-    .email(),
-  password: z
-    .string()
-    .min(8)
-    .max(100)
 });
