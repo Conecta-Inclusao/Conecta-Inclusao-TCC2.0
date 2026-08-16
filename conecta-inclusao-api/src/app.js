@@ -51,7 +51,39 @@ export const io = initRealtime(server, allowedOrigins);
 // ============================================
 // MIDDLEWARES DE SEGURANCA
 // ============================================
-app.use(helmet());
+// A politica padrao do helmet e `default-src 'self'`, o que quebra o front
+// quando ele e servido pela propria API: os icones (unpkg), os avatares
+// (ui-avatars) e todo script inline eram bloqueados, deixando a pagina sem
+// icones e sem o carregador do socket.io.
+//
+// 'unsafe-inline' em scriptSrc e necessario porque o front usa atributos
+// onclick inline em varias telas. Nao e o ideal, mas remover isso exigiria
+// reescrever os handlers de todas as paginas.
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      // O script do @phosphor-icons vem do unpkg, mas ele injeta folhas de
+      // estilo e fontes hospedadas no jsdelivr - por isso os dois dominios.
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://unpkg.com", "https://cdn.jsdelivr.net"],
+      // script-src-attr e uma diretiva separada e o helmet a define como 'none'
+      // por padrao. Sem esta linha, TODO atributo onclick do front e ignorado
+      // silenciosamente - os botoes ficam sem acao nenhuma.
+      scriptSrcAttr: ["'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://unpkg.com", "https://cdn.jsdelivr.net"],
+      imgSrc: ["'self'", "data:", "https://ui-avatars.com"],
+      fontSrc: ["'self'", "data:", "https://unpkg.com", "https://cdn.jsdelivr.net"],
+      // ws:/wss: liberam o transporte WebSocket do socket.io.
+      connectSrc: ["'self'", "ws:", "wss:"],
+      objectSrc: ["'none'"],
+      frameAncestors: ["'none'"]
+    }
+  },
+  // O front carrega imagens de ui-avatars.com; a politica padrao
+  // (same-origin) bloqueia recursos cross-origin.
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  crossOriginEmbedderPolicy: false
+}));
 
 app.use(cors({
   origin: corsOrigin,

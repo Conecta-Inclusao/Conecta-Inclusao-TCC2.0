@@ -248,6 +248,11 @@ body {
         flex-direction: column;
     }
 
+    /* A sidebar e `position: fixed; height: 100vh` no desktop. Este bloco
+       trocava a largura e a direcao mas nao desfazia o posicionamento, entao no
+       celular ela virava uma barra fixa de tela cheia por cima de tudo - e o
+       .main-content continuava empurrado 260px para a direita, fora da tela.
+       Sem estes resets o dashboard do medico era inutilizavel no celular. */
     .sidebar {
         width: 100%;
         padding: 15px;
@@ -255,6 +260,12 @@ body {
         border-bottom: 1px solid #e2e8f0;
         flex-direction: row;
         justify-content: space-between;
+        position: static;
+        height: auto;
+        overflow-y: visible;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 12px;
     }
 
     .sidebar nav {
@@ -279,6 +290,9 @@ body {
 
     .main-content {
         padding: 15px;
+        /* Anula o margin-left: 260px que compensava a sidebar fixa. */
+        margin-left: 0;
+        width: 100%;
     }
 
     .top-bar {
@@ -295,7 +309,8 @@ body {
         grid-template-columns: 1fr;
     }
 
-    .appointments-table {
+    .appointments-table,
+    .patients-table {
         font-size: 14px;
     }
 
@@ -329,9 +344,11 @@ body {
         padding: 15px;
     }
 
-    .appointments-table {
-        display: block;
-        overflow-x: auto;
+    /* O scroll horizontal agora e do container .table-scroll (ver responsive.css).
+       Aplicar `display: block` na propria tabela fazia o thead e o tbody
+       calcularem larguras separadas, desalinhando as colunas. */
+    .appointments-table,
+    .patients-table {
         white-space: nowrap;
     }
 

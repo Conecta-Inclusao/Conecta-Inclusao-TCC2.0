@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard Médico - Portal Saúde</title>
     <link rel="stylesheet" href="../assets/css/dashboard-medico.css">
+    <link rel="stylesheet" href="../assets/css/responsive.css">
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
 </head>
 <body>
@@ -76,25 +77,27 @@
                 <div class="section-header">
                     <h3>Próximos Atendimentos</h3>
                 </div>
-                <table class="appointments-table">
-                    <thead>
-                        <tr>
-                            <th>Paciente</th>
-                            <th>Horário</th>
-                            <th>Tipo</th>
-                            <th>Status</th>
-                            <th>Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td colspan="5" style="text-align: center; padding: 20px; color: #64748b;">
-                                Carregando agendamentos...
-                            </td>
-                        </tr>
-                    </tbody>
+                <div class="table-scroll">
+                    <table class="appointments-table">
+                        <thead>
+                            <tr>
+                                <th>Paciente</th>
+                                <th>Horário</th>
+                                <th>Tipo</th>
+                                <th>Status</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="5" style="text-align: center; padding: 20px; color: #64748b;">
+                                    Carregando agendamentos...
+                                </td>
+                            </tr>
+                        </tbody>
 
-                </table>
+                    </table>
+                </div>
             </section>
 
             <!-- Seção Pacientes -->
@@ -117,24 +120,26 @@
                             <span class="stat-value orange" id="inactivePatients">0</span>
                         </div>
                     </div>
-                    <table class="patients-table">
-                        <thead>
-                            <tr>
-                                <th>Nome</th>
-                                <th>CPF</th>
-                                <th>E-mail</th>
-                                <th>Status</th>
-                                <th>Última Consulta</th>
-                            </tr>
-                        </thead>
-                        <tbody id="patientsTableBody">
-                            <tr>
-                                <td colspan="5" style="text-align: center; padding: 20px; color: #64748b;">
-                                    Carregando pacientes...
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
+                    <div class="table-scroll">
+                        <table class="patients-table">
+                            <thead>
+                                <tr>
+                                    <th>Nome</th>
+                                    <th>CPF</th>
+                                    <th>E-mail</th>
+                                    <th>Status</th>
+                                    <th>Última Consulta</th>
+                                </tr>
+                            </thead>
+                            <tbody id="patientsTableBody">
+                                <tr>
+                                    <td colspan="5" style="text-align: center; padding: 20px; color: #64748b;">
+                                        Carregando pacientes...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </section>
 
@@ -197,23 +202,22 @@
     <script src="../assets/js/config.js"></script>
     <script src="../assets/js/utils.js"></script>
     <!-- socket.io-client vem do proprio backend, mantendo cliente e servidor na
-         mesma versao sem depender de CDN externa. -->
+         mesma versao. Carregado em PARALELO e sem bloquear: a versao anterior so
+         injetava o dashboard depois que este script resolvia, entao quando a API
+         estava dormindo (free tier do Render) a pagina inteira ficava inerte -
+         era o que deixava "Carregando equipe..." girando pra sempre. -->
     <script>
         (function () {
             const base = window.APP_CONFIG?.API_BASE_URL || '';
-            const dashboard = document.createElement('script');
-            dashboard.type = 'module';
-            dashboard.src = '../assets/js/dashboard-medico.js';
-
             const socketScript = document.createElement('script');
-            socketScript.src = `${base}/socket.io/socket.io.js`;
-            socketScript.onload = () => document.body.appendChild(dashboard);
-            socketScript.onerror = () => {
+            socketScript.src = base + '/socket.io/socket.io.js';
+            socketScript.async = true;
+            socketScript.onerror = function () {
                 console.warn('socket.io indisponivel; o chat usara apenas requisicoes REST.');
-                document.body.appendChild(dashboard);
             };
-            document.body.appendChild(socketScript);
+            document.head.appendChild(socketScript);
         })();
     </script>
+    <script type="module" src="../assets/js/dashboard-medico.js"></script>
 </body>
 </html>

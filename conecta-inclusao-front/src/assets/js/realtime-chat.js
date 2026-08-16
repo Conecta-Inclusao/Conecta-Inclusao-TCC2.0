@@ -65,6 +65,28 @@ export async function sendMessageViaRest(targetProfileId, content) {
  * @param {(notice: object) => void}  handlers.onNotification  mensagem em outra conversa
  * @param {(state: string) => void}   handlers.onStatus        'conectado' | 'desconectado' | 'erro'
  */
+/**
+ * O socket.io-client e carregado em paralelo com o modulo do dashboard, entao
+ * `window.io` pode ainda nao existir quando o chat inicializa. Em vez de
+ * desistir na hora, esperamos ele aparecer por um tempo limitado.
+ */
+function aguardarSocketIO(timeoutMs = 20000) {
+    if (typeof window.io === 'function') return Promise.resolve(true);
+
+    return new Promise((resolve) => {
+        const inicio = Date.now();
+        const intervalo = setInterval(() => {
+            if (typeof window.io === 'function') {
+                clearInterval(intervalo);
+                resolve(true);
+            } else if (Date.now() - inicio > timeoutMs) {
+                clearInterval(intervalo);
+                resolve(false);
+            }
+        }, 200);
+    });
+}
+
 export function createChatClient({ onMessage, onNotification, onStatus } = {}) {
     let socket = null;
     let currentTargetProfileId = null;
@@ -73,7 +95,7 @@ export function createChatClient({ onMessage, onNotification, onStatus } = {}) {
         if (typeof onStatus === 'function') onStatus(state, detail);
     }
 
-    function connect() {
+    async function connect() {
         const token = getToken();
 
         if (!token) {
@@ -81,11 +103,15 @@ export function createChatClient({ onMessage, onNotification, onStatus } = {}) {
             return null;
         }
 
-        if (typeof window.io !== 'function') {
-            notifyStatus('erro', 'Biblioteca de tempo real nao carregada.');
+        if (socket) return socket;
+
+        const disponivel = await aguardarSocketIO();
+        if (!disponivel) {
+            notifyStatus('erro', 'Tempo real indisponivel; usando envio por requisicao.');
             return null;
         }
 
+        // Outra chamada pode ter criado o socket enquanto esperavamos.
         if (socket) return socket;
 
         socket = window.io(API_BASE_URL, {
@@ -124,12 +150,19 @@ export function createChatClient({ onMessage, onNotification, onStatus } = {}) {
     return {
         connect,
 
-        /** Abre a conversa com um perfil. Resolve com os dados do contato. */
-        join(targetProfileId) {
+        /**
+         * Abre a conversa com um perfil. Resolve com os dados do contato.
+         * `connect` e assincrono (espera o socket.io-client carregar), entao
+         * precisa ser aguardado - sem o await isso virava uma Promise no lugar
+         * do socket e o emit nunca acontecia.
+         */
+        async join(targetProfileId) {
             currentTargetProfileId = targetProfileId;
-            const activeSocket = connect();
+            const activeSocket = await connect();
 
-            if (!activeSocket) return Promise.resolve({ ok: false, message: 'Chat indisponivel.' });
+            // Sem socket a conversa continua funcionando por REST (historico e
+            // envio); apenas nao ha atualizacao em tempo real.
+            if (!activeSocket) return { ok: false, message: 'Tempo real indisponivel.' };
 
             return new Promise((resolve) => {
                 activeSocket.emit('joinConversation', { targetProfileId }, (response) => {

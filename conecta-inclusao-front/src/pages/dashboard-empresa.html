@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard Empresa - Portal Saúde</title>
     <link rel="stylesheet" href="../assets/css/dashboard-empresa.css">
+    <link rel="stylesheet" href="../assets/css/responsive.css">
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
 </head>
 <body>
@@ -96,22 +97,24 @@
                         <h2>Equipe em Destaque</h2>
                         <span>Últimos 30 dias</span>
                     </div>
-                    <table class="team-table" aria-describedby="teamDescription">
-                        <caption id="teamDescription">Lista dos profissionais mais ativos dos últimos 30 dias</caption>
-                        <thead>
-                            <tr>
-                                <th scope="col">Nome</th>
-                                <th scope="col">Especialidade</th>
-                                <th scope="col">Status</th>
-                                <th scope="col">Local</th>
-                            </tr>
-                        </thead>
-                        <tbody id="teamTableBody">
-                            <tr>
-                                <td colspan="4" style="text-align: center; color: #64748b; padding: 1rem;">Carregando profissionais...</td>
-                            </tr>
-                        </tbody>
-                    </table>
+                    <div class="table-scroll">
+                        <table class="team-table" aria-describedby="teamDescription">
+                            <caption id="teamDescription">Lista dos profissionais mais ativos dos últimos 30 dias</caption>
+                            <thead>
+                                <tr>
+                                    <th scope="col">Nome</th>
+                                    <th scope="col">Especialidade</th>
+                                    <th scope="col">Status</th>
+                                    <th scope="col">Local</th>
+                                </tr>
+                            </thead>
+                            <tbody id="teamTableBody">
+                                <tr>
+                                    <td colspan="4" style="text-align: center; color: #64748b; padding: 1rem;">Carregando profissionais...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </section>
             </section>
 
@@ -255,20 +258,22 @@
 
                 <!-- Table View -->
                 <div id="tableView" class="team-table-wrapper" style="display: none;">
-                    <table class="team-full-table">
-                        <thead>
-                            <tr>
-                                <th>Nome</th>
-                                <th>Função</th>
-                                <th>Registro</th>
-                                <th>Status</th>
-                                <th>Unidade</th>
-                                <th>Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody id="teamFullTableBody">
-                        </tbody>
-                    </table>
+                    <div class="table-scroll">
+                        <table class="team-full-table">
+                            <thead>
+                                <tr>
+                                    <th>Nome</th>
+                                    <th>Função</th>
+                                    <th>Registro</th>
+                                    <th>Status</th>
+                                    <th>Unidade</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="teamFullTableBody">
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </section>
 

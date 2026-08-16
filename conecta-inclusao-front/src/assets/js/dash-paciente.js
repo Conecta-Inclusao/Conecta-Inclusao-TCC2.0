@@ -90,6 +90,35 @@ async function loadUserInfo() {
     }
 }
 
+/**
+ * Traduz o status do paciente (coluna `status` da tabela `pacientes`) para o
+ * texto do cabecalho. O banco grava 'ACTIVE' no cadastro, mas ha registros
+ * antigos com 'ativo'/'inativo', entao a comparacao e case-insensitive.
+ */
+function describePatientStatus(status) {
+    const normalizado = String(status || '').trim().toLowerCase();
+
+    if (!normalizado) return 'Paciente';
+    if (['active', 'ativo'].includes(normalizado)) return 'Paciente ativo';
+
+    return 'Paciente inativo';
+}
+
+/**
+ * Antes o avatar so era definido dentro de um bloco que exigia o paciente ter
+ * consultas. Quem nao tinha nenhuma ficava com <img src=""> - que o navegador
+ * renderiza como icone de imagem quebrada.
+ */
+function updatePatientAvatar(name) {
+    const patientAvatar = document.getElementById('patientAvatar');
+    if (!patientAvatar) return;
+
+    const nomeParaAvatar = (name && name !== 'Paciente') ? name : 'Paciente';
+    const encoded = encodeURIComponent(nomeParaAvatar);
+    patientAvatar.src = `https://ui-avatars.com/api/?name=${encoded}&background=0073e6&color=fff`;
+    patientAvatar.alt = `Avatar de ${nomeParaAvatar}`;
+}
+
 function loadPatientData() {
     const patientHeaderName = document.getElementById('patientHeaderName');
     const patientHeaderSubtitle = document.getElementById('patientHeaderSubtitle');
@@ -112,9 +141,14 @@ function loadPatientData() {
     if (patientHeaderName) {
         patientHeaderName.textContent = name;
     }
+
+    // Subtitulo reflete o status real vindo de /auth/profile, em vez do texto
+    // fixo "Paciente ativo" que estava no HTML.
     if (patientHeaderSubtitle) {
-        patientHeaderSubtitle.textContent = `Olá, ${name}`;
+        patientHeaderSubtitle.textContent = describePatientStatus(user?.status);
     }
+
+    updatePatientAvatar(name);
     if (profilePatientName) {
         profilePatientName.textContent = name;
     }
@@ -2177,16 +2211,8 @@ function renderAppointmentsState() {
             emptyState.remove();
         }
         
-        // Atualizar avatar do paciente (gera avatar via ui-avatars quando houver nome)
-        const patientAvatar = document.getElementById('patientAvatar');
-        if (patientAvatar) {
-            if (user.name) {
-                const encoded = encodeURIComponent(user.name);
-                patientAvatar.src = `https://ui-avatars.com/api/?name=${encoded}&background=0073e6&color=fff`;
-            } else {
-                patientAvatar.removeAttribute('src');
-            }
-        }
+        // O avatar agora e definido em loadPatientData/updatePatientAvatar, que
+        // roda independente de o paciente ter consultas.
 
         // Atualizar responsável exibido no perfil quando disponível
         const profilePatientResponsible = document.getElementById('profilePatientResponsible');

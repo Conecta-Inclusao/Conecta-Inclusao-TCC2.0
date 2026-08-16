@@ -542,10 +542,11 @@ function initializeDebugPanel() {
     closeButton.textContent = '×';
     panel.insertBefore(closeButton, panel.firstChild);
 
-    button.addEventListener('click', () => {
-        panel.classList.toggle('debug-panel-visible');
-    });
-
+    // O botao "DEBUG" que abria o painel foi comentado acima, mas este listener
+    // continuou referenciando a variavel `button`, que deixou de existir. Como
+    // utils.js e carregado em TODAS as paginas, isso lancava
+    // "ReferenceError: button is not defined" em todas elas e interrompia
+    // initializeDebugPanel antes do appendChild final.
     closeButton.addEventListener('click', () => {
         panel.classList.remove('debug-panel-visible');
     });

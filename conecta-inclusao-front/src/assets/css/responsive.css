@@ -1,0 +1,258 @@
+/* ===========================================================================
+   responsive.css - camada compartilhada de responsividade
+   ===========================================================================
+   Carregado DEPOIS do CSS especifico de cada pagina, entao vence em caso de
+   empate de especificidade.
+
+   Cada pagina ja tinha suas proprias media queries; este arquivo nao as
+   substitui. Ele cobre o que faltava em todas elas ao mesmo tempo:
+   estouro horizontal, tabelas largas, modais mais altos que a tela, textos
+   longos sem quebra e alvos de toque pequenos demais.
+   =========================================================================== */
+
+/* ---------------------------------------------------------------------------
+   1. Estouro horizontal
+   Uma unica regra larga demais em qualquer lugar fazia a pagina inteira rolar
+   de lado no celular. Aqui o corpo e travado e o conteudo se ajusta.
+   --------------------------------------------------------------------------- */
+html,
+body {
+    max-width: 100%;
+    overflow-x: hidden;
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+/* ---------------------------------------------------------------------------
+   2. Midia e conteudo incorporado
+   --------------------------------------------------------------------------- */
+img,
+svg,
+video,
+canvas,
+iframe {
+    max-width: 100%;
+    height: auto;
+}
+
+/* ---------------------------------------------------------------------------
+   3. Palavras longas
+   E-mail, CPF, CNPJ e token de recuperacao nao tem espaco para quebrar e
+   empurravam a largura do container.
+   --------------------------------------------------------------------------- */
+p,
+span,
+strong,
+small,
+td,
+th,
+label,
+li,
+h1, h2, h3, h4, h5, h6 {
+    overflow-wrap: break-word;
+    word-break: break-word;
+}
+
+/* ---------------------------------------------------------------------------
+   4. Tabelas
+   O scroll acontece no container (.table-scroll), nao na tabela: transformar a
+   propria tabela em `display: block` quebra o alinhamento das colunas.
+   --------------------------------------------------------------------------- */
+.table-scroll {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.table-scroll > table {
+    width: 100%;
+}
+
+/* Abaixo desta largura as colunas nao cabem: a tabela mantem um minimo legivel
+   e o container passa a rolar horizontalmente. */
+@media (max-width: 820px) {
+    .table-scroll > table {
+        min-width: 640px;
+    }
+}
+
+/* ---------------------------------------------------------------------------
+   5. Modais
+   Nenhum modal limitava a altura. Num celular deitado, o formulario de
+   responsavel passava da tela e os botoes ficavam inalcancaveis.
+   --------------------------------------------------------------------------- */
+.modal {
+    overflow-y: auto;
+}
+
+.modal-content {
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
+}
+
+@media (max-width: 640px) {
+    .modal {
+        padding: 16px;
+        align-items: flex-start;
+    }
+
+    .modal-content {
+        padding: 20px;
+        max-height: calc(100vh - 32px);
+    }
+}
+
+/* ---------------------------------------------------------------------------
+   6. Formularios em telas pequenas
+   Fonte menor que 16px faz o iOS dar zoom sozinho ao focar o campo, e o
+   usuario fica com a pagina deslocada.
+   --------------------------------------------------------------------------- */
+@media (max-width: 768px) {
+    input,
+    select,
+    textarea {
+        font-size: 16px;
+        max-width: 100%;
+    }
+
+    /* Alvo de toque minimo confortavel. */
+    button,
+    .btn-primary,
+    .btn-secondary,
+    .btn-danger,
+    .nav-link,
+    .sidebar nav a {
+        min-height: 44px;
+    }
+
+    /* Botoes lado a lado viram empilhados quando nao cabem. */
+    .modal-footer,
+    .form-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .modal-footer > button,
+    .form-actions > button {
+        flex: 1 1 140px;
+    }
+}
+
+/* ---------------------------------------------------------------------------
+   7. Grades genericas
+   Varias grades usavam minmax(280px..320px, 1fr). Num aparelho de 360px de
+   largura, somando o padding lateral, a coluna nao cabia e vazava.
+   --------------------------------------------------------------------------- */
+@media (max-width: 560px) {
+    /* A agenda semanal usa minmax(240px, 1fr). Como item de grid nasce com
+       `min-width: auto`, a coluna nao encolhia abaixo do conteudo (o cartao de
+       consulta e `84px 1fr` mais padding) e vazava para fora da tela. */
+    .schedule-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .schedule-grid > *,
+    .schedule-day-column {
+        min-width: 0;
+    }
+
+    .schedule-day-column {
+        padding: 14px;
+    }
+
+    .appointment-card {
+        grid-template-columns: 64px minmax(0, 1fr);
+        gap: 12px;
+        padding: 14px;
+    }
+}
+
+@media (max-width: 480px) {
+    .stats-grid,
+    .cards-grid,
+    .team-grid,
+    .suggestion-grid,
+    .permissions-grid,
+    .professionals-grid {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+/* ---------------------------------------------------------------------------
+   8. Chat (paciente e medico)
+   O layout de duas colunas vira uma so, e a lista de mensagens ganha altura
+   propria para nao empurrar o campo de escrita para fora da tela.
+   --------------------------------------------------------------------------- */
+@media (max-width: 900px) {
+    .chat-layout {
+        grid-template-columns: 1fr;
+        min-height: 0;
+    }
+
+    /* Itens de grid e de flex tem `min-width: auto` por padrao, ou seja, nao
+       encolhem abaixo do proprio conteudo. Como a lista de contatos abaixo e
+       uma linha `nowrap`, a largura minima dela virava a soma dos cards e
+       empurrava a coluna inteira para 434px num viewport de 360px.
+       Zerar o min-width permite encolher e deixa o scroll acontecer. */
+    .chat-layout > *,
+    .chat-sidebar,
+    .chat-panel {
+        min-width: 0;
+    }
+
+    .chat-contacts {
+        flex-direction: row;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        max-height: none;
+        padding-bottom: 6px;
+        min-width: 0;
+    }
+
+    .chat-contact-card {
+        flex: 0 0 auto;
+        /* Largura fixa em vez de min-width: com min-width o card ainda
+           participava do calculo de largura minima do container pai. */
+        width: 190px;
+    }
+
+    .chat-messages {
+        max-height: 55vh;
+    }
+
+    .chat-form {
+        grid-template-columns: 1fr;
+    }
+
+    .chat-form .btn-primary {
+        width: 100%;
+    }
+
+    .chat-bubble {
+        max-width: 90%;
+    }
+}
+
+/* ---------------------------------------------------------------------------
+   9. Barras de topo e cabecalhos de secao
+   --------------------------------------------------------------------------- */
+@media (max-width: 768px) {
+    .top-bar,
+    .section-header,
+    .chat-panel-header {
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+
+    .search-bar {
+        width: 100% !important;
+        max-width: 100%;
+    }
+}

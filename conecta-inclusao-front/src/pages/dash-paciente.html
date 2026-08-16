@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard do Paciente - Portal Saude</title>
     <link rel="stylesheet" href="../assets/css/dash-paciente.css">
+    <link rel="stylesheet" href="../assets/css/responsive.css">
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
 </head>
 <body>
@@ -35,10 +36,14 @@
                 </div>
                 <div class="user-profile">
                     <div class="user-info">
-                        <strong id="patientHeaderName">Paciente</strong>
-                        <span id="patientHeaderSubtitle">Paciente ativo</span>
+                        <strong id="patientHeaderName">Carregando...</strong>
+                        <span id="patientHeaderSubtitle">&nbsp;</span>
                     </div>
-                    <img id="patientAvatar" src="" alt="Avatar do paciente">
+                    <!-- src precisa de um valor real: <img src=""> e renderizado
+                         como icone de imagem quebrada ate o JS preencher. -->
+                    <img id="patientAvatar"
+                         src="https://ui-avatars.com/api/?name=Paciente&background=0073e6&color=fff"
+                         alt="Avatar do paciente">
                 </div>
             </header>
 
@@ -108,17 +113,19 @@
                             Ver todos
                         </button>
                     </div>
-                    <table class="appointments-table">
-                        <thead>
-                            <tr>
-                                <th>Especialidade</th>
-                                <th>Profissional</th>
-                                <th>Unidade</th>
-                                <th>Data</th>
-                            </tr>
-                        </thead>
-                        <tbody id="overviewAppointmentsTable"></tbody>
-                    </table>
+                    <div class="table-scroll">
+                        <table class="appointments-table">
+                            <thead>
+                                <tr>
+                                    <th>Especialidade</th>
+                                    <th>Profissional</th>
+                                    <th>Unidade</th>
+                                    <th>Data</th>
+                                </tr>
+                            </thead>
+                            <tbody id="overviewAppointmentsTable"></tbody>
+                        </table>
+                    </div>
                 </section>
             </section>
 
@@ -422,25 +429,24 @@
 
     <script src="../assets/js/config.js"></script>
     <script src="../assets/js/utils.js"></script>
-    <!-- socket.io-client servido pelo proprio backend: cliente e servidor ficam
-         sempre na mesma versao e nao dependemos de CDN externa. O modulo do
-         dashboard so e carregado depois (ou apos falha), para nao travar a pagina. -->
+    <!-- socket.io-client vem do proprio backend, mantendo cliente e servidor na
+         mesma versao. Carregado em PARALELO e sem bloquear: a versao anterior so
+         injetava o dashboard depois que este script resolvia, entao quando a API
+         estava dormindo (free tier do Render) a pagina inteira ficava inerte -
+         spinner girando e nenhum botao funcionando. O chat trata a ausencia do
+         socket sozinho e cai para REST. -->
     <script>
         (function () {
             const base = window.APP_CONFIG?.API_BASE_URL || '';
-            const dashboard = document.createElement('script');
-            dashboard.type = 'module';
-            dashboard.src = '../assets/js/dash-paciente.js';
-
             const socketScript = document.createElement('script');
-            socketScript.src = `${base}/socket.io/socket.io.js`;
-            socketScript.onload = () => document.body.appendChild(dashboard);
-            socketScript.onerror = () => {
+            socketScript.src = base + '/socket.io/socket.io.js';
+            socketScript.async = true;
+            socketScript.onerror = function () {
                 console.warn('socket.io indisponivel; o chat usara apenas requisicoes REST.');
-                document.body.appendChild(dashboard);
             };
-            document.body.appendChild(socketScript);
+            document.head.appendChild(socketScript);
         })();
     </script>
+    <script type="module" src="../assets/js/dash-paciente.js"></script>
 </body>
 </html>
