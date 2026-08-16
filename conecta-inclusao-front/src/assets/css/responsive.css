@@ -193,6 +193,12 @@ h1, h2, h3, h4, h5, h6 {
     .chat-layout {
         grid-template-columns: 1fr;
         min-height: 0;
+        /* No desktop o layout tem altura fechada para a lista de mensagens
+           rolar por dentro. Empilhado em uma coluna so, essa altura passaria a
+           dividir o mesmo espaco entre a lista de contatos e o painel; aqui a
+           altura volta a ser automatica e quem limita a rolagem e o proprio
+           .chat-messages logo abaixo. */
+        height: auto;
     }
 
     /* Itens de grid e de flex tem `min-width: auto` por padrao, ou seja, nao
@@ -223,8 +229,17 @@ h1, h2, h3, h4, h5, h6 {
         width: 190px;
     }
 
+    /* Altura fixa (nao `max-height`): o card fica do mesmo tamanho desde a
+       primeira mensagem e nao cresce a cada envio - a rolagem acontece dentro
+       dele. Com `max-height` o card ainda crescia ate o limite. */
     .chat-messages {
+        height: 55vh;
         max-height: 55vh;
+        min-height: 0;
+    }
+
+    .chat-contacts {
+        flex: 0 0 auto;
     }
 
     .chat-form {

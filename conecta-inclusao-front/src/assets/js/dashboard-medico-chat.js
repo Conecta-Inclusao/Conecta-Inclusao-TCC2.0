@@ -16,6 +16,20 @@ let messages = [];
 let chatClient = null;
 let connectionStatus = 'desconectado';
 
+// Historico ja carregado, por contato. Serve para dois fins: trocar de conversa
+// sem piscar vazio e, principalmente, nao perder o que ja estava na tela quando
+// uma recarga falha.
+const historicoPorContato = new Map();
+
+// Cada abertura de conversa recebe um numero. Se o usuario clicar em outro
+// contato antes da resposta chegar, a resposta atrasada e descartada em vez de
+// sobrescrever a conversa que esta aberta agora.
+let aberturaAtual = 0;
+
+// 'ok' | 'carregando' | 'erro'
+let estadoHistorico = 'ok';
+let erroHistorico = '';
+
 function escapeHTML(value) {
     return String(value ?? '')
         .replace(/&/g, '&amp;')
@@ -27,7 +41,7 @@ function escapeHTML(value) {
 
 function getDoctorName() {
     try {
-        const stored = JSON.parse(localStorage.getItem('user') || '{}');
+        const stored = window.ConectaSession.getUser();
         return stored.name || 'Você';
     } catch {
         return 'Você';
@@ -104,6 +118,29 @@ function renderMessages() {
     list.innerHTML = '';
 
     if (!messages.length) {
+        // Estados distintos de proposito: "carregando" e "falhou" nao podem se
+        // parecer com "nao ha mensagens", senao um erro passa por historico
+        // apagado.
+        if (estadoHistorico === 'carregando') {
+            list.innerHTML = `
+                <div class="chat-empty">
+                    <i class="ph ph-spinner-gap"></i>
+                    <p>Carregando conversa...</p>
+                </div>
+            `;
+            return;
+        }
+
+        if (estadoHistorico === 'erro') {
+            list.innerHTML = `
+                <div class="chat-empty">
+                    <i class="ph ph-warning-circle"></i>
+                    <p>${escapeHTML(erroHistorico || 'Nao foi possivel carregar a conversa.')}</p>
+                </div>
+            `;
+            return;
+        }
+
         list.innerHTML = `
             <div class="chat-empty">
                 <i class="ph ph-chat-circle-dots"></i>
@@ -128,22 +165,54 @@ function renderMessages() {
 }
 
 async function openConversation(contact) {
+    const abertura = ++aberturaAtual;
+    const chave = Number(contact.profileId);
+
     activeContact = contact;
-    messages = [];
+
+    // Mostra na hora o que ja foi carregado antes; so exibe "carregando" para
+    // uma conversa que ainda nunca foi aberta.
+    const emCache = historicoPorContato.get(chave);
+    messages = emCache ? emCache.slice() : [];
+    estadoHistorico = emCache ? 'ok' : 'carregando';
+    erroHistorico = '';
+
     renderContacts();
     renderMessages();
 
     const conversation = await fetchConversation(contact.profileId);
-    messages = conversation?.messages || [];
+
+    // O usuario ja trocou de conversa: esta resposta nao vale mais.
+    if (abertura !== aberturaAtual) return;
+
+    if (conversation.ok) {
+        historicoPorContato.set(chave, conversation.messages);
+        messages = conversation.messages.slice();
+        estadoHistorico = 'ok';
+    } else {
+        // Falhou: mantem o que ja estava na tela em vez de esvaziar.
+        estadoHistorico = emCache ? 'ok' : 'erro';
+        erroHistorico = conversation.message;
+        console.warn('Falha ao carregar a conversa:', conversation.message);
+    }
 
     if (chatClient) {
         const joined = await chatClient.join(contact.profileId);
+        if (abertura !== aberturaAtual) return;
         if (!joined.ok) console.warn('Nao foi possivel entrar na conversa:', joined.message);
     }
 
     contact.unreadCount = 0;
     renderContacts();
     renderMessages();
+}
+
+/** Mantem o cache alinhado com o que esta na tela. */
+function registrarNoHistorico(profileId, message) {
+    const chave = Number(profileId);
+    const atual = historicoPorContato.get(chave) || [];
+    if (atual.some(item => item.id === message.id)) return;
+    historicoPorContato.set(chave, atual.concat(message));
 }
 
 async function sendMessage(content) {
@@ -164,6 +233,7 @@ async function sendMessage(content) {
 
     if (result.message && !messages.some(item => item.id === result.message.id)) {
         messages.push(result.message);
+        registrarNoHistorico(activeContact.profileId, result.message);
     }
 
     renderMessages();
@@ -176,6 +246,7 @@ export async function initDoctorChat() {
             if (messages.some(item => item.id === message.id)) return;
 
             messages.push(message);
+            registrarNoHistorico(activeContact.profileId, message);
             renderMessages();
         },
         onNotification: (notice) => {

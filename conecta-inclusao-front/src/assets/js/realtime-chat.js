@@ -12,7 +12,7 @@ const API_BASE_URL = window.APP_CONFIG?.API_BASE_URL || '';
 const MESSAGES_URL = `${API_BASE_URL}/messages`;
 
 function getToken() {
-    return localStorage.getItem('token');
+    return window.ConectaSession.getToken();
 }
 
 async function requestJSON(url, options = {}) {
@@ -43,10 +43,31 @@ export async function fetchContacts() {
     return result.ok && Array.isArray(result.data) ? result.data : [];
 }
 
-/** Historico persistido da conversa com um perfil. */
+/**
+ * Historico persistido da conversa com um perfil.
+ *
+ * Devolve sempre um objeto com `ok`. Antes esta funcao retornava `null` em
+ * qualquer falha e quem chamava fazia `conversation?.messages || []` - ou seja,
+ * uma sessao expirada ou um erro de rede eram renderizados exatamente como
+ * "conversa vazia". Era isso que dava a impressao de que o historico tinha sido
+ * apagado ao trocar de contato.
+ */
 export async function fetchConversation(targetProfileId) {
     const result = await requestJSON(`${MESSAGES_URL}/thread/${targetProfileId}`);
-    return result.ok ? result.data : null;
+
+    if (result.ok) {
+        return {
+            ok: true,
+            contact: result.data?.contact || null,
+            messages: Array.isArray(result.data?.messages) ? result.data.messages : []
+        };
+    }
+
+    return {
+        ok: false,
+        status: result.status,
+        message: result.data?.message || 'Nao foi possivel carregar a conversa.'
+    };
 }
 
 /** Fallback REST para enviar mensagem quando o socket estiver indisponivel. */

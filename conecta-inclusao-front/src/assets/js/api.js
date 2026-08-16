@@ -3,7 +3,7 @@ const API_BASE = window.APP_CONFIG?.AUTH_API_URL || '/auth';
 
 // Função para obter token do localStorage
 export function getToken() {
-    return localStorage.getItem('token');
+    return window.ConectaSession.getToken();
 }
 
 // Função genérica para fazer requisições

@@ -56,7 +56,11 @@ export const env = {
   DATABASE_URL,
 
   JWT_SECRET,
-  JWT_EXPIRES_IN: optional("JWT_EXPIRES_IN", "1h"),
+  // 1h era curto demais para uma sessao de uso normal: o token vencia no meio
+  // do trabalho e, como o front nao detectava isso, a tela apenas parava de
+  // responder - parecia perda de permissao. O front agora avisa e manda para o
+  // login; aqui damos um prazo compativel com uma jornada de atendimento.
+  JWT_EXPIRES_IN: optional("JWT_EXPIRES_IN", "8h"),
   TEMP_PASSWORD_RESET_EXPIRES_IN: optional("TEMP_PASSWORD_RESET_EXPIRES_IN", "15m"),
 
   MAX_LOGIN_ATTEMPTS: optionalNumber("MAX_LOGIN_ATTEMPTS", 3),

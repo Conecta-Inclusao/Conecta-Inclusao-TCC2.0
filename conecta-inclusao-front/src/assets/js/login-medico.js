@@ -112,8 +112,7 @@ function validateStrongPassword(password) {
 }
 
 function saveProfessionalSession(data, registryFallback) {
-    localStorage.setItem('token', data.token);
-    localStorage.setItem('user', JSON.stringify(data.user));
+    window.ConectaSession.saveSession(data.token, data.user);
 
     const user = data.user || {};
     const registeredRegistry = user.registry || user.crm || registryFallback;

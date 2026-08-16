@@ -14,8 +14,7 @@ async function loadProfessionalInfo() {
             console.log('Dados do profissional carregados:', professionalData);
 
             if (professionalData.profile && professionalData.profile !== 'medico') {
-                localStorage.removeItem('token');
-                localStorage.removeItem('user');
+                window.ConectaSession.clearSession();
                 window.location.href = 'login-medico.html';
                 return;
             }
@@ -40,8 +39,9 @@ async function loadProfessionalInfo() {
             if (welcomeEl) welcomeEl.innerText = `Bom dia, ${displayName}`;
             if (avatarEl) avatarEl.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=0073e6&color=fff`;
 
-            // Armazenar no localStorage e sessionStorage para compatibilidade
-            localStorage.setItem('user', JSON.stringify(professionalData));
+            // A sessao vive em sessionStorage (escopo de aba); as chaves
+            // auxiliares abaixo sao apenas cache de exibicao.
+            window.ConectaSession.setUser(professionalData);
             sessionStorage.setItem('professionalName', displayName);
             sessionStorage.setItem('professionalRegistry', registry);
             sessionStorage.setItem('professionalUnit', unit);
@@ -60,7 +60,7 @@ async function loadProfessionalInfo() {
 function loadProfessionalInfoFromStorage() {
     let storedUser = {};
     try {
-        storedUser = JSON.parse(localStorage.getItem('user') || '{}');
+        storedUser = window.ConectaSession.getUser();
     } catch (error) {
         storedUser = {};
     }
@@ -103,7 +103,7 @@ function escapeHtml(value) {
 
 function getProfessionalUnit() {
     try {
-        const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
+        const storedUser = window.ConectaSession.getUser();
         return sessionStorage.getItem('professionalUnit') || storedUser.unidade || storedUser.unit || '';
     } catch (error) {
         return sessionStorage.getItem('professionalUnit') || '';
@@ -708,8 +708,7 @@ function formatDateTime(dateString) {
 async function handleLogout() {
     const result = await showPopup('Deseja realmente sair?', 'confirm');
     if (result) {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
+        window.ConectaSession.clearSession();
         sessionStorage.removeItem('professionalName');
         sessionStorage.removeItem('professionalRegistry');
         sessionStorage.removeItem('professionalUnit');

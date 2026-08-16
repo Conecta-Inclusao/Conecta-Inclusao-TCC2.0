@@ -1,8 +1,7 @@
 function loadCompanyInfo() {
-    const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
+    const storedUser = window.ConectaSession.getUser();
     if (storedUser.profile && storedUser.profile !== 'clinica') {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
+        window.ConectaSession.clearSession();
         window.location.href = 'login-empresa.html';
         return;
     }
@@ -33,8 +32,7 @@ function switchTab(tabKey) {
 async function handleLogout() {
     const result = await showPopup('Deseja realmente sair?', 'confirm');
     if (result) {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
+        window.ConectaSession.clearSession();
         sessionStorage.removeItem('empresaNomeFantasia');
         sessionStorage.removeItem('empresaCnpj');
         sessionStorage.removeItem('empresaRazaoSocial');

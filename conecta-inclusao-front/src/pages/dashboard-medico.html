@@ -200,6 +200,11 @@
     </div>
 
     <script src="../assets/js/config.js"></script>
+    <script src="../assets/js/session.js"></script>
+    <!-- Guarda de perfil: roda antes de qualquer script da tela. Sem ela, um
+         token de paciente no navegador abria esta pagina normalmente e so
+         falhava depois, requisicao por requisicao. -->
+    <script>window.ConectaSession.requireSession('medico');</script>
     <script src="../assets/js/utils.js"></script>
     <!-- socket.io-client vem do proprio backend, mantendo cliente e servidor na
          mesma versao. Carregado em PARALELO e sem bloquear: a versao anterior so

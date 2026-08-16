@@ -32,6 +32,19 @@ let chatbotScheduleDraft = null;
 let professionalContacts = [];
 let activeConversationMessages = [];
 let chatConnectionStatus = 'desconectado';
+
+// Historico ja carregado, por profissional. Evita piscar vazio ao trocar de
+// conversa e, sobretudo, impede que uma recarga que falha apague o que ja
+// estava na tela.
+const historicoPorProfissional = new Map();
+
+// Numera cada abertura de conversa: resposta que chega depois de o usuario ter
+// trocado de contato e descartada em vez de sobrescrever a conversa atual.
+let aberturaConversaAtual = 0;
+
+// 'ok' | 'carregando' | 'erro'
+let estadoHistoricoConversa = 'ok';
+let erroHistoricoConversa = '';
 let chatClient = null;
 let patientAppointments = [];
 let patientAppointmentsLoaded = false;
@@ -45,17 +58,17 @@ async function loadUserInfo() {
         if (profileResult.ok && profileResult.data) {
             user = profileResult.data;
             if (user?.name) {
-                localStorage.setItem('patientName', String(user.name));
+                sessionStorage.setItem('patientName', String(user.name));
             }
             if (user?.id) {
-                localStorage.setItem('patientId', String(user.id));
+                sessionStorage.setItem('patientId', String(user.id));
             }
         } else {
             console.error('Falha ao carregar perfil do paciente:', profileResult);
             user = {};
         }
 
-        const patientId = user?.id || localStorage.getItem('patientId');
+        const patientId = user?.id || sessionStorage.getItem('patientId');
         if (patientId) {
             try {
                 const appointmentsResult = await getPatientAppointments(patientId);
@@ -133,7 +146,7 @@ function loadPatientData() {
     const name = user?.name || 'Paciente';
     const cpf = user?.cpf || '--';
     const birthDate = user?.data_nascimento ? formatDate(user.data_nascimento) : '--';
-    const responsible = user?.responsible || localStorage.getItem('patientResponsible') || '--';
+    const responsible = user?.responsible || sessionStorage.getItem('patientResponsible') || '--';
     const disabilityType = user?.tipo_deficiencia || '--';
     const plan = user?.plan || '--';
     const preferredUnit = user?.unidade || user?.unit || '--';
@@ -211,7 +224,7 @@ function changeAppointmentsMonth(delta) {
 }
 
 function getToken() {
-    return localStorage.getItem('token');
+    return window.ConectaSession.getToken();
 }
 
 async function fetchAvailableProfessionals() {
@@ -329,7 +342,7 @@ let availablePermissions = [];
 
 async function loadAvailablePermissions() {
     const grid = document.getElementById('guardianPermissionsGrid');
-    const token = localStorage.getItem('token');
+    const token = window.ConectaSession.getToken();
 
     if (!grid || !token) return;
 
@@ -386,7 +399,7 @@ function renderGuardians() {
 
     guardiansList.innerHTML = '<div class="guardians-empty"><i class="ph ph-spinner-gap"></i><p>Carregando...</p></div>';
 
-    const token = localStorage.getItem('token');
+    const token = window.ConectaSession.getToken();
 
     (async () => {
         let guardians = [];
@@ -953,14 +966,36 @@ async function loadProfessionalContacts() {
 
 /** Abre a conversa com um profissional: historico via REST + sala via socket. */
 async function openProfessionalConversation(contact) {
-    activeConversationMessages = [];
+    const abertura = ++aberturaConversaAtual;
+    const chave = Number(contact.profileId);
+
+    // Mostra de imediato o historico ja carregado antes; "carregando" so
+    // aparece em conversa aberta pela primeira vez.
+    const emCache = historicoPorProfissional.get(chave);
+    activeConversationMessages = emCache ? emCache.slice() : [];
+    estadoHistoricoConversa = emCache ? 'ok' : 'carregando';
+    erroHistoricoConversa = '';
     renderActiveConversation();
 
     const conversation = await fetchConversation(contact.profileId);
-    activeConversationMessages = conversation?.messages || [];
+
+    // O usuario ja trocou de conversa: descarta a resposta atrasada.
+    if (abertura !== aberturaConversaAtual) return;
+
+    if (conversation.ok) {
+        historicoPorProfissional.set(chave, conversation.messages);
+        activeConversationMessages = conversation.messages.slice();
+        estadoHistoricoConversa = 'ok';
+    } else {
+        // Falha nao esvazia a tela: mantem o que ja havia sido carregado.
+        estadoHistoricoConversa = emCache ? 'ok' : 'erro';
+        erroHistoricoConversa = conversation.message;
+        console.warn('Falha ao carregar a conversa:', conversation.message);
+    }
 
     if (chatClient) {
         const joinResult = await chatClient.join(contact.profileId);
+        if (abertura !== aberturaConversaAtual) return;
         if (!joinResult.ok) {
             console.warn('Nao foi possivel entrar na conversa:', joinResult.message);
         }
@@ -972,6 +1007,14 @@ async function openProfessionalConversation(contact) {
 
     renderMessageContacts();
     renderActiveConversation();
+}
+
+/** Mantem o cache de historico alinhado com o que esta na tela. */
+function registrarNoHistoricoProfissional(profileId, message) {
+    const chave = Number(profileId);
+    const atual = historicoPorProfissional.get(chave) || [];
+    if (atual.some(item => item.id === message.id)) return;
+    historicoPorProfissional.set(chave, atual.concat(message));
 }
 
 function initChatClient() {
@@ -986,6 +1029,7 @@ function initChatClient() {
             if (activeConversationMessages.some(item => item.id === message.id)) return;
 
             activeConversationMessages.push(message);
+            registrarNoHistoricoProfissional(contact.profileId, message);
             renderActiveConversation();
         },
         onNotification: (notice) => {
@@ -1276,12 +1320,32 @@ function renderActiveConversation() {
         }));
 
     if (!bubbles.length) {
-        messagesList.innerHTML = `
-            <div class="chat-empty">
-                <i class="ph ph-chat-circle-dots"></i>
-                <p>Nenhuma mensagem ainda. Escreva a primeira.</p>
-            </div>
-        `;
+        // "Carregando" e "falhou" precisam ser visualmente diferentes de "nao
+        // ha mensagens" - senao um erro passa por historico apagado.
+        const estadoDoProfissional = contact.type === 'professional' ? estadoHistoricoConversa : 'ok';
+
+        if (estadoDoProfissional === 'carregando') {
+            messagesList.innerHTML = `
+                <div class="chat-empty">
+                    <i class="ph ph-spinner-gap"></i>
+                    <p>Carregando conversa...</p>
+                </div>
+            `;
+        } else if (estadoDoProfissional === 'erro') {
+            messagesList.innerHTML = `
+                <div class="chat-empty">
+                    <i class="ph ph-warning-circle"></i>
+                    <p>${escapeHTML(erroHistoricoConversa || 'Nao foi possivel carregar a conversa.')}</p>
+                </div>
+            `;
+        } else {
+            messagesList.innerHTML = `
+                <div class="chat-empty">
+                    <i class="ph ph-chat-circle-dots"></i>
+                    <p>Nenhuma mensagem ainda. Escreva a primeira.</p>
+                </div>
+            `;
+        }
     }
 
     bubbles.forEach(bubbleData => {
@@ -1369,6 +1433,7 @@ async function sendPatientMessage(content) {
 
     if (result.message && !activeConversationMessages.some(item => item.id === result.message.id)) {
         activeConversationMessages.push(result.message);
+        registrarNoHistoricoProfissional(contact.profileId, result.message);
     }
 
     renderActiveConversation();
@@ -1725,7 +1790,7 @@ async function cancelAppointmentById(appointmentId, dateString) {
     const result = await showPopup('Tem certeza que deseja desmarcar esta consulta?', 'confirm');
     if (!result) return;
 
-    const token = localStorage.getItem('token');
+    const token = window.ConectaSession.getToken();
     if (!token) {
         await showPopup('Voce precisa estar autenticado para desmarcar esta consulta. Faça login novamente.');
         return;
@@ -1807,8 +1872,8 @@ function refreshDashboard() {
 async function handleLogout() {
     const result = await showPopup('Deseja realmente sair?', 'confirm');
     if (result) {
-        localStorage.removeItem('token');
-        window.location.href = 'login-paciente.html';
+        window.ConectaSession.clearSession();
+        window.location.href = 'login-paciente.html?motivo=saiu';
     }
 }
 
@@ -1862,7 +1927,7 @@ async function cancelAppointment(button) {
         return;
     }
 
-    const token = localStorage.getItem('token');
+    const token = window.ConectaSession.getToken();
     if (!token) {
         await showPopup('Voce precisa estar autenticado para desmarcar esta consulta. Faça login novamente.');
         return;
@@ -1968,7 +2033,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             // Tentar criar ou atualizar agendamento no backend
-            const token = localStorage.getItem('token');
+            const token = window.ConectaSession.getToken();
             if (!token) {
                 await showPopup('Voce precisa estar autenticado para agendar/remarcar. Faça login novamente.');
                 return;
@@ -2159,7 +2224,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 };
 
                 // If user is authenticated, try to persist on server
-                const token = localStorage.getItem('token');
+                const token = window.ConectaSession.getToken();
                 if (token) {
                     try {
                         const resp = await fetch(`${window.APP_CONFIG?.AUTH_API_URL || '/auth'}/patient/guardians`, {

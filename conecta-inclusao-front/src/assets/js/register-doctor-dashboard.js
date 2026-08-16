@@ -1,5 +1,5 @@
 async function getClinicDetails() {
-    const token = localStorage.getItem('token');
+    const token = window.ConectaSession.getToken();
 
     if (!token) {
         return { ok: false, message: 'Token nao encontrado' };
@@ -22,7 +22,7 @@ async function getClinicDetails() {
 }
 
 async function registerDoctorFromDashboard(data) {
-    const token = localStorage.getItem('token');
+    const token = window.ConectaSession.getToken();
 
     if (!token) {
         showPopup('Voce precisa estar autenticado para cadastrar um medico.');
@@ -233,7 +233,9 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const userStr = localStorage.getItem('user');
+        const userStr = window.ConectaSession.getToken()
+            ? JSON.stringify(window.ConectaSession.getUser())
+            : null;
         if (!userStr) {
             showPopup('Voce precisa estar autenticado.');
             window.location.href = 'login-empresa.html';

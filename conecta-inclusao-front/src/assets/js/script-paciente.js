@@ -148,8 +148,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             if (result.ok) {
                 // Salvar token e dados
-                localStorage.setItem('token', result.data.token);
-                localStorage.setItem('user', JSON.stringify(result.data.user));
+                window.ConectaSession.saveSession(result.data.token, result.data.user);
                 localStorage.setItem('patientCPF', cpfDigits);
 
                 // Redireciona para a tela

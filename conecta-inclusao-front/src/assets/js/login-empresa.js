@@ -166,8 +166,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             if (result.ok) {
                 // Salvar token e dados do usuário
-                localStorage.setItem('token', result.data.token);
-                localStorage.setItem('user', JSON.stringify(result.data.user));
+                window.ConectaSession.saveSession(result.data.token, result.data.user);
 
                 // Salvar dados da empresa na sessão
                 sessionStorage.setItem('empresaNomeFantasia', result.data.user.name);

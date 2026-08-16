@@ -818,7 +818,12 @@ body {
     display: grid;
     grid-template-columns: 320px minmax(0, 1fr);
     gap: 24px;
-    min-height: 520px;
+    /* Altura FECHADA, nao `min-height`. Com apenas um minimo, a linha `1fr` da
+       lista de mensagens nao tinha limite algum para dividir e resolvia como
+       `auto`: o painel crescia a cada mensagem e empurrava a pagina para baixo.
+       Fixando a altura, o `1fr` vira um limite real e a rolagem passa a
+       acontecer dentro da lista. */
+    height: clamp(460px, 72vh, 760px);
 }
 
 .chat-sidebar {
@@ -829,6 +834,10 @@ body {
     display: flex;
     flex-direction: column;
     gap: 18px;
+    /* Item de grid nasce com `min-height: auto` e nao encolhe abaixo do
+       conteudo; sem zerar isso a lista de contatos estoura a altura fechada
+       em vez de rolar por dentro. */
+    min-height: 0;
 }
 
 .chat-sidebar-header h3 {
@@ -847,6 +856,9 @@ body {
     flex-direction: column;
     gap: 12px;
     overflow-y: auto;
+    /* Ocupa a sobra da barra lateral e rola por dentro dela. */
+    flex: 1 1 auto;
+    min-height: 0;
 }
 
 .chat-contact-card {
@@ -894,8 +906,11 @@ body {
     border: 1px solid #dbe7f0;
     border-radius: 22px;
     display: grid;
-    grid-template-rows: auto minmax(260px, 1fr) auto auto;
+    /* `minmax(0, 1fr)`: o minimo de 260px que existia aqui impedia a linha de
+       encolher, e a lista acabava vazando o painel em telas baixas. */
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
     overflow: hidden;
+    min-height: 0;
 }
 
 .chat-panel-header {
@@ -941,6 +956,9 @@ body {
     flex-direction: column;
     gap: 14px;
     overflow-y: auto;
+    /* Sem este min-height a linha de grid se expande ate caber tudo e a
+       rolagem interna nunca chega a acontecer. */
+    min-height: 0;
 }
 
 .chat-empty,

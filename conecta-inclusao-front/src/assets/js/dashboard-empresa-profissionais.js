@@ -11,7 +11,7 @@ async function loadAPI() {
 }
 
 function getClinicAuthToken() {
-    return localStorage.getItem('token');
+    return window.ConectaSession.getToken();
 }
 
 // Máscara de CRM automática
@@ -59,8 +59,10 @@ async function handleRegisterProfessional(event) {
         return;
     }
     
-    // Obter clinicaId do localStorage
-    const userData = localStorage.getItem('user');
+    // Obter clinicaId da sessao da aba
+    const userData = window.ConectaSession.getToken()
+        ? JSON.stringify(window.ConectaSession.getUser())
+        : null;
     if (!userData) {
         showPopup('Erro: Dados do usuário não encontrados. Faça login novamente.');
         return;
