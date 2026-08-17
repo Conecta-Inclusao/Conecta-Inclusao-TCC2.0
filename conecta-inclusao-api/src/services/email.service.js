@@ -1,3 +1,5 @@
+import dns from "node:dns/promises";
+import net from "node:net";
 import nodemailer from "nodemailer";
 import { env } from "../env.js";
 
@@ -11,16 +13,36 @@ function escapeHtml(value) {
     .replace(/'/g, "&#039;");
 }
 
-function createTransporter() {
+// Em rede sem rota IPv6 o envio falhava com "connect ENETUNREACH <ipv6>:587":
+// o nodemailer resolve o host sozinho (A + AAAA) e sorteia um dos enderecos,
+// entao caia no AAAA do Gmail. A opcao `family: 4` do transporte nao adianta,
+// porque quando o net.connect e chamado o host ja e um IP literal. Resolvemos
+// o A record aqui e conectamos direto nele; `servername` mantem o hostname
+// original para o certificado continuar validando no STARTTLS.
+async function resolveIpv4Host(host) {
+  if (net.isIP(host)) {
+    return host;
+  }
+
+  try {
+    const [address] = await dns.resolve4(host);
+    return address || host;
+  } catch {
+    // Sem A record (ou DNS indisponivel): deixa o nodemailer resolver.
+    return host;
+  }
+}
+
+async function createTransporter() {
   if (!env.SMTP_HOST || !env.SMTP_USER || !env.SMTP_PASS) {
     throw new Error("SMTP nao configurado (SMTP_HOST, SMTP_USER e SMTP_PASS sao obrigatorios para envio de e-mail).");
   }
 
   return nodemailer.createTransport({
-    host: env.SMTP_HOST,
+    host: await resolveIpv4Host(env.SMTP_HOST),
+    servername: env.SMTP_HOST,
     port: env.SMTP_PORT,
     secure: env.SMTP_SECURE,
-    family: 4,
     auth: {
       user: env.SMTP_USER,
       pass: env.SMTP_PASS
@@ -29,7 +51,7 @@ function createTransporter() {
 }
 
 export async function sendPasswordResetEmail({ to, name, token, resetUrl }) {
-  const transporter = createTransporter();
+  const transporter = await createTransporter();
   const from = env.SMTP_FROM || env.SMTP_USER;
 
   await transporter.sendMail({
