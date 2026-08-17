@@ -49,86 +49,85 @@ async function registerDoctorFromDashboard(data) {
 }
 
 function showCredentialsModal(credentials) {
+    // Este modal era 70 linhas de `style="..."` inline com uma paleta propria
+    // (#3498db, #27ae60) que nao existia em nenhum outro lugar do sistema - e,
+    // por ser inline, ignorava o tema de alto contraste. Agora usa as mesmas
+    // classes dos demais modais; o estilo esta em dashboard-empresa.css.
     const modal = document.createElement('div');
-    modal.style.cssText = `
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background-color: rgba(0, 0, 0, 0.5);
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        z-index: 1000;
-    `;
+    modal.className = 'modal credentials-modal active';
 
     const content = document.createElement('div');
-    content.style.cssText = `
-        background: white;
-        border-radius: 12px;
-        padding: 2rem;
-        max-width: 500px;
-        width: 90%;
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
-    `;
+    content.className = 'modal-content';
 
     content.innerHTML = `
-        <div style="text-align: center; margin-bottom: 1.5rem;">
-            <i class="ph ph-check-circle" style="font-size: 3rem; color: #27ae60;"></i>
-            <h2 style="color: #333; margin-top: 1rem;">Medico Cadastrado com Sucesso!</h2>
+        <div class="credentials-head">
+            <i class="ph ph-check-circle" aria-hidden="true"></i>
+            <h2>Profissional cadastrado com sucesso</h2>
         </div>
 
-        <div style="background-color: #e8f4f8; border-left: 4px solid #3498db; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;">
-            <p style="color: #2c3e50; margin: 0; font-size: 0.95rem;">
-                <strong>Importante:</strong> Compartilhe as credenciais abaixo com o medico. Ele devera alterar a senha no primeiro login.
-            </p>
-        </div>
+        <p class="credentials-note">
+            <strong>Importante:</strong> compartilhe as credenciais abaixo com o profissional.
+            Ele devera alterar a senha no primeiro acesso.
+        </p>
 
-        <div style="background-color: #f5f5f5; padding: 1.5rem; border-radius: 8px; margin-bottom: 1.5rem;">
-            <div style="margin-bottom: 1.5rem;">
-                <label style="display: block; font-weight: 600; color: #333; margin-bottom: 0.5rem;">CRM:</label>
-                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                    <input type="text" value="${credentials.identifier}" readonly style="flex: 1; padding: 0.75rem; border: 1px solid #ddd; border-radius: 6px; font-family: monospace; font-size: 1rem;">
-                    <button onclick="copyToClipboard('${credentials.identifier}')" style="padding: 0.75rem 1rem; background-color: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer;">
-                        <i class="ph ph-copy"></i> Copiar
+        <div class="credentials-box">
+            <div class="credentials-field">
+                <label for="credentialsRegistry">Registro (login)</label>
+                <div class="credentials-row">
+                    <input type="text" id="credentialsRegistry" value="${credentials.identifier}" readonly>
+                    <button type="button" class="btn-secondary" data-copy="identifier">
+                        <i class="ph ph-copy" aria-hidden="true"></i> Copiar
                     </button>
                 </div>
             </div>
 
-            <div style="margin-bottom: 1.5rem;">
-                <label style="display: block; font-weight: 600; color: #333; margin-bottom: 0.5rem;">Senha Temporaria:</label>
-                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                    <input type="text" value="${credentials.password}" readonly style="flex: 1; padding: 0.75rem; border: 1px solid #ddd; border-radius: 6px; font-family: monospace; font-size: 1rem;">
-                    <button onclick="copyToClipboard('${credentials.password}')" style="padding: 0.75rem 1rem; background-color: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer;">
-                        <i class="ph ph-copy"></i> Copiar
+            <div class="credentials-field">
+                <label for="credentialsPassword">Senha temporaria</label>
+                <div class="credentials-row">
+                    <input type="text" id="credentialsPassword" value="${credentials.password}" readonly>
+                    <button type="button" class="btn-secondary" data-copy="password">
+                        <i class="ph ph-copy" aria-hidden="true"></i> Copiar
                     </button>
                 </div>
             </div>
 
-            <div>
-                <label style="display: block; font-weight: 600; color: #333; margin-bottom: 0.5rem;">Nome Medico:</label>
-                <p style="margin: 0; padding: 0.75rem; background-color: white; border-radius: 6px; border: 1px solid #ddd;">${credentials.name}</p>
+            <div class="credentials-field">
+                <label for="credentialsName">Nome do profissional</label>
+                <input type="text" id="credentialsName" value="${credentials.name}" readonly>
             </div>
         </div>
 
-        <div style="display: flex; gap: 1rem;">
-            <button onclick="this.closest('div').parentElement.parentElement.remove();" style="flex: 1; padding: 0.75rem 1.5rem; background-color: #27ae60; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">
-                Fechar
+        <div class="modal-footer">
+            <button type="button" class="btn-secondary" data-action="print">
+                <i class="ph ph-printer" aria-hidden="true"></i> Imprimir
             </button>
-            <button onclick="printCredentials('${credentials.identifier}', '${credentials.password}', '${credentials.name}')" style="flex: 1; padding: 0.75rem 1.5rem; background-color: #3498db; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">
-                <i class="ph ph-printer"></i> Imprimir
-            </button>
+            <button type="button" class="btn-primary" data-action="close">Fechar</button>
         </div>
     `;
 
     modal.appendChild(content);
     document.body.appendChild(modal);
 
+    content.querySelectorAll('[data-copy]').forEach((button) => {
+        button.addEventListener('click', () => copyToClipboard(credentials[button.dataset.copy]));
+    });
+
+    content.querySelector('[data-action="print"]').addEventListener('click', () => {
+        printCredentials(credentials.identifier, credentials.password, credentials.name);
+    });
+
+    const close = () => modal.remove();
+    content.querySelector('[data-action="close"]').addEventListener('click', close);
+    content.querySelector('[data-action="close"]').focus();
+
     modal.addEventListener('click', (e) => {
-        if (e.target === modal) {
-            modal.remove();
-        }
+        if (e.target === modal) close();
+    });
+
+    document.addEventListener('keydown', function onEscape(event) {
+        if (event.key !== 'Escape') return;
+        document.removeEventListener('keydown', onEscape);
+        close();
     });
 }
 

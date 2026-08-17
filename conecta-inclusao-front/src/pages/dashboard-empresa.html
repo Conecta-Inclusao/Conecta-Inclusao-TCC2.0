@@ -3,14 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard Empresa - Portal Saúde</title>
+    <meta name="theme-color" content="#b96210">
+    <title>Painel da Clinica | Conecta Inclusao</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <link rel="stylesheet" href="../assets/css/theme.css">
+    <link rel="stylesheet" href="../assets/css/dashboard.css">
     <link rel="stylesheet" href="../assets/css/dashboard-empresa.css">
     <link rel="stylesheet" href="../assets/css/responsive.css">
-    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script src="../assets/js/acessibilidade.js"></script>
 </head>
 <body>
+    <a class="skip-link" href="#conteudo">Pular para o conteúdo</a>
+
     <div class="dashboard-container">
-        <aside class="sidebar" aria-label="Barra lateral">
+        <aside class="sidebar" aria-label="Menu da clínica">
             <div class="logo-section">
                 <i class="ph ph-building" aria-hidden="true"></i>
                 <span id="companySidebarName">Carregando...</span>
@@ -23,12 +32,14 @@
                 <button type="button" class="nav-link" data-tab="settings" role="tab" aria-controls="settings" aria-selected="false"><i class="ph ph-gear" aria-hidden="true"></i> Configurações</button>
             </nav>
             <div class="sidebar-footer">
-                <button type="button" class="btn-logout" onclick="handleLogout()"><i class="ph ph-sign-out" aria-hidden="true"></i> Sair</button>
+                <button type="button" class="btn-logout" onclick="handleLogout()">
+                    <i class="ph ph-sign-out" aria-hidden="true"></i> <span>Sair</span>
+                </button>
             </div>
         </aside>
 
-        <main class="main-content">
-            <header class="top-bar" role="banner">
+        <main class="main-content" id="conteudo">
+            <header class="top-bar">
                 <div class="top-bar-left"></div>
                 <div class="user-profile" aria-label="Perfil da empresa">
                     <div class="user-info">
@@ -110,7 +121,7 @@
                             </thead>
                             <tbody id="teamTableBody">
                                 <tr>
-                                    <td colspan="4" style="text-align: center; color: #64748b; padding: 1rem;">Carregando profissionais...</td>
+                                    <td colspan="4" class="table-empty">Carregando profissionais...</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -132,11 +143,11 @@
                     </div>
                     <div class="form-grid">
                         <div class="input-group">
-                            <label for="professionalName">Nome Completo <span style="color: #e74c3c;">*</span></label>
+                            <label for="professionalName">Nome Completo <span class="required" aria-hidden="true">*</span></label>
                             <input type="text" id="professionalName" placeholder="Dr. João Silva" required>
                         </div>
                         <div class="input-group">
-                            <label for="professionalCRM">CRM <span style="color: #e74c3c;">*</span></label>
+                            <label for="professionalCRM">CRM <span class="required" aria-hidden="true">*</span></label>
                             <input type="text" id="professionalCRM" placeholder="ABC1234" maxlength="7" required>
                         </div>
                         <div class="input-group">
@@ -144,7 +155,7 @@
                             <input type="email" id="professionalEmail" placeholder="medico@example.com">
                         </div>
                         <div class="input-group">
-                            <label for="professionalUnit">Unidade <span style="color: #e74c3c;">*</span></label>
+                            <label for="professionalUnit">Unidade <span class="required" aria-hidden="true">*</span></label>
                             <select id="professionalUnit" required>
                                 <option value="">Selecione uma unidade...</option>
                                 <option value="Unidade A">Unidade A</option>
@@ -153,7 +164,7 @@
                             </select>
                         </div>
                         <div class="input-group full-width">
-                            <label for="professionalEspecialidade">Especialidade <span style="color: #e74c3c;">*</span></label>
+                            <label for="professionalEspecialidade">Especialidade <span class="required" aria-hidden="true">*</span></label>
                             <select id="professionalEspecialidade" required>
                                 <option value="">Selecione uma especialidade...</option>
                                 <option value="Cardiologia">Cardiologia</option>
@@ -170,11 +181,11 @@
                             </select>
                         </div>
                         <div class="input-group">
-                            <label for="professionalPassword">Senha <span style="color: #e74c3c;">*</span></label>
+                            <label for="professionalPassword">Senha <span class="required" aria-hidden="true">*</span></label>
                             <input type="password" id="professionalPassword" data-password-guidance="true" placeholder="Senha forte (8+ caracteres, maiúscula, minúscula, número e especial)" required>
                         </div>
                         <div class="input-group">
-                            <label for="professionalConfirmPassword">Confirmar Senha <span style="color: #e74c3c;">*</span></label>
+                            <label for="professionalConfirmPassword">Confirmar Senha <span class="required" aria-hidden="true">*</span></label>
                             <input type="password" id="professionalConfirmPassword" placeholder="Repita a senha" required>
                         </div>
                         <div class="input-group full-width">

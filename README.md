@@ -63,15 +63,46 @@ O **Conecta Inclusão** propõe uma plataforma digital que conecta pacientes PCD
 
 ## ♿ Acessibilidade (Diferencial do Projeto)
 
-A plataforma foi projetada com foco em inclusão digital:
+A plataforma foi projetada com foco em inclusão digital. Em **todas as telas**
+há um botão flutuante **"Acessibilidade"** que abre um painel com três ajustes,
+gravados no navegador e reaplicados nas próximas visitas:
 
-* Interface simples e intuitiva
-* Facilidade de navegação para responsáveis
-* Estrutura preparada para melhorias como:
+* **Tamanho do texto** — 100%, 112% ou 125% (a interface inteira acompanha,
+  porque os tamanhos são definidos em `rem`)
+* **Alto contraste** — tema preto/amarelo, acima da relação exigida pela WCAG AAA
+* **Animações reduzidas** — para quem tem sensibilidade a movimento
+  (a preferência do sistema, `prefers-reduced-motion`, também é respeitada)
 
-  * leitura de tela
-  * alto contraste
-  * acessibilidade ampliada
+Além disso, valem para o front inteiro:
+
+* link **"Pular para o conteúdo"** como primeiro item tabulável de cada página
+* foco visível em todo campo, botão e link (antes o CSS apagava o contorno)
+* alvos de toque de no mínimo 44 px
+* rótulos associados a todos os campos e ícones marcados como decorativos
+* corpo de texto a partir de 16 px, evitando o zoom automático do iOS
+
+---
+
+## 🎨 Front-end
+
+O front é HTML/CSS/JS puro, sem framework, organizado como um pequeno sistema
+de design em vez de uma folha de estilo por página:
+
+```
+assets/css/
+  theme.css        Tokens (cor, tipografia, espaço, raio, sombra), reset,
+                   botões, campos, selos, modais, alto contraste
+  auth.css         Telas de login e cadastro
+  dashboard.css    Casco comum dos três painéis (barra lateral, topo,
+                   cartões, tabelas, chat, modais)
+  <pagina>.css     Só o que é exclusivo daquela tela
+  responsive.css   Rede de segurança global (carregado por último)
+```
+
+Cada perfil tem uma cor de acento própria — **azul** para o paciente,
+**verde-água** para o profissional e **âmbar** para a clínica —, aplicada por
+uma variável CSS que os componentes leem. A cor acompanha a pessoa do login até
+o painel, funcionando como pista de "onde estou".
 
 ---
 
@@ -98,7 +129,9 @@ conecta-inclusao-api/          Backend (Node.js + Express)
 
 conecta-inclusao-front/        Frontend (HTML/CSS/JS puro)
   src/pages/                   Páginas
-  src/assets/js/               Scripts (realtime-chat.js é o cliente do chat)
+  src/assets/css/              Sistema de design (theme.css é a base)
+  src/assets/js/               Scripts (realtime-chat.js é o cliente do chat,
+                               acessibilidade.js é o painel de preferências)
   scripts/generate-config.js   Gera src/assets/js/config.js no build
 
 Banco de dados.sql             Schema PostgreSQL canônico
@@ -208,7 +241,7 @@ O desenvolvimento do projeto seguiu:
 * Implementação de videochamadas integradas
 * Sistema de recomendação de médicos
 * Aplicativo mobile
-* Recursos avançados de acessibilidade
+* Auditoria de acessibilidade com usuários reais e leitores de tela
 * Suíte de testes automatizados (o projeto ainda não possui testes)
 * Auditoria de acesso a dados sensíveis (exigência prática de LGPD para dados de saúde)
 

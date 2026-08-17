@@ -221,7 +221,7 @@ function showTemporaryPasswordModal(resetToken, registryFallback, loginButton) {
         submitButton.innerText = 'Salvar nova senha';
 
         if (loginButton) {
-            loginButton.innerHTML = 'Acessar como Médico';
+            loginButton.innerHTML = 'Entrar como profissional';
             loginButton.style.opacity = '';
             loginButton.disabled = false;
         }
@@ -256,72 +256,93 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-// CSS para animação
+// Estilo do modal de primeira senha. Continua injetado aqui porque so existe
+// nesta tela, mas agora le as variaveis de theme.css em vez de repetir cores
+// literais - assim o alto contraste tambem vale para ele.
 const style = document.createElement('style');
 style.innerHTML = `
-    @keyframes spin {
-        from { transform: rotate(0deg); }
-        to { transform: rotate(360deg); }
-    }
-
     .temporary-password-overlay {
         position: fixed;
         inset: 0;
-        background: rgba(15, 23, 42, 0.62);
+        background: rgba(13, 27, 42, 0.62);
         display: flex;
         align-items: center;
         justify-content: center;
-        padding: 24px;
+        padding: var(--space-5, 1.25rem);
         z-index: 4000;
     }
 
     .temporary-password-card {
-        width: min(100%, 460px);
-        background: #ffffff;
-        border-radius: 18px;
-        padding: 28px;
-        box-shadow: 0 24px 70px rgba(15, 23, 42, 0.28);
+        width: min(100%, 29rem);
+        max-height: calc(100vh - 2.5rem);
+        overflow-y: auto;
+        background: var(--surface, #fff);
+        border: 1px solid var(--border, #d9e3f0);
+        border-radius: var(--radius-lg, 1.125rem);
+        padding: var(--space-7, 2rem);
+        box-shadow: var(--shadow-lg, 0 24px 70px rgba(15, 23, 42, 0.28));
+    }
+
+    .temporary-password-card form {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-4, 1rem);
     }
 
     .temporary-password-header {
         text-align: center;
-        margin-bottom: 22px;
+        margin-bottom: var(--space-6, 1.5rem);
     }
 
     .temporary-password-header i {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width: 54px;
-        height: 54px;
+        width: 3.25rem;
+        height: 3.25rem;
         border-radius: 50%;
-        background: #eef4ff;
-        color: #0073e6;
-        font-size: 28px;
-        margin-bottom: 14px;
+        background: var(--accent-soft, #eef5ff);
+        color: var(--accent-strong, #154793);
+        font-size: 1.7rem;
+        margin-bottom: var(--space-3, 0.75rem);
     }
 
     .temporary-password-header h2 {
-        color: #1f2937;
-        margin-bottom: 8px;
+        color: var(--text, #0d1b2a);
+        font-size: var(--fs-xl, 1.3125rem);
+        margin-bottom: var(--space-2, 0.5rem);
     }
 
-    .temporary-password-header p,
+    .temporary-password-header p {
+        color: var(--text-muted, #56657e);
+        font-size: var(--fs-sm, 0.875rem);
+        line-height: 1.6;
+    }
+
     .password-rules {
-        color: #64748b;
-        font-size: 14px;
+        display: grid;
+        gap: 0.35rem;
+        padding: var(--space-3, 0.75rem) var(--space-4, 1rem);
+        border-radius: var(--radius-md, 0.75rem);
+        background: var(--surface-muted, #f6f9fe);
+        color: var(--text-soft, #2b3d54);
+        font-size: var(--fs-sm, 0.875rem);
         line-height: 1.5;
     }
 
-    .password-rules {
-        margin: 12px 0 4px 18px;
+    .password-rules li::before {
+        content: '• ';
+        color: var(--accent, #1a56b8);
+        font-weight: 700;
     }
 
-    .temporary-password-error {
-        min-height: 20px;
-        color: #dc2626;
-        font-size: 14px;
-        margin: 10px 0;
+    .temporary-password-error:not(:empty) {
+        padding: var(--space-2, 0.5rem) var(--space-3, 0.75rem);
+        border-radius: var(--radius-sm, 0.5rem);
+        background: var(--danger-soft, #fdeded);
+        color: var(--danger, #c22a2a);
+        font-size: var(--fs-sm, 0.875rem);
+        font-weight: 600;
     }
 `;
 document.head.appendChild(style);
@@ -359,7 +380,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (result.ok) {
                 if (result.data.user?.profile !== 'medico') {
                     showPopup('Login de profissional deve ser feito somente com o CRM cadastrado pela empresa.');
-                    btn.innerHTML = 'Acessar como MÃ©dico';
+                    btn.innerHTML = 'Entrar como profissional';
                     btn.style.opacity = "";
                     btn.disabled = false;
                     return;
@@ -374,7 +395,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 redirectToDoctorDashboard();
             } else {
                 showPopup(result.data.message || "Registro ou senha incorretos.");
-                btn.innerHTML = 'Acessar como Médico';
+                btn.innerHTML = 'Entrar como profissional';
                 btn.style.opacity = "";
                 btn.disabled = false;
             }

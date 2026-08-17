@@ -3,36 +3,47 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard do Paciente - Portal Saude</title>
+    <meta name="theme-color" content="#1a56b8">
+    <title>Portal do Paciente | Conecta Inclusao</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <link rel="stylesheet" href="../assets/css/theme.css">
+    <link rel="stylesheet" href="../assets/css/dashboard.css">
     <link rel="stylesheet" href="../assets/css/dash-paciente.css">
     <link rel="stylesheet" href="../assets/css/responsive.css">
-    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script src="../assets/js/acessibilidade.js"></script>
 </head>
 <body>
+    <a class="skip-link" href="#conteudo">Pular para o conteúdo</a>
+
     <div class="dashboard-container">
-        <aside class="sidebar">
+        <aside class="sidebar" aria-label="Menu do paciente">
             <div class="logo-section">
-                <i class="ph ph-heartbeat"></i>
-                <span>Conecta Inclusao</span>
+                <i class="ph ph-heartbeat" aria-hidden="true"></i>
+                <span>Conecta Inclusão</span>
             </div>
-            <nav>
-                <button class="nav-link active" data-tab="overview"><i class="ph ph-house"></i> Visao Geral</button>
-                <button class="nav-link" data-tab="appointments"><i class="ph ph-calendar-check"></i> Agendamentos</button>
-                <button class="nav-link" data-tab="search"><i class="ph ph-magnifying-glass"></i> Buscar Atendimento</button>
-                <button class="nav-link" data-tab="messages"><i class="ph ph-chat-circle-text"></i> Mensagem</button>
-                <button class="nav-link" data-tab="guardians"><i class="ph ph-users-three"></i> Responsaveis</button>
-                <button class="nav-link" data-tab="profile"><i class="ph ph-user-circle"></i> Meu Perfil</button>
+            <nav aria-label="Navegação principal">
+                <button type="button" class="nav-link active" data-tab="overview"><i class="ph ph-house" aria-hidden="true"></i> Visão Geral</button>
+                <button type="button" class="nav-link" data-tab="appointments"><i class="ph ph-calendar-check" aria-hidden="true"></i> Agendamentos</button>
+                <button type="button" class="nav-link" data-tab="search"><i class="ph ph-magnifying-glass" aria-hidden="true"></i> Buscar Atendimento</button>
+                <button type="button" class="nav-link" data-tab="messages"><i class="ph ph-chat-circle-text" aria-hidden="true"></i> Mensagens</button>
+                <button type="button" class="nav-link" data-tab="guardians"><i class="ph ph-users-three" aria-hidden="true"></i> Responsáveis</button>
+                <button type="button" class="nav-link" data-tab="profile"><i class="ph ph-user-circle" aria-hidden="true"></i> Meu Perfil</button>
             </nav>
             <div class="sidebar-footer">
-                <button class="btn-logout" onclick="handleLogout()"><i class="ph ph-sign-out"></i> Sair</button>
+                <button class="btn-logout" type="button" onclick="handleLogout()">
+                    <i class="ph ph-sign-out" aria-hidden="true"></i> <span>Sair</span>
+                </button>
             </div>
         </aside>
 
-        <main class="main-content">
+        <main class="main-content" id="conteudo">
             <header class="top-bar">
                 <div class="page-title">
                     <h1>Portal do Paciente</h1>
-                    <p>Acompanhe consultas, encontre atendimento e mantenha sua rotina de saude organizada.</p>
+                    <p>Acompanhe consultas, encontre atendimento e mantenha sua rotina de saúde organizada.</p>
                 </div>
                 <div class="user-profile">
                     <div class="user-info">
@@ -50,7 +61,7 @@
             <section class="tab-content active" id="overview">
                 <div class="overview-header">
                     <h2>Bem-vindo de volta</h2>
-                    <p>Veja um resumo rapido da sua agenda medica, acompanhe consultas futuras e acesse os proximos passos do seu cuidado.</p>
+                    <p>Veja um resumo rápido da sua agenda médica, acompanhe consultas futuras e acesse os próximos passos do seu cuidado.</p>
                 </div>
 
                 <div class="overview-grid">
@@ -63,7 +74,7 @@
                     </div>
                     <div class="status-card success-card">
                         <div>
-                            <span>Proxima consulta</span>
+                            <span>Próxima consulta</span>
                             <h3 id="nextAppointmentDate">--</h3>
                         </div>
                         <i class="ph ph-clock-countdown"></i>
@@ -81,7 +92,7 @@
                     <div class="section-header">
                         <div>
                             <h3>Resumo do cuidado</h3>
-                            <p>Informacoes principais para o seu acompanhamento no portal.</p>
+                            <p>Informações principais para o seu acompanhamento no portal.</p>
                         </div>
                         <button class="btn-primary" type="button" id="btnOverviewNewAppointment">
                             <i class="ph ph-plus"></i> Novo Agendamento
@@ -106,8 +117,8 @@
                 <section class="table-card">
                     <div class="section-header">
                         <div>
-                            <h3>Proximos agendamentos</h3>
-                            <p>Uma visao resumida das suas consultas ja marcadas.</p>
+                            <h3>Próximos agendamentos</h3>
+                            <p>Uma visão resumida das suas consultas já marcadas.</p>
                         </div>
                         <button class="btn-secondary" type="button" id="btnGoAppointments">
                             Ver todos
@@ -158,7 +169,7 @@
                 <div class="section-header">
                     <div>
                         <h2>Buscar Atendimento</h2>
-                        <p>Filtre por especialidade, unidade ou plano para encontrar a melhor opcao para voce.</p>
+                        <p>Filtre por especialidade, unidade ou plano para encontrar a melhor opção para você.</p>
                     </div>
                 </div>
 
@@ -167,7 +178,7 @@
                         <div class="input-group">
                             <label for="searchSpecialty"><i class="ph ph-stethoscope"></i> Especialidade</label>
                             <select id="searchSpecialty">
-                                <option value="">Todas as areas</option>
+                                <option value="">Todas as áreas</option>
                                 <option>Cardiologia</option>
                                 <option>Pediatria</option>
                                 <option>Ortopedia</option>
@@ -186,7 +197,7 @@
                         </div>
 
                         <div class="input-group">
-                            <label for="searchPlan"><i class="ph ph-cardholder"></i> Plano de Saude</label>
+                            <label for="searchPlan"><i class="ph ph-cardholder"></i> Plano de Saúde</label>
                             <select id="searchPlan">
                                 <option value="">Todos os planos / Particular</option>
                                 <option>Unimed</option>
@@ -217,7 +228,7 @@
                 <div class="section-header">
                     <div>
                         <h2>Mensagem</h2>
-                        <p>Fale com o profissional do seu atendimento e receba respostas automaticas com tom humano.</p>
+                        <p>Fale com o profissional do seu atendimento e tire dúvidas com a assistente virtual.</p>
                     </div>
                 </div>
 
@@ -226,7 +237,7 @@
                         <aside class="chat-sidebar">
                             <div class="chat-sidebar-header">
                                 <h3>Chatbot</h3>
-                                <p>Use a assistente virtual para tirar duvidas sobre consultas, preparo e proximos passos.</p>
+                                <p>Use a assistente virtual para tirar dúvidas sobre consultas, preparo e próximos passos.</p>
                             </div>
                             <div id="messageContactsList" class="chat-contacts"></div>
                         </aside>
@@ -280,7 +291,7 @@
                 <div class="section-header">
                     <div>
                         <h2>Meu Perfil</h2>
-                        <p>Confira os principais dados do seu cadastro e mantenha suas informacoes em dia.</p>
+                        <p>Confira os principais dados do seu cadastro e mantenha suas informações em dia.</p>
                     </div>
                 </div>
 
@@ -301,25 +312,25 @@
                                 <strong id="profileBirthDate">01/01/2000</strong>
                             </div>
                             <div>
-                                <span>Responsavel</span>
+                                <span>Responsável</span>
                                 <strong id="profilePatientResponsible">--</strong>
                             </div>
                         </div>
                     </article>
 
                     <article class="info-card">
-                        <h3>Saude e atendimento</h3>
+                        <h3>Saúde e atendimento</h3>
                         <div class="profile-list">
                             <div>
-                                <span>Tipo de deficiencia</span>
-                                <strong id="profileDisabilityType">Deficiencia Motora</strong>
+                                <span>Tipo de deficiência</span>
+                                <strong id="profileDisabilityType">Deficiência Motora</strong>
                             </div>
                             <div>
                                 <span>Plano</span>
                                 <strong id="profilePlan">Unimed</strong>
                             </div>
                             <div>
-                                <span>Unidade de preferencia</span>
+                                <span>Unidade de preferência</span>
                                 <strong id="profilePreferredUnit">Hospital Central</strong>
                             </div>
                         </div>
@@ -416,7 +427,7 @@
                     <!-- Preenchido a partir de GET /auth/permissoes: os valores
                          sao os ids da tabela `permissoes`, nao strings fixas. -->
                     <div class="permissions-grid" id="guardianPermissionsGrid">
-                        <span style="color: #64748b;">Carregando permissões...</span>
+                        <span class="loading-inline">Carregando permissões...</span>
                     </div>
                 </div>
                 <div class="modal-footer">

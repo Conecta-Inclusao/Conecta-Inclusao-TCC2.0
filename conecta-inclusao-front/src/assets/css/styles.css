@@ -1,276 +1,501 @@
-:root {
-    --primary-blue: #0A72E4; /* Azul vibrante e médico */
-    --secondary-grey: #2c3e50; /* Cinza grafite, profundo */
-    --light-grey: #ecf0f1; /* Fundo suave */
-    --text-color: #34495e; /* Texto principal */
-    --white: #ffffff;
-    --border-radius-large: 15px;
-    --transition-speed: 0.4s ease-out;
-}
+/* ===========================================================================
+   styles.css - porta de entrada (lndex.html)
+   ===========================================================================
+   Depende de theme.css.
 
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-}
+   A versao anterior era um bloco branco com tres colunas iguais, `body` com
+   `overflow: hidden` e um logo flutuante em cima da divisa central - a pagina
+   nao dizia o que o Conecta Inclusao faz nem para quem, e no celular o
+   conteudo ficava preso sem rolagem.
+
+   Aqui a entrada passa a apresentar o projeto (proposito, publico e o que a
+   plataforma resolve) e so depois oferece os tres acessos, cada um com a sua
+   cor de perfil.
+   =========================================================================== */
 
 body {
-    font-family: 'Inter', sans-serif;
-    background-color: var(--light-grey);
+    background:
+        radial-gradient(60rem 32rem at 12% -8%, var(--brand-100) 0%, transparent 62%),
+        radial-gradient(48rem 28rem at 92% 4%, var(--care-50) 0%, transparent 58%),
+        var(--bg);
+    background-attachment: fixed;
+}
+
+.portal-page {
     display: flex;
-    justify-content: center;
-    align-items: center;
+    flex-direction: column;
     min-height: 100vh;
-    overflow: hidden; /* Para o efeito de fundo */
-    color: var(--text-color);
 }
 
-.bio-portal-container {
-    display: flex;
-    width: 90%;
-    max-width: 1200px;
-    background: var(--white);
-    border-radius: var(--border-radius-large);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-    position: relative;
-    min-height: 600px;
-    overflow: hidden;
-}
-
-/* Padrão de fundo biométrico/tecnológico */
-.background-pattern {
-    position: absolute;
-    top: 0;
-    left: 0;
+.portal-shell {
     width: 100%;
-    height: 100%;
-    background-image: url('data:image/svg+xml,%3Csvg width="60" height="60" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg"%3E%3Cg fill="none" fill-rule="evenodd"%3E%3Cg fill="%23e3e3e3" fill-opacity="0.2"%3E%3Cpath d="M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0 20v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zm0 20v-4H4v4H0v2h4v4h2v-4h4v-2H6zM36 4v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zM6 4v-4H4v4H0v2h4v4h2v-4h4v-2H6z"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E');
-    opacity: 0.3;
-    z-index: 0;
-    pointer-events: none;
+    max-width: 76rem;
+    margin: 0 auto;
+    padding: 0 var(--space-6);
 }
 
+/* ---------------------------------------------------------------------------
+   Cabecalho
+   --------------------------------------------------------------------------- */
+.site-header {
+    padding: var(--space-6) 0 var(--space-4);
+}
 
-.bio-card {
-    flex: 1;
+.site-header .portal-shell {
     display: flex;
-    flex-direction: column;
-    justify-content: center;
     align-items: center;
-    padding: 3rem;
-    position: relative;
-    z-index: 1;
-    transition: all var(--transition-speed);
+    justify-content: space-between;
+    gap: var(--space-4);
+    flex-wrap: wrap;
 }
 
-.bio-card:hover {
-    transform: translateY(-5px); /* Efeito sutil de flutuação */
-    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.15);
-}
-
-.left-card {
-    background-color: var(--white);
-    border-right: 1px solid rgba(0, 0, 0, 0.05);
-}
-
-.middle-card {
-    background-color: var(--white);
-    border-left: 1px solid rgba(0, 0, 0, 0.05);
-    border-right: 1px solid rgba(0, 0, 0, 0.05);
-}
-
-.right-card {
-    background-color: var(--white);
-    border-left: 1px solid rgba(0, 0, 0, 0.05);
-}
-
-.content {
-    text-align: center;
-    max-width: 400px;
-}
-
-.icon-large {
-    font-size: 4.5rem; /* Ícones maiores */
-    color: var(--primary-blue);
-    margin-bottom: 25px;
-    transition: transform 0.3s ease;
-}
-
-.bio-card:hover .icon-large {
-    transform: scale(1.1); /* Animação no ícone */
-}
-
-h2 {
-    font-size: 2.5rem;
-    font-weight: 800; /* Mais peso para os títulos */
-    margin-bottom: 15px;
-    color: var(--secondary-grey);
-}
-
-p {
-    font-size: 1.1rem;
-    line-height: 1.7;
-    margin-bottom: 40px;
-    color: var(--text-color);
-    font-weight: 300;
-}
-
-/* Botões */
-.btn {
-    padding: 16px 35px;
-    border: none;
-    border-radius: 8px; /* Botões mais arredondados */
-    font-size: 1.1rem;
-    font-weight: 700;
-    cursor: pointer;
-    transition: background-color 0.3s ease, color 0.3s ease, transform 0.2s ease;
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-}
-
-.btn-left {
-    background-color: var(--primary-blue);
-    color: var(--white);
-}
-
-.btn-left:hover {
-    background-color: #0867cf;
-    transform: translateY(-2px);
-}
-
-.btn-middle {
-    background-color: var(--primary-blue);
-    color: var(--white);
-}
-
-.btn-middle:hover {
-    background-color: #0867cf;
-    transform: translateY(-2px);
-}
-
-.btn-right {
-    background-color: var(--primary-blue);
-    color: var(--white);
-}
-
-.btn-right:hover {
-    background-color: #0867cf;
-    transform: translateY(-2px);
-}
-
-/* Divisor Central e Logo */
-.portal-logo {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: var(--primary-blue);
-    color: var(--white);
-    padding: 15px 25px;
-    border-radius: var(--border-radius-large);
+.brand {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-3);
+    font-size: var(--fs-lg);
     font-weight: 800;
-    font-size: 1.4rem;
-    letter-spacing: 1px;
-    box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
-    z-index: 3;
-    pointer-events: none; /* Não interfere com cliques */
+    color: var(--brand-800);
+    letter-spacing: -0.02em;
 }
 
-
-/* Responsividade */
-@media (max-width: 992px) {
-    body {
-        overflow-y: scroll;
-    }
-    
-    .bio-portal-container {
-        flex-direction: column;
-        width: 95%;
-        height: auto;
-        min-height: auto;
-    }
-
-    .bio-card {
-        padding: 2.5rem 1.5rem;
-        border: none;
-        border-bottom: 1px solid rgba(0, 0, 0, 0.05); /* Separador em mobile */
-    }
-
-    .left-card, .middle-card, .right-card {
-        border-left: none;
-        border-right: none;
-    }
-
-    .center-divider {
-        display: none; /* Esconde a linha central em mobile */
-    }
-
-    .portal-logo {
-        position: relative; /* Ajusta a posição em mobile */
-        top: auto;
-        left: auto;
-        transform: none;
-        margin-bottom: 30px; /* Espaço abaixo do logo */
-        margin-top: 30px;
-    }
+.brand-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: var(--radius-md);
+    background: linear-gradient(140deg, var(--brand-600), var(--care-600));
+    color: #ffffff;
+    font-size: 1.5rem;
+    box-shadow: var(--shadow-sm);
 }
 
-@media (max-width: 576px) {
-    body {
-        overflow-y: scroll;
-    }
-    
-    h2 { font-size: 2rem; }
-    p { font-size: 1rem; }
-    .btn { font-size: 1rem; padding: 14px 25px; }
-    .icon-large { font-size: 3.5rem; }
+[data-contrast="alto"] .brand,
+[data-contrast="alto"] .brand-mark {
+    color: var(--text);
 }
 
-/* Password feedback styling */
-.input-group {
+[data-contrast="alto"] .brand-mark {
+    background: var(--surface-muted);
+    border: 1px solid var(--border);
+}
+
+.header-note {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: 0.4rem 0.9rem;
+    border-radius: var(--radius-pill);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-soft);
+    font-size: var(--fs-sm);
+    font-weight: 600;
+}
+
+.header-note i {
+    color: var(--care-600);
+    font-size: 1.1rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Apresentacao
+   --------------------------------------------------------------------------- */
+.portal-hero {
+    padding: var(--space-7) 0 var(--space-8);
+}
+
+.portal-hero .portal-shell {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+    gap: var(--space-8);
+    align-items: center;
+}
+
+.eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-4);
+    padding: 0.4rem 0.9rem;
+    border-radius: var(--radius-pill);
+    background: var(--brand-100);
+    color: var(--brand-800);
+    font-size: var(--fs-xs);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+}
+
+.portal-hero h1 {
+    font-size: var(--fs-4xl);
+    line-height: 1.08;
+    letter-spacing: -0.03em;
+    color: var(--brand-900);
+}
+
+.portal-hero h1 em {
+    display: block;
+    font-style: normal;
+    color: var(--care-700);
+}
+
+.hero-text {
+    margin-top: var(--space-5);
+    max-width: 34rem;
+    color: var(--text-soft);
+    font-size: var(--fs-lg);
+    line-height: var(--lh-loose);
+}
+
+.hero-highlights {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    margin-top: var(--space-6);
+}
+
+.hero-highlights li {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: 0.55rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-pill);
+    background: var(--surface);
+    color: var(--text-soft);
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    box-shadow: var(--shadow-xs);
+}
+
+.hero-highlights i {
+    color: var(--brand-600);
+    font-size: 1.15rem;
+}
+
+/* Cartao ilustrativo: um "recorte" da agenda, para a entrada mostrar o
+   produto em vez de so descreve-lo. */
+.hero-panel {
+    position: relative;
+    padding: var(--space-6);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    background: var(--surface);
+    box-shadow: var(--shadow-lg);
+}
+
+.hero-panel::before {
+    content: '';
+    position: absolute;
+    inset: auto -0.75rem -0.75rem auto;
+    width: 60%;
+    height: 60%;
+    border-radius: var(--radius-xl);
+    background: linear-gradient(140deg, var(--brand-100), var(--care-50));
+    z-index: -1;
+}
+
+/* Pseudo-elemento decorativo: como e um ::before, escapa da regra global que
+   zera degrades no alto contraste - some explicitamente. */
+[data-contrast="alto"] .hero-panel::before {
+    display: none;
+}
+
+.hero-panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding-bottom: var(--space-4);
+    margin-bottom: var(--space-4);
+    border-bottom: 1px solid var(--border);
+}
+
+.hero-panel-head strong {
+    font-size: var(--fs-md);
+    color: var(--text);
+}
+
+.hero-panel-head span {
+    font-size: var(--fs-xs);
+    color: var(--text-muted);
+}
+
+.hero-appointment {
+    display: grid;
+    grid-template-columns: 3.5rem minmax(0, 1fr);
+    gap: var(--space-4);
+    align-items: center;
+    padding: var(--space-3);
+    border-radius: var(--radius-md);
+    background: var(--surface-muted);
+}
+
+.hero-appointment + .hero-appointment {
+    margin-top: var(--space-3);
+}
+
+.hero-appointment-time {
     display: flex;
     flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-2) 0;
+    border-radius: var(--radius-sm);
+    background: var(--brand-600);
+    color: #ffffff;
+    line-height: 1.1;
 }
 
-.password-rule-feedback {
-    width: 100% !important;
-    clear: both;
-    margin-top: 0.4rem !important;
+.hero-appointment-time strong {
+    font-size: var(--fs-md);
 }
 
-@media (max-width: 768px) {
-    body {
-        overflow-y: scroll;
-    }
-    
-    .bio-portal-container {
-        width: 95%;
+.hero-appointment-time span {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    opacity: 0.85;
+}
+
+[data-contrast="alto"] .hero-appointment-time {
+    background: var(--surface-sunken);
+    color: var(--text);
+    border: 1px solid var(--border);
+}
+
+.hero-appointment-info strong {
+    display: block;
+    font-size: var(--fs-sm);
+    color: var(--text);
+}
+
+.hero-appointment-info span {
+    font-size: var(--fs-xs);
+    color: var(--text-muted);
+}
+
+/* ---------------------------------------------------------------------------
+   Acessos por perfil
+   --------------------------------------------------------------------------- */
+.portal-access {
+    padding: var(--space-4) 0 var(--space-9);
+}
+
+.section-intro {
+    max-width: 42rem;
+    margin-bottom: var(--space-6);
+}
+
+.section-intro h2 {
+    font-size: var(--fs-2xl);
+    color: var(--brand-900);
+}
+
+.section-intro p {
+    margin-top: var(--space-2);
+    color: var(--text-muted);
+    font-size: var(--fs-md);
+}
+
+.role-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-5);
+}
+
+.role-card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    padding: var(--space-7) var(--space-6);
+    border: 1px solid var(--border);
+    border-top: 4px solid var(--accent);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
+    transition: transform var(--speed) var(--ease), box-shadow var(--speed) var(--ease),
+                border-color var(--speed) var(--ease);
+}
+
+.role-card:hover,
+.role-card:focus-within {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-md);
+}
+
+/* Cada perfil tem a sua cor. Sao os mesmos tres acentos usados dentro dos
+   respectivos dashboards, entao a cor vira uma pista de "onde estou". */
+.role-card--paciente {
+    --accent: var(--brand-600);
+    --accent-strong: var(--brand-700);
+    --accent-soft: var(--brand-50);
+}
+
+.role-card--profissional {
+    --accent: var(--care-600);
+    --accent-strong: var(--care-700);
+    --accent-soft: var(--care-50);
+}
+
+.role-card--empresa {
+    --accent: var(--warm-600);
+    --accent-strong: var(--warm-700);
+    --accent-soft: var(--warm-50);
+}
+
+.role-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 3.5rem;
+    height: 3.5rem;
+    border-radius: var(--radius-md);
+    background: var(--accent-soft);
+    color: var(--accent-strong);
+    font-size: 1.9rem;
+}
+
+.role-card h3 {
+    font-size: var(--fs-xl);
+    color: var(--text);
+}
+
+.role-card > p {
+    color: var(--text-muted);
+    font-size: var(--fs-sm);
+    line-height: var(--lh-normal);
+}
+
+.role-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin-top: auto;
+    padding-top: var(--space-2);
+}
+
+.role-list li {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-2);
+    color: var(--text-soft);
+    font-size: var(--fs-sm);
+}
+
+.role-list i {
+    flex-shrink: 0;
+    margin-top: 0.15rem;
+    color: var(--accent);
+    font-size: 1.05rem;
+}
+
+.role-card .btn-primary {
+    width: 100%;
+    margin-top: var(--space-2);
+    font-size: var(--fs-md);
+    padding: 0.85rem 1.35rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Compromissos do projeto
+   --------------------------------------------------------------------------- */
+.portal-values {
+    padding-bottom: var(--space-9);
+}
+
+.values-card {
+    padding: var(--space-7);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
+}
+
+.values-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-6);
+    margin-top: var(--space-5);
+}
+
+.value-item {
+    display: flex;
+    gap: var(--space-4);
+}
+
+.value-item i {
+    flex-shrink: 0;
+    color: var(--brand-600);
+    font-size: 1.6rem;
+}
+
+.value-item h3 {
+    font-size: var(--fs-md);
+    margin-bottom: var(--space-1);
+}
+
+.value-item p {
+    color: var(--text-muted);
+    font-size: var(--fs-sm);
+    line-height: var(--lh-normal);
+}
+
+/* ---------------------------------------------------------------------------
+   Rodape
+   --------------------------------------------------------------------------- */
+.site-footer {
+    margin-top: auto;
+    padding: var(--space-6) 0 var(--space-8);
+    border-top: 1px solid var(--border);
+}
+
+.site-footer .portal-shell {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    flex-wrap: wrap;
+    color: var(--text-muted);
+    font-size: var(--fs-sm);
+}
+
+/* ---------------------------------------------------------------------------
+   Responsivo
+   --------------------------------------------------------------------------- */
+@media (max-width: 960px) {
+    .portal-hero .portal-shell {
+        grid-template-columns: 1fr;
+        gap: var(--space-6);
     }
 
-    .bio-card {
-        padding: 2rem 1rem;
+    .hero-panel {
+        order: -1;
     }
 
-    h2 {
-        font-size: 2.2rem;
+    .role-grid,
+    .values-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 600px) {
+    .portal-shell {
+        padding: 0 var(--space-4);
     }
 
-    p {
-        font-size: 1rem;
-        margin-bottom: 30px;
+    .portal-hero {
+        padding: var(--space-5) 0 var(--space-6);
     }
 
-    .btn {
-        padding: 14px 30px;
-        font-size: 1rem;
+    .role-card {
+        padding: var(--space-6) var(--space-5);
     }
 
-    .icon-large {
-        font-size: 4rem;
-        margin-bottom: 20px;
-    }
-
-    .portal-logo {
-        padding: 12px 20px;
-        font-size: 1.2rem;
+    .values-card {
+        padding: var(--space-5);
     }
 }

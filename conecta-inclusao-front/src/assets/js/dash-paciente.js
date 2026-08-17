@@ -1691,46 +1691,29 @@ function showAppointmentDetail(appointment) {
     if (!appointment) return;
     const modal = document.createElement('div');
     modal.className = 'popup-modal';
-    modal.style.position = 'fixed';
-    modal.style.top = '0';
-    modal.style.left = '0';
-    modal.style.width = '100%';
-    modal.style.height = '100%';
-    modal.style.backgroundColor = 'rgba(0,0,0,0.5)';
-    modal.style.display = 'flex';
-    modal.style.justifyContent = 'center';
-    modal.style.alignItems = 'center';
-    modal.style.zIndex = '3000';
 
+    // Detalhe da consulta: mesma caixa dos avisos, porem alinhada a esquerda e
+    // sem o icone de aviso. O estilo vem de theme.css - estilo inline aqui
+    // sobrescrevia o tema de alto contraste (fundo branco com texto branco).
     const content = document.createElement('div');
-    content.className = 'popup-content';
-    content.style.backgroundColor = 'white';
-    content.style.padding = '18px';
-    content.style.borderRadius = '8px';
-    content.style.textAlign = 'left';
-    content.style.maxWidth = '420px';
+    content.className = 'popup-content popup-content--detail';
     modal.appendChild(content);
 
     const title = document.createElement('h3');
     title.textContent = appointment.doctor || 'Profissional';
-    title.style.margin = '0 0 6px 0';
     content.appendChild(title);
 
     const p1 = document.createElement('p');
     p1.textContent = `${getAppointmentTime(appointment.date)} — ${appointment.hospital || ''}`;
-    p1.style.margin = '0 0 8px 0';
     content.appendChild(p1);
 
     const p2 = document.createElement('p');
+    p2.className = 'popup-detail-meta';
     p2.textContent = appointment.specialty || '';
-    p2.style.margin = '0 0 12px 0';
-    p2.style.color = '#64748b';
     content.appendChild(p2);
 
     const btns = document.createElement('div');
-    btns.style.display = 'flex';
-    btns.style.gap = '8px';
-    btns.style.justifyContent = 'flex-end';
+    btns.className = 'popup-actions';
 
     const resBtn = document.createElement('button');
     resBtn.className = 'btn-secondary';

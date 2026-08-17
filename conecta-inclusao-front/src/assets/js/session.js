@@ -263,10 +263,10 @@
     // Aviso na tela de login
     // -----------------------------------------------------------------------
     var MENSAGENS = {
-        expirada: 'Sua sessao expirou. Entre novamente para continuar.',
-        perfil: 'Voce precisa entrar com uma conta deste tipo para acessar essa area.',
-        login: 'Entre na sua conta para acessar essa area.',
-        saiu: 'Voce saiu da sua conta.'
+        expirada: 'Sua sessão expirou. Entre novamente para continuar.',
+        perfil: 'Você precisa entrar com uma conta deste tipo para acessar essa área.',
+        login: 'Entre na sua conta para acessar essa área.',
+        saiu: 'Você saiu da sua conta.'
     };
 
     function mostrarAvisoDeRetorno() {
@@ -274,16 +274,12 @@
         var texto = MENSAGENS[motivo];
         if (!texto) return;
 
+        // Estilo em theme.css (.session-toast): antes era `style.cssText` com
+        // um azul fixo, que ignorava o tema de alto contraste.
         var aviso = document.createElement('div');
+        aviso.className = 'session-toast';
         aviso.setAttribute('role', 'status');
         aviso.textContent = texto;
-        aviso.style.cssText = [
-            'position:fixed', 'top:16px', 'left:50%', 'transform:translateX(-50%)',
-            'z-index:9999', 'max-width:calc(100% - 32px)', 'padding:12px 18px',
-            'border-radius:12px', 'background:#0f4dbf', 'color:#fff',
-            'font-size:15px', 'line-height:1.4', 'text-align:center',
-            'box-shadow:0 10px 30px rgba(15,77,191,0.28)'
-        ].join(';');
 
         document.body.appendChild(aviso);
         window.setTimeout(function () { aviso.remove(); }, 6000);

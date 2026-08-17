@@ -3,46 +3,189 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Conecta Inclusão | Acesso Inteligente à Saúde</title>
+    <meta name="description" content="Conecta Inclusao: plataforma que aproxima criancas e adolescentes com deficiencia de medicos, clinicas e consultorios parceiros.">
+    <meta name="theme-color" content="#1a56b8">
+    <title>Conecta Inclusao | Saude acessivel para quem mais precisa</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <link rel="stylesheet" href="../assets/css/theme.css">
     <link rel="stylesheet" href="../assets/css/styles.css">
     <link rel="stylesheet" href="../assets/css/responsive.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;500;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <script src="../assets/js/acessibilidade.js"></script>
 </head>
-<body>
+<body class="portal-page">
+    <a class="skip-link" href="#conteudo">Pular para o conteudo</a>
 
-    <div class="bio-portal-container">
-        <div class="background-pattern"></div> 
-        <div class="card bio-card left-card" id="card-empresa">
-            <div class="content">
-                <i class="fas fa-building icon-large"></i>
-                <h2>Portal Empresarial</h2>
-                <p>Gerencie convênios, relatórios corporativos e soluções para saúde ocupacional da sua empresa.</p>
-                <button class="btn btn-middle" onclick="navTo('empresa')">Entrar como Empresa</button>
+    <header class="site-header">
+        <div class="portal-shell">
+            <div class="brand">
+                <span class="brand-mark" aria-hidden="true"><i class="ph ph-heartbeat"></i></span>
+                Conecta Inclusão
             </div>
+            <p class="header-note">
+                <i class="ph ph-hand-heart" aria-hidden="true"></i>
+                Projeto de Conclusão de Curso
+            </p>
         </div>
+    </header>
 
-        <div class="card bio-card middle-card" id="card-medico">
-            <div class="content">
-                <i class="fas fa-user-md icon-large"></i>
-                <h2>Área do Profissional</h2>
-                <p>Acesse sistemas de diagnóstico e gerencie sua agenda cirúrgica e de consultas.</p>
-                <button class="btn btn-left" onclick="navTo('medico')">Entrar como Médico</button>
+    <main id="conteudo">
+        <section class="portal-hero">
+            <div class="portal-shell">
+                <div>
+                    <p class="eyebrow"><i class="ph ph-wheelchair" aria-hidden="true"></i> Saúde inclusiva</p>
+                    <h1>Cuidado contínuo <em>sem barreiras no caminho</em></h1>
+                    <p class="hero-text">
+                        Uma plataforma que conecta crianças e adolescentes com deficiência —
+                        e quem cuida deles — a médicos, clínicas e consultórios parceiros.
+                        Consultas agendadas, histórico organizado e conversa direta com o
+                        profissional, tudo em um lugar só.
+                    </p>
+                    <ul class="hero-highlights">
+                        <li><i class="ph ph-calendar-check" aria-hidden="true"></i> Agendamento simples</li>
+                        <li><i class="ph ph-chat-circle-text" aria-hidden="true"></i> Conversa com o profissional</li>
+                        <li><i class="ph ph-eye" aria-hidden="true"></i> Alto contraste e fonte ampliada</li>
+                    </ul>
+                </div>
+
+                <!-- Amostra estatica da agenda: a entrada mostra como a plataforma
+                     se parece antes de pedir login. -->
+                <div class="hero-panel" aria-hidden="true">
+                    <div class="hero-panel-head">
+                        <strong>Próximas consultas</strong>
+                        <span>Portal do paciente</span>
+                    </div>
+                    <div class="hero-appointment">
+                        <div class="hero-appointment-time">
+                            <strong>09</strong>
+                            <span>Set</span>
+                        </div>
+                        <div class="hero-appointment-info">
+                            <strong>Fonoaudiologia</strong>
+                            <span>Dra. Helena Prado · Unidade Central</span>
+                        </div>
+                    </div>
+                    <div class="hero-appointment">
+                        <div class="hero-appointment-time">
+                            <strong>17</strong>
+                            <span>Set</span>
+                        </div>
+                        <div class="hero-appointment-info">
+                            <strong>Terapia Ocupacional</strong>
+                            <span>Dr. Rafael Lima · Clínica Santa Maria</span>
+                        </div>
+                    </div>
+                    <div class="hero-appointment">
+                        <div class="hero-appointment-time">
+                            <strong>28</strong>
+                            <span>Set</span>
+                        </div>
+                        <div class="hero-appointment-info">
+                            <strong>Pediatria</strong>
+                            <span>Dra. Marina Alves · Unidade Botafogo</span>
+                        </div>
+                    </div>
+                </div>
             </div>
-        </div>
+        </section>
 
-        <div class="card bio-card right-card" id="card-paciente">
-            <div class="content">
-                <i class="fas fa-user-injured icon-large"></i>
-                <h2>Espaço do Paciente</h2>
-                <p>Consulte resultados de exames, acompanhe seu plano de tratamento e agende teleconsultas de forma intuitiva.</p>
-                <button class="btn btn-right" onclick="navTo('paciente')">Acessar Meu Perfil</button>
+        <section class="portal-access" aria-labelledby="acessosTitulo">
+            <div class="portal-shell">
+                <div class="section-intro">
+                    <h2 id="acessosTitulo">Escolha como deseja entrar</h2>
+                    <p>Cada perfil tem uma área própria, com as informações e ações certas para o seu papel no cuidado.</p>
+                </div>
+
+                <div class="role-grid">
+                    <article class="role-card role-card--paciente">
+                        <span class="role-icon" aria-hidden="true"><i class="ph ph-user-circle"></i></span>
+                        <h3>Paciente e responsável</h3>
+                        <p>Para quem recebe o cuidado e para quem acompanha de perto.</p>
+                        <ul class="role-list">
+                            <li><i class="ph ph-check-circle" aria-hidden="true"></i> Agende e acompanhe consultas</li>
+                            <li><i class="ph ph-check-circle" aria-hidden="true"></i> Converse com o profissional</li>
+                            <li><i class="ph ph-check-circle" aria-hidden="true"></i> Cadastre responsáveis autorizados</li>
+                        </ul>
+                        <button class="btn-primary" type="button" onclick="navTo('paciente')">
+                            Entrar como paciente
+                        </button>
+                    </article>
+
+                    <article class="role-card role-card--profissional">
+                        <span class="role-icon" aria-hidden="true"><i class="ph ph-stethoscope"></i></span>
+                        <h3>Profissional de saúde</h3>
+                        <p>Médicos e terapeutas que atendem pela plataforma.</p>
+                        <ul class="role-list">
+                            <li><i class="ph ph-check-circle" aria-hidden="true"></i> Veja a agenda do dia</li>
+                            <li><i class="ph ph-check-circle" aria-hidden="true"></i> Acompanhe seus pacientes</li>
+                            <li><i class="ph ph-check-circle" aria-hidden="true"></i> Responda mensagens com segurança</li>
+                        </ul>
+                        <button class="btn-primary" type="button" onclick="navTo('medico')">
+                            Entrar como profissional
+                        </button>
+                    </article>
+
+                    <article class="role-card role-card--empresa">
+                        <span class="role-icon" aria-hidden="true"><i class="ph ph-buildings"></i></span>
+                        <h3>Clínica e consultório</h3>
+                        <p>Instituições parceiras que gerenciam equipes de atendimento.</p>
+                        <ul class="role-list">
+                            <li><i class="ph ph-check-circle" aria-hidden="true"></i> Cadastre profissionais</li>
+                            <li><i class="ph ph-check-circle" aria-hidden="true"></i> Acompanhe a equipe por unidade</li>
+                            <li><i class="ph ph-check-circle" aria-hidden="true"></i> Consulte relatórios do quadro</li>
+                        </ul>
+                        <button class="btn-primary" type="button" onclick="navTo('empresa')">
+                            Entrar como clínica
+                        </button>
+                    </article>
+                </div>
             </div>
+        </section>
+
+        <section class="portal-values" aria-labelledby="compromissosTitulo">
+            <div class="portal-shell">
+                <div class="values-card">
+                    <div class="section-intro" style="margin-bottom:0">
+                        <h2 id="compromissosTitulo">O que orienta o projeto</h2>
+                        <p>Três compromissos que aparecem em cada tela da plataforma.</p>
+                    </div>
+                    <div class="values-grid">
+                        <div class="value-item">
+                            <i class="ph ph-universal-access" aria-hidden="true"></i>
+                            <div>
+                                <h3>Acessibilidade de verdade</h3>
+                                <p>Texto grande, contraste alto, navegação por teclado e alvos de toque confortáveis — disponíveis em todas as páginas.</p>
+                            </div>
+                        </div>
+                        <div class="value-item">
+                            <i class="ph ph-path" aria-hidden="true"></i>
+                            <div>
+                                <h3>Continuidade do cuidado</h3>
+                                <p>O histórico, os agendamentos e as conversas ficam reunidos, para o acompanhamento não se perder entre consultas.</p>
+                            </div>
+                        </div>
+                        <div class="value-item">
+                            <i class="ph ph-shield-check" aria-hidden="true"></i>
+                            <div>
+                                <h3>Dados sob controle</h3>
+                                <p>Cada perfil enxerga apenas o que lhe compete, e a conversa só existe quando há um atendimento real entre as partes.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <div class="portal-shell">
+            <span>Conecta Inclusão · Trabalho de Conclusão de Curso</span>
+            <span>Feito para ampliar o acesso à saúde de PCDs</span>
         </div>
-    </div>
+    </footer>
 
-
-        
     <script src="../assets/js/config.js"></script>
     <script src="../assets/js/session.js"></script>
     <script src="../assets/js/script.js"></script>

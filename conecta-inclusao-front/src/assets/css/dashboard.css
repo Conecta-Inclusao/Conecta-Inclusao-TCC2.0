@@ -1,0 +1,1164 @@
+/* ===========================================================================
+   dashboard.css - estrutura comum aos tres paineis
+   ===========================================================================
+   Depende de theme.css.
+
+   Paciente, profissional e clinica sempre usaram a mesma marcacao (.sidebar,
+   .nav-link, .top-bar, .status-card, .chat-layout, .modal...), mas cada um
+   tinha a sua copia do CSS - 4.500 linhas somadas, com tres larguras de
+   sidebar, tres alturas de avatar e comportamentos diferentes no celular.
+   Quem abria dois perfis via dois produtos.
+
+   O casco comum passa a viver aqui. Cada painel declara so a sua cor de
+   acento e o que e realmente exclusivo daquela tela.
+
+   Notas de layout preservadas da versao anterior (foram correcoes reais):
+     - a sidebar e `sticky`, nao `fixed`: `fixed` exigia compensar com
+       margin-left no conteudo e virava barra de tela cheia no celular;
+     - o chat tem altura FECHADA para a lista de mensagens rolar por dentro em
+       vez de empurrar a pagina a cada mensagem nova;
+     - itens de grid recebem `min-width/min-height: 0` onde precisam encolher.
+   =========================================================================== */
+
+body {
+    background-color: var(--bg);
+    color: var(--text);
+}
+
+.dashboard-container {
+    display: flex;
+    align-items: flex-start;
+    min-height: 100vh;
+}
+
+/* ---------------------------------------------------------------------------
+   1. Barra lateral
+   --------------------------------------------------------------------------- */
+.sidebar {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    width: 17rem;
+    height: 100vh;
+    padding: var(--space-6) var(--space-4);
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+}
+
+.logo-section {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin-bottom: var(--space-7);
+    padding: 0 var(--space-2);
+    font-size: var(--fs-md);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: var(--text);
+    line-height: 1.25;
+}
+
+.logo-section i {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: var(--radius-md);
+    background: var(--accent-soft);
+    color: var(--accent-strong);
+    font-size: 1.4rem;
+}
+
+.sidebar nav {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    flex-grow: 1;
+    overflow-y: auto;
+}
+
+/* O painel do paciente e o da clinica usam <button class="nav-link">; o do
+   profissional usa <a>. Os dois recebem o mesmo tratamento. */
+.nav-link,
+.sidebar nav a {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    position: relative;
+    min-height: var(--tap);
+    padding: 0.7rem 0.9rem;
+    border: none;
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--text-soft);
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background-color var(--speed) var(--ease), color var(--speed) var(--ease);
+}
+
+.nav-link i,
+.sidebar nav a i {
+    flex-shrink: 0;
+    font-size: 1.25rem;
+}
+
+.nav-link:hover,
+.sidebar nav a:hover {
+    background: var(--surface-sunken);
+    color: var(--text);
+}
+
+.nav-link.active,
+.sidebar nav a.active {
+    background: var(--accent-soft);
+    color: var(--accent-strong);
+}
+
+/* Marca a aba atual tambem por forma, nao so por cor - quem nao distingue as
+   duas tonalidades continua sabendo onde esta. */
+.nav-link.active::before,
+.sidebar nav a.active::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 22%;
+    bottom: 22%;
+    width: 0.1875rem;
+    border-radius: var(--radius-pill);
+    background: var(--accent);
+}
+
+.sidebar-footer {
+    padding-top: var(--space-4);
+    margin-top: var(--space-4);
+    border-top: 1px solid var(--border);
+}
+
+.btn-logout {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    width: 100%;
+    min-height: var(--tap);
+    padding: 0.6rem 0.9rem;
+    border-radius: var(--radius-md);
+    background: none;
+    border: none;
+    color: var(--danger);
+    font-size: var(--fs-sm);
+    font-weight: 700;
+    cursor: pointer;
+    transition: background-color var(--speed) var(--ease);
+}
+
+.btn-logout:hover {
+    background: var(--danger-soft);
+}
+
+.btn-logout i {
+    font-size: 1.2rem;
+}
+
+/* ---------------------------------------------------------------------------
+   2. Area principal e barra superior
+   --------------------------------------------------------------------------- */
+.main-content {
+    flex-grow: 1;
+    min-width: 0;
+    width: 100%;
+    max-width: 87.5rem;
+    margin: 0 auto;
+    padding: var(--space-7) var(--space-7) var(--space-9);
+}
+
+.top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-5);
+    margin-bottom: var(--space-7);
+    padding-bottom: var(--space-5);
+    border-bottom: 1px solid var(--border);
+}
+
+.top-bar-left {
+    flex: 1;
+    min-width: 0;
+}
+
+.page-title h1 {
+    font-size: var(--fs-3xl);
+    letter-spacing: -0.025em;
+}
+
+.page-title p {
+    margin-top: var(--space-1);
+    color: var(--text-muted);
+    font-size: var(--fs-sm);
+}
+
+.search-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    width: min(25rem, 100%);
+    padding: 0 var(--space-3);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    transition: border-color var(--speed) var(--ease), box-shadow var(--speed) var(--ease);
+}
+
+.search-bar:focus-within {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 4px var(--primary-ring);
+}
+
+.search-bar i {
+    color: var(--text-muted);
+    font-size: 1.2rem;
+}
+
+.search-bar input {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    background: transparent;
+    padding: 0.65rem 0;
+    font-size: var(--fs-sm);
+}
+
+.search-bar input:focus {
+    outline: none;
+    box-shadow: none;
+}
+
+.user-profile {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    flex-shrink: 0;
+}
+
+.user-info {
+    text-align: right;
+    line-height: 1.35;
+}
+
+.user-info strong {
+    display: block;
+    font-size: var(--fs-sm);
+    color: var(--text);
+}
+
+.user-info span {
+    display: block;
+    font-size: var(--fs-xs);
+    color: var(--text-muted);
+}
+
+.user-profile img {
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid var(--surface);
+    box-shadow: var(--shadow-xs);
+}
+
+/* ---------------------------------------------------------------------------
+   3. Abas e cabecalhos de secao
+   --------------------------------------------------------------------------- */
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+    animation: tab-in 0.24s var(--ease);
+}
+
+@keyframes tab-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.overview-header {
+    margin-bottom: var(--space-6);
+}
+
+.overview-header h1,
+.overview-header h2 {
+    font-size: var(--fs-3xl);
+    letter-spacing: -0.025em;
+}
+
+.overview-header p {
+    max-width: 46rem;
+    margin-top: var(--space-2);
+    color: var(--text-muted);
+    font-size: var(--fs-md);
+    line-height: var(--lh-normal);
+}
+
+.section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    flex-wrap: wrap;
+    margin-bottom: var(--space-5);
+}
+
+.section-header h2 {
+    font-size: var(--fs-2xl);
+}
+
+.section-header h3 {
+    font-size: var(--fs-xl);
+}
+
+.section-header p,
+.section-header > span {
+    margin-top: var(--space-1);
+    color: var(--text-muted);
+    font-size: var(--fs-sm);
+}
+
+/* ---------------------------------------------------------------------------
+   4. Superficies
+   --------------------------------------------------------------------------- */
+.summary-card,
+.table-card,
+.filter-card,
+.info-card,
+.team-overview,
+.professional-form,
+.messages-section,
+.appointments-section,
+.patients-section,
+.team-section,
+.guardians-container,
+.team-table-wrapper,
+.settings-grid,
+.reports-grid {
+    padding: var(--space-6);
+    margin-bottom: var(--space-6);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
+}
+
+/* Grades de cartoes nao precisam do fundo branco duplicado. */
+.settings-grid,
+.reports-grid {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+}
+
+/* ---- Cartoes de indicador ------------------------------------------- */
+.overview-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-4);
+    margin-bottom: var(--space-6);
+}
+
+.status-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    padding: var(--space-5);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--accent);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow var(--speed) var(--ease), transform var(--speed) var(--ease);
+}
+
+.status-card:hover {
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+}
+
+.status-card span {
+    display: block;
+    margin-bottom: var(--space-1);
+    color: var(--text-muted);
+    font-size: var(--fs-xs);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+}
+
+.status-card h2,
+.status-card h3 {
+    font-size: var(--fs-3xl);
+    line-height: 1.1;
+    color: var(--accent-strong);
+}
+
+.status-card > i {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 3rem;
+    height: 3rem;
+    border-radius: var(--radius-md);
+    background: var(--accent-soft);
+    color: var(--accent-strong);
+    font-size: 1.6rem;
+}
+
+/* Variacoes semanticas usadas pelas telas. */
+.success-card,
+.working-card {
+    --accent: var(--care-600);
+    --accent-strong: var(--care-700);
+    --accent-soft: var(--care-50);
+}
+
+.accent-card,
+.break-card {
+    --accent: var(--warm-600);
+    --accent-strong: var(--warm-700);
+    --accent-soft: var(--warm-50);
+}
+
+/* ---- Resumo em tres colunas ----------------------------------------- */
+.summary-body {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-4);
+}
+
+.summary-item {
+    padding: var(--space-4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-muted);
+    text-align: center;
+}
+
+.summary-item span {
+    display: block;
+    margin-bottom: var(--space-2);
+    color: var(--text-muted);
+    font-size: var(--fs-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.summary-item strong {
+    font-size: var(--fs-2xl);
+    color: var(--accent-strong);
+}
+
+.info-card h3 {
+    margin-bottom: var(--space-4);
+    padding-bottom: var(--space-3);
+    border-bottom: 1px solid var(--border);
+    font-size: var(--fs-lg);
+}
+
+/* ---------------------------------------------------------------------------
+   5. Tabelas
+   --------------------------------------------------------------------------- */
+.appointments-table,
+.patients-table,
+.team-table,
+.team-full-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--fs-sm);
+}
+
+.appointments-table caption,
+.team-table caption {
+    padding-bottom: var(--space-3);
+    color: var(--text-muted);
+    font-size: var(--fs-xs);
+    text-align: left;
+}
+
+.appointments-table th,
+.patients-table th,
+.team-table th,
+.team-full-table th {
+    padding: var(--space-3);
+    border-bottom: 1px solid var(--border-strong);
+    background: var(--surface-muted);
+    color: var(--text-soft);
+    font-size: var(--fs-xs);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    text-align: left;
+    white-space: nowrap;
+}
+
+.appointments-table th:first-child,
+.patients-table th:first-child,
+.team-table th:first-child,
+.team-full-table th:first-child {
+    border-top-left-radius: var(--radius-sm);
+}
+
+.appointments-table th:last-child,
+.patients-table th:last-child,
+.team-table th:last-child,
+.team-full-table th:last-child {
+    border-top-right-radius: var(--radius-sm);
+}
+
+.appointments-table td,
+.patients-table td,
+.team-table td,
+.team-full-table td {
+    padding: var(--space-4) var(--space-3);
+    border-bottom: 1px solid var(--border);
+    color: var(--text-soft);
+    vertical-align: middle;
+}
+
+.appointments-table tbody tr:hover,
+.patients-table tbody tr:hover,
+.team-table tbody tr:hover,
+.team-full-table tbody tr:hover {
+    background: var(--surface-muted);
+}
+
+.table-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+}
+
+/* Linha de "carregando" / "nada aqui" dentro das tabelas. Antes cada uma
+   carregava `style="color:#64748b"` no proprio HTML, o que ignorava o tema de
+   alto contraste (cinza medio sobre preto). */
+.table-empty td,
+td.table-empty {
+    padding: var(--space-7) var(--space-3);
+    color: var(--text-muted);
+    text-align: center;
+}
+
+/* Botoes pequenos dentro das tabelas. */
+.btn-action,
+.btn-action-small,
+.table-btn,
+.view-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    min-height: 2.25rem;
+    padding: 0.4rem 0.85rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid transparent;
+    font-size: var(--fs-xs);
+    font-weight: 700;
+    cursor: pointer;
+    transition: background-color var(--speed) var(--ease), color var(--speed) var(--ease),
+                border-color var(--speed) var(--ease);
+}
+
+.btn-action {
+    background: var(--surface);
+    border-color: var(--accent);
+    color: var(--accent-strong);
+}
+
+.btn-action:hover:not(:disabled) {
+    background: var(--accent);
+    color: var(--on-primary);
+}
+
+.btn-action:disabled {
+    border-color: var(--border-strong);
+    background: var(--surface-sunken);
+    color: var(--text-muted);
+    cursor: not-allowed;
+}
+
+.btn-action-small,
+.table-btn.edit-btn {
+    background: var(--accent);
+    color: var(--on-primary);
+}
+
+.btn-action-small:hover,
+.table-btn.edit-btn:hover {
+    background: var(--accent-strong);
+}
+
+.table-btn.inactive-btn {
+    background: var(--danger-soft);
+    color: var(--danger);
+    border-color: var(--danger-100);
+}
+
+.table-btn.inactive-btn:hover {
+    background: var(--danger);
+    color: #ffffff;
+}
+
+.inactive-warning {
+    margin-top: var(--space-1);
+    color: var(--danger);
+    font-size: var(--fs-xs);
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+/* ---------------------------------------------------------------------------
+   6. Estados vazios e carregamento
+   --------------------------------------------------------------------------- */
+.empty-state,
+.guardians-empty,
+.suggestion-empty,
+.empty-team-message,
+.loading-message {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    padding: var(--space-8) var(--space-5);
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius-lg);
+    background: var(--surface-muted);
+    color: var(--text-muted);
+    text-align: center;
+}
+
+.empty-state i,
+.guardians-empty i,
+.suggestion-empty i,
+.empty-team-message i,
+.loading-message i {
+    font-size: 2.5rem;
+    color: var(--ink-300);
+}
+
+.loading-message i {
+    color: var(--accent);
+    animation: spin 1s linear infinite;
+}
+
+.loading-inline {
+    color: var(--text-muted);
+    font-size: var(--fs-sm);
+}
+
+/* ---------------------------------------------------------------------------
+   7. Chat (paciente <-> profissional)
+   --------------------------------------------------------------------------- */
+.chat-layout {
+    display: grid;
+    grid-template-columns: 19rem minmax(0, 1fr);
+    gap: var(--space-5);
+    /* Altura FECHADA, nao `min-height`: com apenas um minimo, a linha `1fr` da
+       lista de mensagens nao tem limite para dividir, resolve como `auto` e o
+       painel cresce a cada mensagem, empurrando a pagina. */
+    height: clamp(28rem, 70vh, 46rem);
+}
+
+.chat-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    min-height: 0;
+    padding: var(--space-4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--surface-muted);
+}
+
+.chat-sidebar-header h3,
+.chat-sidebar-header strong {
+    display: block;
+    margin-bottom: var(--space-1);
+    font-size: var(--fs-md);
+    font-weight: 700;
+    color: var(--text);
+}
+
+.chat-sidebar-header p,
+.chat-sidebar-header span {
+    color: var(--text-muted);
+    font-size: var(--fs-xs);
+    line-height: var(--lh-normal);
+}
+
+.chat-contacts {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.chat-contact-card {
+    width: 100%;
+    padding: var(--space-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    text-align: left;
+    cursor: pointer;
+    transition: border-color var(--speed) var(--ease), box-shadow var(--speed) var(--ease);
+}
+
+.chat-contact-card:hover {
+    border-color: var(--accent);
+}
+
+.chat-contact-card.active {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.chat-contact-card strong {
+    display: block;
+    margin-bottom: var(--space-1);
+    color: var(--text);
+    font-size: var(--fs-sm);
+}
+
+.chat-contact-card span {
+    display: block;
+    color: var(--accent-strong);
+    font-size: var(--fs-xs);
+    font-weight: 600;
+}
+
+.chat-contact-card small {
+    display: block;
+    margin-top: var(--space-1);
+    color: var(--text-muted);
+    font-size: var(--fs-xs);
+    line-height: var(--lh-normal);
+}
+
+.chat-unread-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.25rem;
+    height: 1.25rem;
+    padding: 0 0.375rem;
+    margin-left: var(--space-2);
+    border-radius: var(--radius-pill);
+    background: var(--danger);
+    color: #ffffff;
+    font-size: var(--fs-xs);
+    font-weight: 700;
+    vertical-align: middle;
+}
+
+[data-contrast="alto"] .chat-unread-badge {
+    color: #000000;
+}
+
+.chat-panel {
+    display: grid;
+    /* `minmax(0, 1fr)`: sem o minimo zerado a lista vaza o painel em telas
+       baixas. As linhas extras (auto) cobrem os atalhos do chatbot. */
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
+    min-height: 0;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+}
+
+.chat-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    padding: var(--space-4) var(--space-5);
+    border-bottom: 1px solid var(--border);
+    background: var(--surface-muted);
+}
+
+.chat-panel-header strong {
+    display: block;
+    margin-bottom: var(--space-1);
+    color: var(--text);
+    font-size: var(--fs-md);
+}
+
+.chat-panel-header span {
+    color: var(--text-muted);
+    font-size: var(--fs-xs);
+    line-height: var(--lh-normal);
+}
+
+.chat-messages {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    min-height: 0;
+    padding: var(--space-5);
+    overflow-y: auto;
+    background: var(--surface-muted);
+}
+
+.chat-empty,
+.chat-contacts-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    min-height: 100%;
+    padding: var(--space-6);
+    color: var(--text-muted);
+    text-align: center;
+}
+
+.chat-empty i,
+.chat-contacts-empty i {
+    font-size: 2.25rem;
+    color: var(--ink-300);
+}
+
+.chat-bubble {
+    max-width: 75%;
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-lg);
+    font-size: var(--fs-sm);
+    line-height: var(--lh-normal);
+    box-shadow: var(--shadow-xs);
+}
+
+/* "mine" muda de lado conforme o perfil: no painel do paciente quem envia e
+   .patient; no do profissional, .professional. */
+.chat-bubble.patient {
+    align-self: flex-end;
+    background: var(--accent);
+    color: var(--on-primary);
+    border-bottom-right-radius: var(--radius-sm);
+}
+
+.chat-bubble.professional,
+.chat-bubble.bot {
+    align-self: flex-start;
+    background: var(--surface);
+    color: var(--text-soft);
+    border: 1px solid var(--border);
+    border-bottom-left-radius: var(--radius-sm);
+}
+
+.chat-bubble.bot {
+    background: var(--accent-soft);
+    border-color: var(--accent-soft);
+}
+
+.chat-bubble-meta {
+    display: block;
+    margin-top: var(--space-2);
+    font-size: var(--fs-xs);
+    opacity: 0.8;
+}
+
+.chatbot-quick-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    padding: var(--space-4) var(--space-5) 0;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+}
+
+.chatbot-chip {
+    min-height: 2.25rem;
+    padding: 0.4rem 0.85rem;
+    border: 1px solid var(--accent-soft);
+    border-radius: var(--radius-pill);
+    background: var(--accent-soft);
+    color: var(--accent-strong);
+    font-size: var(--fs-xs);
+    font-weight: 700;
+    cursor: pointer;
+    transition: background-color var(--speed) var(--ease), color var(--speed) var(--ease);
+}
+
+.chatbot-chip:hover {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--on-primary);
+}
+
+.chat-form {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--space-3);
+    padding: var(--space-4) var(--space-5) var(--space-5);
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+}
+
+.chat-form textarea {
+    min-height: 5rem;
+    resize: none;
+    font-size: var(--fs-sm);
+}
+
+.chat-form .btn-primary {
+    align-self: end;
+    min-height: 3rem;
+}
+
+/* ---------------------------------------------------------------------------
+   8. Modais
+   --------------------------------------------------------------------------- */
+.modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-5);
+    background: rgba(13, 27, 42, 0.55);
+    backdrop-filter: blur(2px);
+}
+
+.modal.active {
+    display: flex;
+}
+
+.modal-content {
+    width: 100%;
+    max-width: 30rem;
+    padding: var(--space-6);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+    box-shadow: var(--shadow-lg);
+}
+
+.modal-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-4);
+    margin-bottom: var(--space-5);
+    padding-bottom: var(--space-4);
+    border-bottom: 1px solid var(--border);
+}
+
+.modal-header h3 {
+    font-size: var(--fs-xl);
+}
+
+.modal-header p {
+    margin-top: var(--space-1);
+    color: var(--text-muted);
+    font-size: var(--fs-sm);
+    line-height: var(--lh-normal);
+}
+
+.modal-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 2.5rem;
+    height: 2.5rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    color: var(--text-muted);
+    font-size: 1.2rem;
+    cursor: pointer;
+    transition: background-color var(--speed) var(--ease), color var(--speed) var(--ease);
+}
+
+.modal-close:hover {
+    background: var(--surface-sunken);
+    color: var(--text);
+}
+
+.modal-form {
+    display: grid;
+    gap: var(--space-4);
+}
+
+.modal-form .input-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-3);
+    margin-top: var(--space-2);
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--border);
+}
+
+/* ---------------------------------------------------------------------------
+   9. Responsivo
+   --------------------------------------------------------------------------- */
+@media (max-width: 1080px) {
+    .overview-grid,
+    .summary-body {
+        grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    }
+
+    .chat-layout {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 900px) {
+    /* A sidebar deixa de ser coluna e vira uma barra superior fixa com
+       navegacao rolavel na horizontal - o padrao de app, em vez do bloco de
+       links quebrando em varias linhas e empurrando o conteudo. */
+    .dashboard-container {
+        flex-direction: column;
+    }
+
+    .sidebar {
+        position: sticky;
+        top: 0;
+        flex-direction: row;
+        align-items: center;
+        gap: var(--space-3);
+        width: 100%;
+        height: auto;
+        padding: var(--space-3) var(--space-4);
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+        box-shadow: var(--shadow-xs);
+    }
+
+    .logo-section {
+        margin-bottom: 0;
+        padding: 0;
+        flex-shrink: 0;
+        font-size: var(--fs-sm);
+    }
+
+    /* No celular so o simbolo: o nome completo comeria a linha inteira. */
+    .logo-section span {
+        display: none;
+    }
+
+    .sidebar nav {
+        flex-direction: row;
+        gap: var(--space-2);
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding-bottom: 0.125rem;
+        scrollbar-width: thin;
+    }
+
+    .nav-link,
+    .sidebar nav a {
+        flex-shrink: 0;
+        white-space: nowrap;
+        padding: 0.55rem 0.8rem;
+    }
+
+    .nav-link.active::before,
+    .sidebar nav a.active::before {
+        left: 0.6rem;
+        right: 0.6rem;
+        top: auto;
+        bottom: 0;
+        width: auto;
+        height: 0.1875rem;
+    }
+
+    .sidebar-footer {
+        margin: 0;
+        padding: 0;
+        border: none;
+        flex-shrink: 0;
+    }
+
+    .btn-logout {
+        width: auto;
+        padding: 0.5rem 0.7rem;
+    }
+
+    .btn-logout span {
+        display: none;
+    }
+
+    .main-content {
+        padding: var(--space-5) var(--space-4) var(--space-8);
+    }
+
+    .top-bar {
+        flex-wrap: wrap;
+        gap: var(--space-3);
+    }
+}
+
+@media (max-width: 640px) {
+    .overview-grid,
+    .summary-body {
+        grid-template-columns: 1fr;
+    }
+
+    .summary-card,
+    .table-card,
+    .filter-card,
+    .info-card,
+    .team-overview,
+    .professional-form,
+    .messages-section,
+    .appointments-section,
+    .patients-section,
+    .team-section,
+    .guardians-container,
+    .modal-content {
+        padding: var(--space-4);
+    }
+
+    .overview-header h1,
+    .overview-header h2,
+    .page-title h1 {
+        font-size: var(--fs-2xl);
+    }
+
+    .user-profile {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .modal-footer {
+        flex-direction: column-reverse;
+    }
+
+    .modal-footer > button {
+        width: 100%;
+    }
+}

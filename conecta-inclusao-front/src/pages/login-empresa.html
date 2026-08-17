@@ -3,58 +3,94 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login Empresa - Portal Saúde</title>
+    <meta name="theme-color" content="#b96210">
+    <title>Entrar como clinica | Conecta Inclusao</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <link rel="stylesheet" href="../assets/css/theme.css">
+    <link rel="stylesheet" href="../assets/css/auth.css">
     <link rel="stylesheet" href="../assets/css/login-empresa.css">
     <link rel="stylesheet" href="../assets/css/responsive.css">
-    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script src="../assets/js/acessibilidade.js"></script>
 </head>
-<body>
-    <div class="login-container">
-        <div class="login-header">
-            <div class="back-button">
-                <a href="lndex.html"><i class="ph ph-arrow-left"></i> Voltar</a>
-            </div>
-            <div class="company-icon">
-                <i class="ph ph-building"></i>
-            </div>
-            <h1>Área da Empresa</h1>
-            <p>Gerencie seus funcionários e acompanhe os históricos de saúde ocupacional.</p>
-        </div>
+<body class="auth-page">
+    <a class="skip-link" href="#conteudo">Pular para o formulário</a>
 
-        <form id="loginFormEmpresa">
-            <div class="input-group">
-                <label for="cnpj">CNPJ</label>
-                <input type="text" id="cnpj" placeholder="00.000.000/0000-00" maxlength="18" required>
+    <div class="auth-layout">
+        <aside class="auth-aside on-dark">
+            <a class="auth-back" href="lndex.html">
+                <i class="ph ph-arrow-left" aria-hidden="true"></i> Voltar para o início
+            </a>
+
+            <div class="auth-brand">
+                <span class="brand-mark" aria-hidden="true"><i class="ph ph-buildings"></i></span>
+                Conecta Inclusão
             </div>
 
-            <div class="input-group">
-                <label for="password">Senha</label>
-                <input type="password" id="password" placeholder="Sua senha" required>
-            </div>
+            <h2>Sua equipe de atendimento, organizada por unidade</h2>
+            <p class="auth-aside-text">
+                Entre com o CNPJ para cadastrar profissionais, acompanhar a situação
+                do quadro e consultar os relatórios da clínica.
+            </p>
 
-            <button type="submit" class="btn-login">Acessar como Empresa</button>
-            <br><br>
-            <a href="#" class="forgot-password" onclick="openForgotPasswordModal(event)">Esqueceu a senha?</a>
-            
-            <div class="login-footer">
-                
+            <ul class="auth-aside-list">
+                <li><i class="ph ph-user-plus" aria-hidden="true"></i> Cadastro de profissionais em minutos</li>
+                <li><i class="ph ph-users-three" aria-hidden="true"></i> Situação da equipe por unidade</li>
+                <li><i class="ph ph-chart-line" aria-hidden="true"></i> Indicadores do quadro de atendimento</li>
+            </ul>
+        </aside>
+
+        <main class="auth-main" id="conteudo">
+            <div class="login-container">
+                <div class="login-header">
+                    <div class="company-icon" aria-hidden="true">
+                        <i class="ph ph-buildings"></i>
+                    </div>
+                    <h1>Área da Clínica</h1>
+                    <p>Gerencie a equipe e acompanhe o atendimento da sua unidade.</p>
+                </div>
+
+                <form id="loginFormEmpresa">
+                    <div class="input-group">
+                        <label for="cnpj">CNPJ</label>
+                        <input type="text" id="cnpj" inputmode="numeric" autocomplete="username"
+                               placeholder="00.000.000/0000-00" maxlength="18" required>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="password">Senha</label>
+                        <input type="password" id="password" autocomplete="current-password"
+                               placeholder="Sua senha" required>
+                    </div>
+
+                    <button type="submit" class="btn-login">Acessar como clínica</button>
+
+                    <a href="#" class="forgot-password" onclick="openForgotPasswordModal(event)">Esqueceu a senha?</a>
+
+                    <div class="login-footer">
+                        <p>Ainda não é parceira? <a href="cadastro-empresa.html">Cadastre sua clínica</a></p>
+                    </div>
+                </form>
             </div>
-            <span>Não tem conta? 
-            <a href="cadastro-empresa.html">Cadastre sua empresa</a></span>
-        </form>
+        </main>
     </div>
 
     <!-- Modal Esqueceu a Senha -->
-    <div id="forgotPasswordModal" class="forgot-modal-overlay" style="display: none;">
+    <div id="forgotPasswordModal" class="forgot-modal-overlay" style="display: none;"
+         role="dialog" aria-modal="true" aria-labelledby="forgotPasswordTitle">
         <div class="forgot-modal-content">
             <div class="forgot-modal-header">
-                <h2>Recuperar Senha</h2>
-                <button type="button" class="forgot-modal-close" onclick="closeForgotPasswordModal()">&times;</button>
+                <h2 id="forgotPasswordTitle">Recuperar senha</h2>
+                <button type="button" class="forgot-modal-close" aria-label="Fechar"
+                        onclick="closeForgotPasswordModal()">&times;</button>
             </div>
             <div class="forgot-modal-body">
-                <p class="forgot-modal-description">Digite seu CNPJ para receber um link de recuperação de senha no seu e-mail cadastrado.</p>
-                <input type="text" id="forgotEmail" placeholder="00.000.000/0000-00" class="forgot-input" maxlength="18">
-                <button type="button" class="forgot-btn" onclick="sendResetEmail('cnpj')">Enviar Link de Recuperação</button>
+                <p class="forgot-modal-description">Digite o CNPJ da clínica para receber um link de recuperação no e-mail cadastrado.</p>
+                <label class="sr-only" for="forgotEmail">CNPJ</label>
+                <input type="text" id="forgotEmail" placeholder="00.000.000/0000-00" class="forgot-input" maxlength="18" inputmode="numeric">
+                <button type="button" class="forgot-btn" onclick="sendResetEmail('cnpj')">Enviar link de recuperação</button>
             </div>
             <div class="forgot-modal-footer">
                 <button type="button" class="forgot-cancel-btn" onclick="closeForgotPasswordModal()">Cancelar</button>

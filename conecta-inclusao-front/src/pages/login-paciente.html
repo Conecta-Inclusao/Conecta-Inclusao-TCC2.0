@@ -3,61 +3,94 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login Paciente - Portal Saúde</title>
+    <meta name="theme-color" content="#1a56b8">
+    <title>Entrar como paciente | Conecta Inclusao</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <link rel="stylesheet" href="../assets/css/theme.css">
+    <link rel="stylesheet" href="../assets/css/auth.css">
     <link rel="stylesheet" href="../assets/css/login-paciente.css">
     <link rel="stylesheet" href="../assets/css/responsive.css">
-    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script src="../assets/js/acessibilidade.js"></script>
 </head>
-<body>
-    <div class="login-container">
-        <div class="login-header">
-            <div class="back-button">
-                <a href="lndex.html"><i class="ph ph-arrow-left"></i> Voltar</a>
-            </div>
-            <div class="patient-icon">
-                <i class="ph ph-user-circle"></i>
-            </div>
-            <h1>Área do Paciente</h1>
-            <p>Acesse seus exames e histórico médico com segurança.</p>
-        </div>
+<body class="auth-page">
+    <a class="skip-link" href="#conteudo">Pular para o formulário</a>
 
-        <form id="loginFormPaciente">
-            <div class="input-group">
-                <label for="cpf">CPF</label>
-                <input type="text" id="cpf" placeholder="000.000.000-00" maxlength="14" required>
+    <div class="auth-layout">
+        <aside class="auth-aside on-dark">
+            <a class="auth-back" href="lndex.html">
+                <i class="ph ph-arrow-left" aria-hidden="true"></i> Voltar para o início
+            </a>
+
+            <div class="auth-brand">
+                <span class="brand-mark" aria-hidden="true"><i class="ph ph-heartbeat"></i></span>
+                Conecta Inclusão
             </div>
 
-            <div class="input-group">
-                <div class="label-row">
-                    <label for="password">Senha</label>
-                    
+            <h2>O acompanhamento do paciente, reunido em um lugar só</h2>
+            <p class="auth-aside-text">
+                Entre com o CPF do paciente para ver consultas marcadas, encontrar
+                atendimento e falar com o profissional responsável.
+            </p>
+
+            <ul class="auth-aside-list">
+                <li><i class="ph ph-calendar-check" aria-hidden="true"></i> Consultas agendadas e histórico sempre à mão</li>
+                <li><i class="ph ph-users-three" aria-hidden="true"></i> Responsáveis autorizados com acesso próprio</li>
+                <li><i class="ph ph-lock-key" aria-hidden="true"></i> Dados visíveis apenas para quem tem permissão</li>
+            </ul>
+        </aside>
+
+        <main class="auth-main" id="conteudo">
+            <div class="login-container">
+                <div class="login-header">
+                    <div class="patient-icon" aria-hidden="true">
+                        <i class="ph ph-user-circle"></i>
+                    </div>
+                    <h1>Área do Paciente</h1>
+                    <p>Acesse consultas, histórico e mensagens com segurança.</p>
                 </div>
-                <input type="password" id="password" placeholder="Sua senha" required>
-            </div>
 
-            <button type="submit" class="btn-login">Acessar meus dados</button>
-            <br><br>
-            <a href="#" class="forgot-password" onclick="openForgotPasswordModal(event)">Esqueceu a senha?</a>
-            
-            <div class="login-footer">
-                <p style="text-align: center; margin-top: 1.5rem; color: #666;">
-                    Não tem uma conta? <a href="cadastro-paciente.html" style="color: #3498db; font-weight: 600;">Cadastre-se aqui</a>
-                </p>
+                <form id="loginFormPaciente">
+                    <div class="input-group">
+                        <label for="cpf">CPF do paciente</label>
+                        <input type="text" id="cpf" inputmode="numeric" autocomplete="username"
+                               placeholder="000.000.000-00" maxlength="14" required>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="password">Senha</label>
+                        <input type="password" id="password" autocomplete="current-password"
+                               placeholder="Sua senha" required>
+                    </div>
+
+                    <button type="submit" class="btn-login">Acessar meus dados</button>
+
+                    <a href="#" class="forgot-password" onclick="openForgotPasswordModal(event)">Esqueceu a senha?</a>
+
+                    <div class="login-footer">
+                        <p>Não tem uma conta? <a href="cadastro-paciente.html">Cadastre-se aqui</a></p>
+                    </div>
+                </form>
             </div>
-        </form>
+        </main>
     </div>
 
     <!-- Modal Esqueceu a Senha -->
-    <div id="forgotPasswordModal" class="forgot-modal-overlay" style="display: none;">
+    <div id="forgotPasswordModal" class="forgot-modal-overlay" style="display: none;"
+         role="dialog" aria-modal="true" aria-labelledby="forgotPasswordTitle">
         <div class="forgot-modal-content">
             <div class="forgot-modal-header">
-                <h2>Recuperar Senha</h2>
-                <button type="button" class="forgot-modal-close" onclick="closeForgotPasswordModal()">&times;</button>
+                <h2 id="forgotPasswordTitle">Recuperar senha</h2>
+                <button type="button" class="forgot-modal-close" aria-label="Fechar"
+                        onclick="closeForgotPasswordModal()">&times;</button>
             </div>
             <div class="forgot-modal-body">
-                <p class="forgot-modal-description">Digite seu CPF para receber um link de recuperação de senha no seu e-mail cadastrado.</p>
-                <input type="text" id="forgotEmail" placeholder="000.000.000-00" class="forgot-input" maxlength="14">
-                <button type="button" class="forgot-btn" onclick="sendResetEmail('cpf')">Enviar Link de Recuperação</button>
+                <p class="forgot-modal-description">Digite o CPF do paciente para receber um link de recuperação no e-mail cadastrado.</p>
+                <label class="sr-only" for="forgotEmail">CPF do paciente</label>
+                <input type="text" id="forgotEmail" placeholder="000.000.000-00" class="forgot-input" maxlength="14" inputmode="numeric">
+                <button type="button" class="forgot-btn" onclick="sendResetEmail('cpf')">Enviar link de recuperação</button>
             </div>
             <div class="forgot-modal-footer">
                 <button type="button" class="forgot-cancel-btn" onclick="closeForgotPasswordModal()">Cancelar</button>

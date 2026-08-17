@@ -1,0 +1,512 @@
+/* ===========================================================================
+   auth.css - telas de entrada e cadastro
+   ===========================================================================
+   Depende de theme.css.
+
+   Antes, login-paciente.css, login-medico.css e login-empresa.css eram tres
+   copias quase identicas do mesmo arquivo (mesmo modal, mesmo botao, mesmo
+   card) que ja tinham comecado a divergir entre si: raio 16px num, 12px no
+   outro; #f0f4f8 de fundo num, #f8f9fa no outro. Toda essa parte comum passou
+   a viver aqui, e cada pagina so declara a cor do seu perfil.
+
+   O layout tambem mudou: o formulario deixou de flutuar sozinho no meio de um
+   fundo cinza e ganhou um painel ao lado explicando onde a pessoa esta e o que
+   vai encontrar - util para o responsavel que entra pela primeira vez.
+   =========================================================================== */
+
+.auth-page {
+    background:
+        radial-gradient(48rem 30rem at 0% 0%, var(--accent-soft) 0%, transparent 60%),
+        var(--bg);
+    background-attachment: fixed;
+}
+
+.auth-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+    align-items: stretch;
+    min-height: 100vh;
+}
+
+/* ---------------------------------------------------------------------------
+   Painel institucional
+   --------------------------------------------------------------------------- */
+.auth-aside {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
+    padding: var(--space-9) var(--space-8);
+    background: linear-gradient(155deg, var(--accent-strong) 0%, var(--accent) 55%, var(--brand-800) 100%);
+    color: #ffffff;
+}
+
+[data-contrast="alto"] .auth-aside {
+    background: var(--surface);
+    color: var(--text);
+    border-right: 1px solid var(--border);
+}
+
+.auth-back {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    align-self: flex-start;
+    min-height: var(--tap);
+    padding: 0.5rem 0.9rem;
+    border-radius: var(--radius-pill);
+    background: rgba(255, 255, 255, 0.15);
+    color: #ffffff;
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    text-decoration: none;
+    transition: background-color var(--speed) var(--ease);
+}
+
+.auth-back:hover {
+    background: rgba(255, 255, 255, 0.28);
+    color: #ffffff;
+}
+
+.auth-back:focus-visible {
+    outline-color: #ffffff;
+}
+
+[data-contrast="alto"] .auth-back {
+    background: var(--surface-muted);
+    color: var(--text);
+    border: 1px solid var(--border);
+}
+
+.auth-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin-top: var(--space-4);
+    font-size: var(--fs-lg);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+}
+
+.auth-brand .brand-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: var(--radius-md);
+    background: rgba(255, 255, 255, 0.18);
+    font-size: 1.35rem;
+}
+
+[data-contrast="alto"] .auth-brand .brand-mark {
+    background: var(--surface-muted);
+    border: 1px solid var(--border);
+}
+
+.auth-aside h2 {
+    max-width: 22ch;
+    font-size: var(--fs-3xl);
+    line-height: 1.15;
+    color: inherit;
+}
+
+.auth-aside-text {
+    max-width: 40ch;
+    color: rgba(255, 255, 255, 0.88);
+    font-size: var(--fs-md);
+    line-height: var(--lh-loose);
+}
+
+[data-contrast="alto"] .auth-aside-text {
+    color: var(--text-soft);
+}
+
+.auth-aside-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    margin-top: auto;
+}
+
+.auth-aside-list li {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-3);
+    font-size: var(--fs-sm);
+    color: rgba(255, 255, 255, 0.92);
+}
+
+[data-contrast="alto"] .auth-aside-list li {
+    color: var(--text-soft);
+}
+
+.auth-aside-list i {
+    flex-shrink: 0;
+    margin-top: 0.1rem;
+    font-size: 1.2rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Coluna do formulario
+   --------------------------------------------------------------------------- */
+.auth-main {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-8) var(--space-6);
+}
+
+.login-container {
+    width: 100%;
+    max-width: 27rem;
+    padding: var(--space-8);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    background: var(--surface);
+    box-shadow: var(--shadow-md);
+}
+
+.login-header {
+    margin-bottom: var(--space-6);
+    text-align: center;
+}
+
+/* Os tres icones de perfil que cada pagina ja usava. */
+.patient-icon,
+.doctor-icon,
+.company-icon,
+.login-header > i {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 4rem;
+    height: 4rem;
+    margin-bottom: var(--space-4);
+    border-radius: var(--radius-lg);
+    background: var(--accent-soft);
+    color: var(--accent-strong);
+    font-size: 2.1rem;
+}
+
+.login-header h1 {
+    font-size: var(--fs-2xl);
+    margin-bottom: var(--space-2);
+}
+
+.login-header p {
+    color: var(--text-muted);
+    font-size: var(--fs-sm);
+    line-height: var(--lh-normal);
+}
+
+.login-container form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+.login-container .input-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    text-align: left;
+}
+
+.login-container .input-group label {
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    color: var(--text-soft);
+}
+
+.btn-login {
+    width: 100%;
+    min-height: var(--tap);
+    margin-top: var(--space-2);
+    padding: 0.85rem 1.35rem;
+    border: none;
+    border-radius: var(--radius-md);
+    background: var(--accent);
+    color: var(--on-primary);
+    font-size: var(--fs-md);
+    font-weight: 700;
+    cursor: pointer;
+    transition: background-color var(--speed) var(--ease), box-shadow var(--speed) var(--ease),
+                transform var(--speed) var(--ease);
+}
+
+.btn-login:hover:not(:disabled) {
+    background: var(--accent-strong);
+    box-shadow: var(--shadow-sm);
+    transform: translateY(-1px);
+}
+
+.forgot-password {
+    display: inline-block;
+    align-self: center;
+    color: var(--accent-strong);
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.forgot-password:hover {
+    text-decoration: underline;
+}
+
+.login-footer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-4);
+    flex-wrap: wrap;
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: var(--fs-sm);
+    text-align: center;
+}
+
+.login-footer p {
+    color: var(--text-muted);
+    font-size: var(--fs-sm);
+}
+
+.login-footer a,
+.login-container form > span a {
+    color: var(--accent-strong);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.login-footer a:hover,
+.login-container form > span a:hover {
+    text-decoration: underline;
+}
+
+.login-container form > span {
+    display: block;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: var(--fs-sm);
+}
+
+/* `.back-button` continua existindo dentro do card para as paginas que ainda
+   nao tem o painel lateral (ex.: telas abertas direto por link). */
+.back-button {
+    margin-bottom: var(--space-4);
+    text-align: left;
+}
+
+.back-button a {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    color: var(--accent-strong);
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.back-button a:hover {
+    text-decoration: underline;
+}
+
+/* ---------------------------------------------------------------------------
+   Variante de coluna unica (cadastros e redefinicao de senha)
+   --------------------------------------------------------------------------- */
+.auth-page--single {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: var(--space-8) var(--space-4);
+}
+
+.auth-page--single .auth-main,
+.page-shell {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    padding: 0;
+}
+
+/* ---------------------------------------------------------------------------
+   Modal "esqueci a senha"
+   --------------------------------------------------------------------------- */
+.forgot-modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-4);
+    background: rgba(13, 27, 42, 0.55);
+    backdrop-filter: blur(2px);
+    animation: fadeIn var(--speed) var(--ease);
+}
+
+.forgot-modal-content {
+    width: 100%;
+    max-width: 26rem;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+    box-shadow: var(--shadow-lg);
+    animation: slideUp var(--speed) var(--ease);
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+@keyframes slideUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.forgot-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-5) var(--space-6);
+    background: var(--accent);
+    color: #ffffff;
+}
+
+[data-contrast="alto"] .forgot-modal-header {
+    background: var(--surface-muted);
+    color: var(--text);
+    border-bottom: 1px solid var(--border);
+}
+
+.forgot-modal-header h2 {
+    font-size: var(--fs-lg);
+    color: inherit;
+}
+
+.forgot-modal-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: var(--radius-sm);
+    color: inherit;
+    font-size: 1.6rem;
+    line-height: 1;
+    transition: background-color var(--speed) var(--ease);
+}
+
+.forgot-modal-close:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.forgot-modal-close:focus-visible {
+    outline-color: #ffffff;
+}
+
+[data-contrast="alto"] .forgot-modal-close:hover {
+    background: var(--surface-sunken);
+}
+
+.forgot-modal-body {
+    padding: var(--space-6);
+}
+
+.forgot-modal-description {
+    margin-bottom: var(--space-5);
+    color: var(--text-soft);
+    font-size: var(--fs-sm);
+    line-height: var(--lh-normal);
+}
+
+.forgot-input {
+    margin-bottom: var(--space-5);
+}
+
+.forgot-btn {
+    width: 100%;
+    min-height: var(--tap);
+    padding: 0.8rem 1.25rem;
+    border: none;
+    border-radius: var(--radius-md);
+    background: var(--accent);
+    color: var(--on-primary);
+    font-size: var(--fs-sm);
+    font-weight: 700;
+    cursor: pointer;
+    transition: background-color var(--speed) var(--ease), transform var(--speed) var(--ease);
+}
+
+.forgot-btn:hover:not(:disabled) {
+    background: var(--accent-strong);
+    transform: translateY(-1px);
+}
+
+.forgot-modal-footer {
+    padding: var(--space-4) var(--space-6);
+    border-top: 1px solid var(--border);
+    background: var(--surface-muted);
+    text-align: right;
+}
+
+.forgot-cancel-btn {
+    min-height: var(--tap);
+    padding: 0.6rem 1.25rem;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    color: var(--text-soft);
+    font-size: var(--fs-sm);
+    font-weight: 700;
+    cursor: pointer;
+    transition: background-color var(--speed) var(--ease);
+}
+
+.forgot-cancel-btn:hover {
+    background: var(--surface-sunken);
+    color: var(--text);
+}
+
+/* ---------------------------------------------------------------------------
+   Responsivo
+   --------------------------------------------------------------------------- */
+@media (max-width: 900px) {
+    .auth-layout {
+        grid-template-columns: 1fr;
+    }
+
+    /* No celular o painel institucional vira um cabecalho curto: mantem a
+       identidade e o link de voltar sem empurrar o formulario para baixo da
+       dobra. */
+    .auth-aside {
+        gap: var(--space-4);
+        padding: var(--space-5) var(--space-5) var(--space-6);
+    }
+
+    .auth-aside h2 {
+        font-size: var(--fs-xl);
+    }
+
+    .auth-aside-text,
+    .auth-aside-list {
+        display: none;
+    }
+
+    .auth-brand {
+        margin-top: 0;
+    }
+
+    .auth-main {
+        padding: var(--space-6) var(--space-4) var(--space-8);
+    }
+}
+
+@media (max-width: 480px) {
+    .login-container {
+        padding: var(--space-6) var(--space-5);
+    }
+}

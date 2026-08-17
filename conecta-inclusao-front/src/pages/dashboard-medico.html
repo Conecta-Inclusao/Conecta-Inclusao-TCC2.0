@@ -3,34 +3,46 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard Médico - Portal Saúde</title>
+    <meta name="theme-color" content="#0c7d6a">
+    <title>Painel do Profissional | Conecta Inclusao</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <link rel="stylesheet" href="../assets/css/theme.css">
+    <link rel="stylesheet" href="../assets/css/dashboard.css">
     <link rel="stylesheet" href="../assets/css/dashboard-medico.css">
     <link rel="stylesheet" href="../assets/css/responsive.css">
-    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script src="../assets/js/acessibilidade.js"></script>
 </head>
 <body>
+    <a class="skip-link" href="#conteudo">Pular para o conteúdo</a>
+
     <div class="dashboard-container">
-        <aside class="sidebar">
+        <aside class="sidebar" aria-label="Menu do profissional">
             <div class="logo-section">
-                <i class="ph ph-stethoscope"></i>
+                <i class="ph ph-stethoscope" aria-hidden="true"></i>
                 <span>Conecta Inclusão</span>
             </div>
-            <nav>
-                <a href="#" class="active" onclick="showHome(event)"><i class="ph ph-house"></i> Início</a>
-                <a href="#" onclick="openAgendaMedica(event)"><i class="ph ph-calendar-blank"></i> Agenda</a>
-                <a href="#" onclick="togglePatientsList(event)"><i class="ph ph-users"></i> Pacientes</a>
-                <a href="#" onclick="openMensagens(event)"><i class="ph ph-chat-circle-text"></i> Mensagens</a>
+            <nav aria-label="Navegação principal">
+                <a href="#" class="active" onclick="showHome(event)"><i class="ph ph-house" aria-hidden="true"></i> Início</a>
+                <a href="#" onclick="openAgendaMedica(event)"><i class="ph ph-calendar-blank" aria-hidden="true"></i> Agenda</a>
+                <a href="#" onclick="togglePatientsList(event)"><i class="ph ph-users" aria-hidden="true"></i> Pacientes</a>
+                <a href="#" onclick="openMensagens(event)"><i class="ph ph-chat-circle-text" aria-hidden="true"></i> Mensagens</a>
             </nav>
             <div class="sidebar-footer">
-                <button class="btn-logout" onclick="handleLogout()"><i class="ph ph-sign-out"></i> Sair</button>
+                <button class="btn-logout" type="button" onclick="handleLogout()">
+                    <i class="ph ph-sign-out" aria-hidden="true"></i> <span>Sair</span>
+                </button>
             </div>
         </aside>
 
-        <main class="main-content">
+        <main class="main-content" id="conteudo">
             <header class="top-bar">
                 <div class="search-bar">
-                    <i class="ph ph-magnifying-glass"></i>
-                    <input type="text" placeholder="Buscar paciente...">
+                    <i class="ph ph-magnifying-glass" aria-hidden="true"></i>
+                    <label class="sr-only" for="patientSearch">Buscar paciente</label>
+                    <input type="search" id="patientSearch" placeholder="Buscar paciente...">
                 </div>
                 <div class="user-profile">
                     <div class="user-info">
@@ -90,7 +102,7 @@
                         </thead>
                         <tbody>
                             <tr>
-                                <td colspan="5" style="text-align: center; padding: 20px; color: #64748b;">
+                                <td colspan="5" class="table-empty">
                                     Carregando agendamentos...
                                 </td>
                             </tr>
@@ -133,7 +145,7 @@
                             </thead>
                             <tbody id="patientsTableBody">
                                 <tr>
-                                    <td colspan="5" style="text-align: center; padding: 20px; color: #64748b;">
+                                    <td colspan="5" class="table-empty">
                                         Carregando pacientes...
                                     </td>
                                 </tr>
