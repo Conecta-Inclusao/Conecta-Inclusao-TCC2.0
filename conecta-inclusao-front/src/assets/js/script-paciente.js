@@ -37,7 +37,12 @@ async function sendResetEmail(type) {
             return;
         }
 
-        showPopup(`Enviamos o token de recuperação para ${result.email}. Verifique sua caixa de entrada.`);
+        // A API só devolve o e-mail mascarado quando o envio realmente ocorreu.
+        // Sem esse cuidado o popup dizia "enviamos para null" mesmo quando o
+        // cadastro não existia ou o SMTP falhou.
+        showPopup(result.email
+            ? `Enviamos o token de recuperação para ${result.email}. Verifique sua caixa de entrada.`
+            : (result.message || 'Se houver um cadastro com esse identificador, enviaremos um e-mail com as instruções.'));
         closeForgotPasswordModal();
     } catch (error) {
         console.error('Erro ao solicitar recuperação:', error);

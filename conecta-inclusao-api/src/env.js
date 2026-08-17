@@ -75,7 +75,13 @@ export const env = {
   SMTP_SECURE: String(optional("SMTP_SECURE", "false")).toLowerCase() === "true",
   SMTP_USER: optional("SMTP_USER"),
   SMTP_PASS: optional("SMTP_PASS"),
-  SMTP_FROM: optional("SMTP_FROM")
+  SMTP_FROM: optional("SMTP_FROM"),
+
+  // Envio por API HTTP (porta 443). Necessario no Render, que bloqueia as
+  // portas SMTP de saida no plano free. Sem MAILJET_API_KEY o envio cai no SMTP.
+  MAILJET_API_KEY: optional("MAILJET_API_KEY"),
+  MAILJET_API_SECRET: optional("MAILJET_API_SECRET"),
+  MAILJET_SENDER: optional("MAILJET_SENDER")
 };
 
 export const isProduction = env.NODE_ENV === "production";
