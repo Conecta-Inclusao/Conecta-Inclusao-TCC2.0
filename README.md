@@ -70,7 +70,6 @@ A plataforma foi projetada com foco em inclusão digital:
 * Estrutura preparada para melhorias como:
 
   * leitura de tela
-  * alto contraste
   * acessibilidade ampliada
 
 ---
@@ -177,13 +176,12 @@ O desenvolvimento do projeto seguiu:
 * Sistema de recomendação de médicos
 * Aplicativo mobile
 * Recursos avançados de acessibilidade
-* 
 
 ---
 
 ## 🌐 Demonstração
 
-👉 (Adicionar link do sistema online)
+👉 https://conecta-inclusao-tcc-2-0.vercel.app/
 
 ---
 
@@ -207,7 +205,7 @@ O desenvolvimento do projeto seguiu:
 
 *(Adicionar os links abaixo)*
 
-* Matheus Couto da Costa Lima – (link)
+* Matheus Couto da Costa Lima – www.linkedin.com/in/matheus-lima-7a485830b
 * Miguel Rezende Gomes – (link)
 * Natan Belo da Cruz Silva – (link)
 * Thais Vitoria Ferraz Rangel – (link)
