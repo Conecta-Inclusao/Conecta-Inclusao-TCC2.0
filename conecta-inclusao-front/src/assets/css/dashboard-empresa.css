@@ -97,6 +97,88 @@ body {
     grid-column: span 2;
 }
 
+/* ---- Blocos do formulario de cadastro ------------------------------- */
+/* O formulario do medico passou a ter tres assuntos distintos (endereco,
+   registro profissional e alocacao). Sem separacao visual, virava uma coluna
+   unica de 12 campos onde nada indica que o CEP existe para descobrir a
+   unidade mais proxima. */
+.form-subsection {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-top: var(--space-2);
+    padding-bottom: var(--space-2);
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+    font-size: var(--fs-md);
+    font-weight: 700;
+}
+
+.form-subsection i {
+    color: var(--accent-strong);
+    font-size: 1.15rem;
+}
+
+/* Endereco manual ("nao sei meu CEP"): grade propria porque sao cinco campos
+   de larguras bem diferentes dentro de um unico .input-group full-width. */
+.address-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1.5fr 1.5fr 0.6fr;
+    gap: var(--space-4);
+}
+
+/* Distancia da unidade ate o medico, exibida ao lado do nome na lista. */
+.unit-distance {
+    color: var(--text-muted);
+    font-size: var(--fs-xs);
+}
+
+/* Acao dentro de celula de tabela. Existe como classe porque os botoes das
+   tabelas de equipe usam `style="..."` inline com cores fixas (#667eea,
+   #f44336) - o que ignora o tema de alto contraste, ja que estilo inline vence
+   qualquer folha de estilo. A tabela de unidades ja nasce sem esse problema. */
+.btn-table-action {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-height: var(--tap);
+    padding: 0.4rem 0.75rem;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--accent-strong);
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color var(--speed) var(--ease), border-color var(--speed) var(--ease);
+}
+
+.btn-table-action:hover {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+}
+
+.btn-table-action--danger {
+    color: var(--danger);
+}
+
+.btn-table-action--danger:hover {
+    background: var(--danger-soft);
+    border-color: var(--danger);
+}
+
+@media (max-width: 900px) {
+    .address-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 560px) {
+    .address-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
 /* O bloco de regras de senha e injetado pelo utils.js dentro do .input-group;
    `order: 3` o mantem abaixo do campo mesmo com o container em coluna. */
 .professional-form .password-rule-feedback {

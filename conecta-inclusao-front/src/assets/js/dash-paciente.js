@@ -179,6 +179,40 @@ function loadPatientData() {
         garantirOpcaoDeUnidade(profilePreferredUnit, user?.unidade_preferencia);
         profilePreferredUnit.value = user?.unidade_preferencia || '';
     }
+
+    aplicarAdaptacaoDeAcessibilidade();
+}
+
+/* ---------------------------------------------------------------------------
+   Adaptacao do dashboard ao tipo de deficiencia
+   ---------------------------------------------------------------------------
+   O tipo de deficiencia era coletado no cadastro e nunca usado para nada: ficava
+   guardado em pacientes.tipo_deficiencia e reaparecia como texto num campo da
+   aba "Meu Perfil". Num produto cujo diferencial e acessibilidade, isso e o dado
+   mais importante do cadastro sendo tratado como enfeite.
+
+   Agora ele configura a interface inteira. Quem toma as decisoes de ajuste e o
+   acessibilidade.js (carregado em todas as telas); aqui so entregamos o tipo e
+   mostramos ao paciente o que foi mudado - porque ajuste automatico que o
+   usuario nao entende e nao consegue desfazer vira armadilha, nao acessibilidade.
+   --------------------------------------------------------------------------- */
+function aplicarAdaptacaoDeAcessibilidade() {
+    const aviso = document.getElementById('accessibilityAdaptationNotice');
+    const perfil = window.ConectaAcessibilidade?.aplicarPerfilDeDeficiencia(user?.tipo_deficiencia);
+
+    if (!aviso) return;
+
+    if (!perfil) {
+        aviso.hidden = true;
+        return;
+    }
+
+    const texto = document.getElementById('accessibilityAdaptationText');
+    if (texto) {
+        texto.textContent = `Ajustamos esta tela para ${perfil.rotulo}: ${perfil.descricao}`;
+    }
+
+    aviso.hidden = false;
 }
 
 /**
@@ -466,6 +500,10 @@ async function fetchPatientAppointments() {
 
         patientAppointments = Array.isArray(data) ? data.map(appointment => ({
             id: appointment.id || `local-${Date.now()}`,
+            // doctorId passou a ser guardado: a remarcacao precisa dele para
+            // pre-selecionar o profissional e carregar os horarios livres dele.
+            // Antes o modal de remarcar abria com o profissional em branco.
+            doctorId: appointment.doctorId ?? null,
             specialty: appointment.specialty || appointment.especialty || '',
             doctor: appointment.doctorName || appointment.name || '',
             hospital: appointment.unit || appointment.clinicName || '',
@@ -549,10 +587,26 @@ function permissionLabelById(id) {
     return found ? found.label : String(id);
 }
 
-// Carregar responsáveis do localStorage
+/* Cache local dos responsaveis, usado so quando a API nao responde.
+ *
+ * Tinha o mesmo defeito do historico do chatbot: uma chave unica por navegador
+ * ('patientGuardians') em localStorage. Nome, CPF, e-mail e parentesco dos
+ * responsaveis de um paciente ficavam disponiveis para a proxima conta que
+ * abrisse o painel na mesma maquina - e apareciam na tela sempre que a chamada
+ * a API falhasse. Agora a chave inclui o id do paciente e vive em
+ * sessionStorage, com escopo de aba. */
+function getGuardiansStorageKey() {
+    const pacienteId = user?.id
+        || window.ConectaSession.getUser()?.id
+        || sessionStorage.getItem('patientId')
+        || 'anonimo';
+
+    return `${GUARDIANS_STORAGE_KEY}:${pacienteId}`;
+}
+
 function loadGuardians() {
     try {
-        const data = localStorage.getItem(GUARDIANS_STORAGE_KEY);
+        const data = sessionStorage.getItem(getGuardiansStorageKey());
         return data ? JSON.parse(data) : [];
     } catch (error) {
         console.error('Erro ao carregar responsáveis:', error);
@@ -560,9 +614,12 @@ function loadGuardians() {
     }
 }
 
-// Salvar responsáveis no localStorage
 function saveGuardians(guardians) {
-    localStorage.setItem(GUARDIANS_STORAGE_KEY, JSON.stringify(guardians));
+    try {
+        sessionStorage.setItem(getGuardiansStorageKey(), JSON.stringify(guardians));
+    } catch (error) {
+        console.warn('Nao foi possivel guardar a lista de responsaveis nesta sessao.');
+    }
 }
 
 // Renderizar lista de responsáveis
@@ -927,6 +984,92 @@ function scrollToSpecialty(specialty) {
     }
 }
 
+/* ---------------------------------------------------------------------------
+   Horarios disponiveis
+   ---------------------------------------------------------------------------
+   O campo de horario era um <input type="time"> livre. Isso permitia marcar
+   03:47, permitia marcar um horario que o medico ja tinha ocupado - e, pior, o
+   valor digitado nem chegava a ser enviado: o corpo da requisicao levava so a
+   data, e o servidor completava com 00:00:00. Toda consulta ficava gravada para
+   a meia-noite.
+
+   Agora e uma combobox alimentada por GET /auth/doctors/:id/slots?date=..., que
+   devolve a grade de 30 em 30 minutos do expediente ja marcando o que esta
+   ocupado ou no passado.
+   --------------------------------------------------------------------------- */
+
+/** Estado do <select> de horario quando ainda nao ha o que oferecer. */
+function definirHorarioIndisponivel(mensagem) {
+    const select = document.getElementById('modalTime');
+    if (!select) return;
+
+    select.innerHTML = `<option value="">${escapeHTML(mensagem)}</option>`;
+    select.disabled = true;
+}
+
+/**
+ * Recarrega a combobox de horarios para o profissional e a data escolhidos.
+ * @param {string} [horarioPreferido] horario a manter selecionado, se ainda livre
+ */
+async function atualizarHorariosDisponiveis(horarioPreferido = '') {
+    const select = document.getElementById('modalTime');
+    const dataEscolhida = document.getElementById('modalDate')?.value;
+    const profissional = getProfessionalByRegistry(document.getElementById('modalProfessional')?.value);
+
+    if (!select) return;
+
+    if (!profissional || !dataEscolhida) {
+        definirHorarioIndisponivel('Escolha o profissional e a data');
+        return;
+    }
+
+    definirHorarioIndisponivel('Carregando horários...');
+
+    const form = document.getElementById('formNewAppointment');
+    const editId = form?.dataset.editAppointmentId;
+
+    const parametros = new URLSearchParams({ date: dataEscolhida });
+    // Na remarcacao, o proprio agendamento nao pode bloquear o horario dele.
+    if (editId) parametros.set('ignore', editId);
+
+    try {
+        const resposta = await window.ConectaSession.authFetch(
+            `${window.APP_CONFIG?.AUTH_API_URL || '/auth'}/doctors/${profissional.id}/slots?${parametros.toString()}`
+        );
+
+        const corpo = await resposta.json();
+
+        if (!resposta.ok) {
+            definirHorarioIndisponivel(corpo.message || 'Não foi possível carregar os horários');
+            return;
+        }
+
+        const livres = (corpo.horarios || []).filter(faixa => faixa.disponivel);
+
+        if (!livres.length) {
+            definirHorarioIndisponivel('Nenhum horário livre nesta data');
+            return;
+        }
+
+        select.innerHTML = '<option value="">Selecione um horário...</option>';
+        livres.forEach(faixa => {
+            const opcao = document.createElement('option');
+            opcao.value = faixa.hora;
+            opcao.textContent = faixa.hora;
+            select.appendChild(opcao);
+        });
+
+        select.disabled = false;
+
+        if (horarioPreferido && livres.some(faixa => faixa.hora === horarioPreferido)) {
+            select.value = horarioPreferido;
+        }
+    } catch (erro) {
+        console.error('Erro ao carregar horários disponíveis:', erro);
+        definirHorarioIndisponivel('Erro de conexão ao carregar os horários');
+    }
+}
+
 function openModal() {
     const modalDate = document.getElementById('modalDate');
     if (modalDate) {
@@ -941,6 +1084,8 @@ function openModal() {
     if (modal) {
         modal.style.display = 'flex';
     }
+
+    atualizarHorariosDisponiveis();
 }
 
 function closeModal() {
@@ -957,6 +1102,10 @@ function closeModal() {
         const submitBtn = form.querySelector('button[type="submit"]');
         if (submitBtn) submitBtn.textContent = 'Agendar';
         updateSelectedProfessionalDetails();
+        // form.reset() apenas volta a selecao ao primeiro <option>; as opcoes de
+        // horario carregadas continuariam la, agora referentes a um profissional
+        // e a uma data que nao estao mais escolhidos.
+        definirHorarioIndisponivel('Escolha o profissional e a data');
     }
 }
 
@@ -1213,12 +1362,60 @@ function getAppointmentData() {
 }
 
 function getPatientName() {
-    return user?.name || localStorage.getItem('patientName') || 'Paciente';
+    // localStorage['patientName'] era o segundo item consultado aqui: um nome
+    // gravado sem dono, compartilhado por todas as abas. Se o perfil ainda nao
+    // tivesse carregado, o chatbot cumprimentava o paciente novo pelo nome do
+    // anterior. A sessao da aba e a unica fonte correta.
+    return user?.name || sessionStorage.getItem('patientName') || 'Paciente';
+}
+
+/* ---------------------------------------------------------------------------
+   Historico do chatbot: um por paciente, nesta aba
+   ---------------------------------------------------------------------------
+   O BUG: a conversa do chatbot era gravada em
+   localStorage['patientProfessionalMessages'], uma chave unica por NAVEGADOR.
+   localStorage nao tem nocao de quem esta logado. Entao, ao cadastrar um
+   paciente novo e entrar com ele no mesmo computador, a aba Mensagens abria com
+   o historico do paciente anterior - inclusive nomes de medicos, datas de
+   consulta e o que ele tivesse escrito ao assistente.
+
+   Em computador compartilhado (recepcao da clinica, casa da familia, laboratorio
+   da escola) isso vaza conversa de um paciente para outro.
+
+   A CORRECAO tem duas partes:
+
+     1. A chave passa a incluir o id do paciente logado
+        ('patientProfessionalMessages:42'), entao cada conta tem a sua.
+     2. sessionStorage no lugar de localStorage: o historico do chatbot e um
+        apoio da sessao, nao um registro clinico. sessionStorage morre com a aba
+        e nao e compartilhado com a aba ao lado - a mesma decisao ja tomada para
+        o token em session.js, e pelo mesmo motivo.
+
+   As conversas com MEDICOS nunca passaram por aqui: elas vivem no banco, sob
+   autenticacao, e ja eram isoladas por usuario.
+   --------------------------------------------------------------------------- */
+
+/**
+ * Chave de armazenamento do chatbot para o paciente logado.
+ *
+ * A ordem das fontes importa. `user` so existe depois de loadUserInfo(), que e
+ * assincrona - e a primeira renderizacao da aba Mensagens acontece antes dela
+ * terminar. ConectaSession.getUser() ja tem o id desde o login, entao cobre essa
+ * janela e evita que a conversa comece num balde "anonimo" e depois mude de
+ * lugar no meio do uso.
+ */
+function getConversationsStorageKey() {
+    const pacienteId = user?.id
+        || window.ConectaSession.getUser()?.id
+        || sessionStorage.getItem('patientId')
+        || 'anonimo';
+
+    return `${PATIENT_MESSAGES_STORAGE_KEY}:${pacienteId}`;
 }
 
 function loadStoredConversations() {
     try {
-        const raw = localStorage.getItem(PATIENT_MESSAGES_STORAGE_KEY);
+        const raw = sessionStorage.getItem(getConversationsStorageKey());
         const parsed = raw ? JSON.parse(raw) : {};
         return parsed && typeof parsed === 'object' ? parsed : {};
     } catch (error) {
@@ -1228,7 +1425,28 @@ function loadStoredConversations() {
 }
 
 function saveStoredConversations(conversations) {
-    localStorage.setItem(PATIENT_MESSAGES_STORAGE_KEY, JSON.stringify(conversations));
+    try {
+        sessionStorage.setItem(getConversationsStorageKey(), JSON.stringify(conversations));
+    } catch (error) {
+        // Storage cheio ou bloqueado: a conversa segue valendo em memoria.
+        console.warn('Nao foi possivel salvar a conversa do assistente.');
+    }
+}
+
+/**
+ * Apaga o historico antigo que ficou em localStorage (versoes anteriores desta
+ * tela). Sem isso o vazamento continuaria valendo para quem ja tem a chave
+ * gravada no navegador - a correcao so passaria a valer em maquina nova.
+ */
+function limparHistoricoAntigoDoChatbot() {
+    try {
+        localStorage.removeItem(PATIENT_MESSAGES_STORAGE_KEY);
+        localStorage.removeItem(GUARDIANS_STORAGE_KEY);
+        // 'patientName' tambem era gravado em localStorage por versoes antigas.
+        localStorage.removeItem('patientName');
+    } catch (error) {
+        /* storage bloqueado: nada a limpar */
+    }
 }
 
 function escapeHTML(value) {
@@ -1412,7 +1630,72 @@ function updateChatStatusPill() {
 // buildAiReply foi removida: as respostas de profissional eram simuladas no
 // proprio navegador. Agora quem responde e o medico, pelo painel dele.
 
-function handleChatbotScheduling(userMessage) {
+/**
+ * Horarios livres de um profissional numa data, para o chatbot oferecer.
+ * @returns {Promise<string[]>} horarios no formato HH:MM
+ */
+async function buscarHorariosLivres(professionalId, date) {
+    try {
+        const resposta = await window.ConectaSession.authFetch(
+            `${window.APP_CONFIG?.AUTH_API_URL || '/auth'}/doctors/${professionalId}/slots?date=${encodeURIComponent(date)}`
+        );
+
+        if (!resposta.ok) return [];
+
+        const corpo = await resposta.json();
+        return (corpo.horarios || []).filter(faixa => faixa.disponivel).map(faixa => faixa.hora);
+    } catch (erro) {
+        console.error('Erro ao buscar horários livres:', erro);
+        return [];
+    }
+}
+
+/**
+ * Cria o agendamento no servidor.
+ *
+ * Existe porque o chatbot ANTES nao criava nada: ele chamava
+ * addAppointmentToDashboard(), que so desenhava um card com id "local-..." na
+ * tela e dizia "Consulta agendada com sucesso". Nada era gravado - bastava
+ * atualizar a pagina para a consulta sumir, e o medico nunca a via.
+ */
+async function criarAgendamentoNoServidor(professional, date, time) {
+    try {
+        const resposta = await window.ConectaSession.authFetch(
+            `${window.APP_CONFIG?.AUTH_API_URL || '/auth'}/patient/appointments`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ med_crm: professional.registry, date, time })
+            }
+        );
+
+        const corpo = await resposta.json().catch(() => ({}));
+
+        if (!resposta.ok) {
+            return { ok: false, message: corpo.message || 'Nao foi possivel criar o agendamento.' };
+        }
+
+        const criado = {
+            id: corpo.id,
+            doctorId: corpo.doctorId ?? professional.id,
+            specialty: corpo.specialty || professional.especialidade || '',
+            doctor: corpo.doctorName || professional.name,
+            hospital: corpo.unit || corpo.clinicName || professional.unidade || '',
+            date: corpo.appointmentDate || `${date}T${time}:00`,
+            status: corpo.status || 'pendente'
+        };
+
+        patientAppointments.unshift(criado);
+        refreshDashboard();
+
+        return { ok: true, appointment: criado };
+    } catch (erro) {
+        console.error('Erro ao criar agendamento:', erro);
+        return { ok: false, message: 'Erro de conexao ao criar o agendamento.' };
+    }
+}
+
+async function handleChatbotScheduling(userMessage) {
     const professionals = availableProfessionals;
     const normalizedMessage = normalizeText(userMessage);
 
@@ -1467,14 +1750,51 @@ function handleChatbotScheduling(userMessage) {
             return 'Nao consegui entender a data ou ela esta no passado. Envie no formato DD/MM/AAAA, por exemplo 20/05/2026.';
         }
 
-        const created = addAppointmentToDashboard(selectedProfessional, date);
-        chatbotScheduleDraft = null;
+        // O chat passou a respeitar a mesma grade da tela de agendamento: 30 em
+        // 30 minutos e so o que esta livre na agenda do medico.
+        const livres = await buscarHorariosLivres(selectedProfessional.id, date);
 
-        if (!created) {
-            return 'Nao consegui criar o agendamento agora. Tente novamente pela aba Agendamentos.';
+        if (!livres.length) {
+            return `Nao ha horario livre com ${selectedProfessional.name} em ${formatDate(date)}. Envie outra data (DD/MM/AAAA) ou escreva "cancelar".`;
         }
 
-        return `Consulta agendada com sucesso para ${formatDate(date)} com ${selectedProfessional.name}, em ${selectedProfessional.unit || 'Unidade a confirmar'}. Ja coloquei na area de consultas agendadas.`;
+        chatbotScheduleDraft = {
+            step: 'time',
+            professionalRegistry: chatbotScheduleDraft.professionalRegistry,
+            date,
+            horarios: livres
+        };
+
+        return `Horarios livres com ${selectedProfessional.name} em ${formatDate(date)}:\n${livres.join('  ')}\n\nResponda com o horario desejado (por exemplo ${livres[0]}).`;
+    }
+
+    if (chatbotScheduleDraft.step === 'time') {
+        const selectedProfessional = getProfessionalByRegistry(chatbotScheduleDraft.professionalRegistry);
+        const { date, horarios } = chatbotScheduleDraft;
+
+        if (!selectedProfessional) {
+            chatbotScheduleDraft = null;
+            return 'Esse medico nao esta mais disponivel. Escreva "agendar consulta" para iniciar novamente.';
+        }
+
+        // Aceita "14:30", "14h30" e "1430".
+        const digitos = userMessage.replace(/\D/g, '');
+        const escolhido = horarios.find(hora => hora === userMessage.trim())
+            || (digitos.length === 4 ? horarios.find(hora => hora.replace(':', '') === digitos) : null);
+
+        if (!escolhido) {
+            return `Nao reconheci esse horario. Escolha um da lista:\n${horarios.join('  ')}`;
+        }
+
+        const resultado = await criarAgendamentoNoServidor(selectedProfessional, date, escolhido);
+        chatbotScheduleDraft = null;
+
+        if (!resultado.ok) {
+            return `${resultado.message} Voce pode tentar de novo escrevendo "agendar consulta".`;
+        }
+
+        switchTab('appointments');
+        return `Consulta agendada para ${formatDate(date)} as ${escolhido} com ${selectedProfessional.name}, em ${selectedProfessional.unit || 'Unidade a confirmar'}. Ja aparece na aba Agendamentos.`;
     }
 
     chatbotScheduleDraft = null;
@@ -1615,14 +1935,15 @@ const CHATBOT_INTENTS = [
     }
 ];
 
-function buildChatbotReply(userMessage) {
+async function buildChatbotReply(userMessage) {
     const normalizedMessage = normalizeText(userMessage);
     const appointments = getAppointmentData();
     const professionals = availableProfessionals;
 
     // O fluxo de agendamento pelo chat tem estado proprio e precisa continuar
-    // sendo consultado antes das intencoes soltas.
-    const schedulingReply = handleChatbotScheduling(userMessage);
+    // sendo consultado antes das intencoes soltas. Virou assincrono porque agora
+    // consulta os horarios livres e cria o agendamento de verdade no servidor.
+    const schedulingReply = await handleChatbotScheduling(userMessage);
     if (schedulingReply) {
         return schedulingReply;
     }
@@ -1843,10 +2164,10 @@ async function sendPatientMessage(content) {
 
         renderActiveConversation();
 
-        window.setTimeout(() => {
+        window.setTimeout(async () => {
             appendMessageToConversation(contact.key, {
                 sender: 'bot',
-                content: buildChatbotReply(content),
+                content: await buildChatbotReply(content),
                 timestamp: formatDateTime()
             });
             renderActiveConversation();
@@ -1998,20 +2319,32 @@ function openRescheduleModal(appointmentId) {
     const form = document.getElementById('formNewAppointment');
     if (!form) return;
 
-    // Preencher campos do modal com dados do agendamento selecionado
+    // O editAppointmentId precisa ser marcado ANTES de openModal(): e ele que
+    // faz a consulta de horarios ignorar o proprio agendamento, para o horario
+    // atual continuar selecionavel em vez de aparecer como ocupado.
+    form.dataset.editAppointmentId = appointmentId;
+
     document.getElementById('modalSpec').value = appointment?.specialty || '';
     document.getElementById('modalUnit').value = appointment?.hospital || '';
-    document.getElementById('modalDate').value = appointment?.date ? String(appointment.date).slice(0,10) : '';
-    // Reset profissional para permitir trocar se desejar
-    document.getElementById('modalProfessional').value = '';
+    document.getElementById('modalDate').value = appointment?.date ? String(appointment.date).slice(0, 10) : '';
 
-    form.dataset.editAppointmentId = appointmentId;
     const header = document.querySelector('#appointmentModal .modal-header div h3');
     if (header) header.textContent = 'Remarcar Agendamento';
     const submitBtn = form.querySelector('button[type="submit"]');
     if (submitBtn) submitBtn.textContent = 'Remarcar';
 
     openModal();
+
+    // O profissional atual ja vem selecionado (continua trocavel). Antes o campo
+    // era zerado, o que obrigava a escolher de novo o mesmo medico - e, com a
+    // grade de horarios, deixaria o modal sem nenhum horario para oferecer.
+    const professionalSelect = document.getElementById('modalProfessional');
+    if (professionalSelect && appointment?.doctorId) {
+        professionalSelect.value = String(appointment.doctorId);
+        updateSelectedProfessionalDetails();
+    }
+
+    atualizarHorariosDisponiveis(getAppointmentTime(appointment?.date));
 }
 
 function renderAppointmentsList() {
@@ -2265,38 +2598,13 @@ async function cancelAppointmentById(appointmentId, dateString) {
     await showPopup('Consulta removida com sucesso.');
 }
 
-function addAppointmentToDashboard(selectedProfessional, date) {
-    const appointmentsList = document.getElementById('appointmentsList');
-    if (!appointmentsList || !selectedProfessional || !date) return false;
-
-    const specialty = selectedProfessional.role;
-    const unit = selectedProfessional.unit || 'Unidade a confirmar';
-    const newAppointment = {
-        id: `local-${Date.now()}`,
-        specialty,
-        doctor: selectedProfessional.name,
-        hospital: unit,
-        date,
-        status: 'pendente'
-    };
-
-    const appointmentCard = createAppointmentCardElement(newAppointment);
-    appointmentCard.dataset.id = newAppointment.id;
-    appointmentCard.dataset.date = newAppointment.date;
-    appointmentCard.dataset.specialty = newAppointment.specialty;
-    appointmentCard.dataset.doctor = newAppointment.doctor;
-    appointmentCard.dataset.hospital = newAppointment.hospital;
-
-    appointmentsList.prepend(appointmentCard);
-
-    if (patientAppointmentsLoaded) {
-        patientAppointments.unshift(newAppointment);
-    }
-
-    refreshDashboard();
-    switchTab('appointments');
-    return true;
-}
+// addAppointmentToDashboard() foi removida: ela criava um card com id
+// "local-..." direto no DOM e devolvia true, sem falar com o servidor. O
+// chatbot chamava essa funcao e respondia "Consulta agendada com sucesso" -
+// mas nada era gravado: bastava recarregar a pagina para a consulta sumir, e o
+// medico nunca a via na agenda dele. O chat agora usa
+// criarAgendamentoNoServidor(), que passa pela mesma rota da tela de
+// agendamento (com grade de horarios e checagem de duplicata).
 
 function refreshDashboard() {
     updateOverviewCards();
@@ -2490,6 +2798,11 @@ async function cancelAppointment(button) {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+    // Apaga o historico global das versoes anteriores. Sem isso, quem ja tem a
+    // chave antiga no navegador continuaria vendo a conversa do outro paciente:
+    // a correcao so valeria em maquina nova.
+    limparHistoricoAntigoDoChatbot();
+
     const navButtons = document.querySelectorAll('.nav-link');
     navButtons.forEach(button => {
         button.addEventListener('click', () => switchTab(button.dataset.tab));
@@ -2620,7 +2933,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (editId) {
                     // Remarcar (atualizar) um agendamento existente
                     const url = `${window.APP_CONFIG?.AUTH_API_URL || '/auth'}/patient/appointments/${encodeURIComponent(editId)}`;
-                    const bodyData = { date };
+                    // `time` entra no corpo: sem ele o servidor gravava
+                    // 00:00:00 e a remarcacao perdia o horario.
+                    const bodyData = { date, time };
                     if (professionalCrm) bodyData.med_crm = professionalCrm;
 
                     const resp = await fetch(url, {
@@ -2674,12 +2989,19 @@ document.addEventListener('DOMContentLoaded', async () => {
                             'Content-Type': 'application/json',
                             'Authorization': `Bearer ${token}`
                         },
-                        body: JSON.stringify({ med_crm: professionalCrm, date })
+                        // O horario escolhido era lido do formulario e simplesmente
+                        // descartado aqui - o corpo levava so a data. Por isso toda
+                        // consulta acabava gravada as 00:00.
+                        body: JSON.stringify({ med_crm: professionalCrm, date, time })
                     });
 
                     const body = await resp.json();
                     if (!resp.ok) {
                         await showPopup(body.message || 'Erro ao criar agendamento no servidor.');
+                        // 409 = horario ocupado ou consulta duplicada. Em ambos
+                        // os casos a grade em tela esta velha; recarrega para o
+                        // paciente ver o que sobrou livre.
+                        if (resp.status === 409) await atualizarHorariosDisponiveis();
                         return;
                     }
 
@@ -2709,7 +3031,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const professionalSelect = document.getElementById('modalProfessional');
     if (professionalSelect) {
-        professionalSelect.addEventListener('change', updateSelectedProfessionalDetails);
+        professionalSelect.addEventListener('change', () => {
+            updateSelectedProfessionalDetails();
+            // A agenda e por profissional: trocar de medico muda os horarios.
+            atualizarHorariosDisponiveis();
+        });
+    }
+
+    const modalDateInput = document.getElementById('modalDate');
+    if (modalDateInput) {
+        modalDateInput.addEventListener('change', () => atualizarHorariosDisponiveis());
     }
 
     const messageForm = document.getElementById('messageForm');

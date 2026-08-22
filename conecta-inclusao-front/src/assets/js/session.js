@@ -87,6 +87,12 @@
     }
 
     function saveSession(token, user) {
+        // Limpa o que sobrou de qualquer sessao anterior nesta aba antes de
+        // gravar a nova. Entrar com outra conta sem passar pelo botao "Sair"
+        // (login direto pela URL, ou depois de uma sessao expirada) deixava as
+        // chaves auxiliares do usuario antigo no lugar.
+        clearSession();
+
         try {
             sessionStorage.setItem(CHAVE_TOKEN, token);
             if (user) sessionStorage.setItem(CHAVE_USER, JSON.stringify(user));
@@ -97,12 +103,55 @@
         agendarExpiracao();
     }
 
+    // Chaves auxiliares que as telas gravam para exibicao (nome no cabecalho,
+    // registro, unidade, historico do assistente, cache de responsaveis).
+    // Todas pertencem ao usuario logado e precisam ir embora junto com ele.
+    var PREFIXOS_DA_SESSAO = [
+        'patient',              // patientName, patientId
+        'patientProfessionalMessages',  // historico do chatbot, por paciente
+        'patientGuardians',     // cache dos responsaveis, por paciente
+        'professional',         // professionalName, professionalRegistry, professionalUnit
+        'empresa'               // empresaNomeFantasia, empresaCnpj, empresaRazaoSocial
+    ];
+
+    /**
+     * Encerra a sessao e apaga TUDO que pertencia ao usuario nesta aba.
+     *
+     * Antes so o token e o objeto `user` eram removidos. As chaves auxiliares
+     * ficavam para tras, e o proximo login na mesma aba herdava o que sobrou:
+     * o painel do medico mostrava o nome e o CRM do medico anterior enquanto o
+     * perfil novo nao chegava, e o assistente do paciente abria com a conversa
+     * de quem usou antes. O logout limpava algumas dessas chaves na mao, uma a
+     * uma, em cada tela - mas a expiracao de sessao nao limpava nenhuma.
+     *
+     * Varrer por prefixo, aqui no ponto unico de saida, cobre os dois caminhos e
+     * qualquer chave nova que apareca seguindo a mesma convencao de nome.
+     */
     function clearSession() {
         try {
             sessionStorage.removeItem(CHAVE_TOKEN);
             sessionStorage.removeItem(CHAVE_USER);
             localStorage.removeItem(CHAVE_TOKEN);
             localStorage.removeItem(CHAVE_USER);
+
+            // A lista de chaves e coletada antes de remover: sessionStorage.key(i)
+            // reindexa a cada remocao, e apagar durante o laco pula itens.
+            var paraRemover = [];
+            for (var i = 0; i < sessionStorage.length; i += 1) {
+                var chave = sessionStorage.key(i);
+                if (!chave) continue;
+
+                for (var j = 0; j < PREFIXOS_DA_SESSAO.length; j += 1) {
+                    if (chave.indexOf(PREFIXOS_DA_SESSAO[j]) === 0) {
+                        paraRemover.push(chave);
+                        break;
+                    }
+                }
+            }
+
+            paraRemover.forEach(function (chave) {
+                sessionStorage.removeItem(chave);
+            });
         } catch (erro) { /* storage indisponivel */ }
     }
 

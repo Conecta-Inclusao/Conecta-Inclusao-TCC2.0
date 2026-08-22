@@ -33,17 +33,109 @@
     const defaults = {
         fonte: 'padrao',
         contraste: 'normal',
-        movimento: 'normal'
+        movimento: 'normal',
+        // Quais preferencias o proprio usuario ajustou no painel. E o que
+        // impede a adaptacao automatica por deficiencia de sobrescrever uma
+        // escolha consciente dele - ver aplicarPerfilDeDeficiencia().
+        definidoPeloUsuario: {}
     };
+
+    /* -----------------------------------------------------------------------
+       Adaptacao por tipo de deficiencia
+       -----------------------------------------------------------------------
+       O paciente informa o tipo de deficiencia no cadastro, e esse dado ficava
+       so guardado no banco, aparecendo como texto na aba "Meu Perfil". Aqui ele
+       passa a valer alguma coisa: ao abrir o dashboard, a interface ja nasce
+       ajustada ao que aquela pessoa precisa, sem depender de ela descobrir o
+       painel de acessibilidade e configurar tudo na mao.
+
+       Cada perfil define (a) preferencias de leitura sugeridas e (b) um
+       marcador `data-adaptacao` no <html>, que o CSS usa para mudar espacamento,
+       tamanho de alvo e densidade da tela.
+
+       As sugestoes NUNCA vencem uma escolha manual: se a pessoa ja mexeu no
+       tamanho da fonte, a adaptacao respeita o que ela escolheu.
+       ----------------------------------------------------------------------- */
+    const PERFIS_DE_ADAPTACAO = {
+        visual: {
+            rotulo: 'deficiência visual',
+            // Fonte ampliada e alto contraste sao os dois ajustes com maior
+            // efeito para baixa visao. Quem usa leitor de tela nao e prejudicado:
+            // o marcador tambem reforca foco visivel e rotulos textuais.
+            preferencias: { fonte: 'grande', contraste: 'alto' },
+            descricao: 'Texto ampliado, alto contraste e foco de teclado reforçado.'
+        },
+        auditiva: {
+            rotulo: 'deficiência auditiva',
+            preferencias: {},
+            descricao: 'Avisos sempre em texto e destaque para o atendimento por mensagem escrita.'
+        },
+        motora: {
+            rotulo: 'deficiência motora',
+            // Movimento reduzido evita que um elemento se desloque no instante
+            // do clique - problema real para quem tem pouca precisao motora.
+            preferencias: { movimento: 'reduzido' },
+            descricao: 'Botões e campos maiores, mais espaço entre eles e menos movimento na tela.'
+        },
+        cognitiva: {
+            rotulo: 'deficiência intelectual ou TEA',
+            preferencias: { movimento: 'reduzido', fonte: 'medio' },
+            descricao: 'Menos elementos por vez, sem animações e com textos de apoio mais diretos.'
+        },
+        multipla: {
+            rotulo: 'deficiência múltipla',
+            preferencias: { fonte: 'grande', contraste: 'alto', movimento: 'reduzido' },
+            descricao: 'Combina texto ampliado, alto contraste, alvos maiores e menos movimento.'
+        }
+    };
+
+    /** Remove acentos e caixa para casar o texto livre vindo do banco. */
+    function normalizar(texto) {
+        // A faixa do replace e U+0300-U+036F: os sinais diacriticos que o
+        // normalize('NFD') separa da letra base. Mesma tecnica ja usada em
+        // normalizeText(), no dash-paciente.js.
+        return String(texto || '')
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[̀-ͯ]/g, '')
+            .trim();
+    }
+
+    /**
+     * Traduz o valor gravado em `pacientes.tipo_deficiencia` para um dos perfis
+     * acima. A coluna e texto livre (VARCHAR 100) e ja tem variacoes gravadas -
+     * por isso o casamento e por palavra-chave, e nao por igualdade exata.
+     */
+    function perfilParaTipoDeDeficiencia(tipo) {
+        const t = normalizar(tipo);
+        if (!t) return null;
+
+        if (t.includes('multipla')) return 'multipla';
+        if (t.includes('visual') || t.includes('cegueira') || t.includes('baixa visao')) return 'visual';
+        if (t.includes('auditiva') || t.includes('surdez') || t.includes('surdo')) return 'auditiva';
+        if (t.includes('fisica') || t.includes('motora') || t.includes('cadeirante')) return 'motora';
+        if (t.includes('intelectual') || t.includes('autista') || t.includes('autismo')
+            || t.includes('espectro') || t.includes('tea') || t.includes('cognitiva')) {
+            return 'cognitiva';
+        }
+
+        return null;
+    }
 
     function readPreferences() {
         try {
             const raw = window.localStorage.getItem(STORAGE_KEY);
-            if (!raw) return { ...defaults };
-            return { ...defaults, ...JSON.parse(raw) };
+            if (!raw) return { ...defaults, definidoPeloUsuario: {} };
+
+            const salvo = JSON.parse(raw);
+            return {
+                ...defaults,
+                ...salvo,
+                definidoPeloUsuario: { ...(salvo.definidoPeloUsuario || {}) }
+            };
         } catch (error) {
             // Modo anonimo ou storage bloqueado: segue com o padrao.
-            return { ...defaults };
+            return { ...defaults, definidoPeloUsuario: {} };
         }
     }
 
@@ -80,12 +172,63 @@
     applyPreferences();
 
     function update(key, value) {
-        preferences = { ...preferences, [key]: value };
+        preferences = {
+            ...preferences,
+            [key]: value,
+            // Marca a escolha como do usuario: a partir daqui, a adaptacao
+            // automatica por deficiencia nao mexe mais nesta preferencia.
+            definidoPeloUsuario: { ...preferences.definidoPeloUsuario, [key]: true }
+        };
         savePreferences(preferences);
         applyPreferences();
         syncButtons();
         announce(key, value);
     }
+
+    /**
+     * Aplica o conjunto de ajustes correspondente ao tipo de deficiencia do
+     * paciente logado. Chamada pelo dashboard depois de carregar o perfil.
+     *
+     * @param {string} tipoDeDeficiencia valor de `pacientes.tipo_deficiencia`
+     * @returns {object|null} o perfil aplicado, ou null se nao houver
+     */
+    function aplicarPerfilDeDeficiencia(tipoDeDeficiencia) {
+        const chave = perfilParaTipoDeDeficiencia(tipoDeDeficiencia);
+        const root = document.documentElement;
+
+        if (!chave) {
+            root.removeAttribute('data-adaptacao');
+            return null;
+        }
+
+        const perfil = PERFIS_DE_ADAPTACAO[chave];
+
+        // O marcador no <html> e o que liga as regras de CSS do perfil
+        // (espacamento, tamanho de alvo, densidade).
+        root.setAttribute('data-adaptacao', chave);
+
+        const sugeridas = {};
+        Object.entries(perfil.preferencias).forEach(([campo, valor]) => {
+            if (!preferences.definidoPeloUsuario[campo]) {
+                sugeridas[campo] = valor;
+            }
+        });
+
+        if (Object.keys(sugeridas).length) {
+            preferences = { ...preferences, ...sugeridas };
+            savePreferences(preferences);
+            applyPreferences();
+            syncButtons();
+        }
+
+        return { chave, ...perfil, aplicadas: sugeridas };
+    }
+
+    window.ConectaAcessibilidade = {
+        aplicarPerfilDeDeficiencia,
+        perfilParaTipoDeDeficiencia,
+        PERFIS_DE_ADAPTACAO
+    };
 
     let panel;
     let launcher;
@@ -187,11 +330,23 @@
         launcher.addEventListener('click', togglePanel);
         document.getElementById('a11yClose').addEventListener('click', () => closePanel(true));
         document.getElementById('a11yReset').addEventListener('click', () => {
-            preferences = { ...defaults };
+            // "Restaurar padrao" tambem esquece quais preferencias foram
+            // ajustadas a mao - senao a adaptacao por deficiencia continuaria
+            // bloqueada para sempre depois do primeiro clique no painel.
+            preferences = { ...defaults, definidoPeloUsuario: {} };
             savePreferences(preferences);
             applyPreferences();
             syncButtons();
             announce('contraste', 'normal');
+
+            // Volta a valer a sugestao do perfil, se houver uma ativa.
+            const adaptacaoAtual = document.documentElement.getAttribute('data-adaptacao');
+            if (adaptacaoAtual && PERFIS_DE_ADAPTACAO[adaptacaoAtual]) {
+                preferences = { ...preferences, ...PERFIS_DE_ADAPTACAO[adaptacaoAtual].preferencias };
+                savePreferences(preferences);
+                applyPreferences();
+                syncButtons();
+            }
         });
 
         panel.querySelectorAll('.a11y-option').forEach((button) => {

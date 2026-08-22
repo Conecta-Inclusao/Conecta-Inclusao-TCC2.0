@@ -140,18 +140,92 @@ body {
     cursor: pointer;
 }
 
-.guardian-summary-box {
+/* ---- Card do responsavel -------------------------------------------- */
+/* Antes era `.guardian-summary-box`: fundo cinza (--surface-muted), borda
+   neutra e um botao com estilo de "cancelar". Visualmente lia-se como aviso
+   secundario, quando na verdade e o passo obrigatorio do cadastro de menor de
+   idade. Agora usa a cor-chave do paciente - `--accent` aqui e --brand-600,
+   o azul institucional definido no topo deste arquivo. */
+.guardian-card {
     display: grid;
-    gap: var(--space-4);
-    padding: var(--space-4);
-    border: 1px solid var(--border);
+    grid-template-columns: auto 1fr;
+    gap: var(--space-2) var(--space-4);
+    align-items: center;
+    padding: var(--space-5);
+    border: 1px solid var(--accent);
+    border-left: 4px solid var(--accent);
     border-radius: var(--radius-md);
-    background: var(--surface-muted);
+    background: var(--accent-soft);
 }
 
-.guardian-summary-box p {
+.guardian-card-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    color: var(--accent-strong);
+    font-size: 1.5rem;
+}
+
+.guardian-card-body strong {
+    display: block;
+    margin-bottom: var(--space-1);
+    color: var(--accent-strong);
+    font-size: var(--fs-md);
+}
+
+.guardian-card-body p {
     color: var(--text-soft);
     font-size: var(--fs-sm);
+    line-height: var(--lh-normal);
+}
+
+.guardian-card-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    grid-column: 1 / -1;
+    margin-top: var(--space-2);
+}
+
+.guardian-card-actions .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    flex: 1 1 12rem;
+}
+
+.guardian-card-actions .btn[hidden] {
+    display: none;
+}
+
+/* Botao principal do card: fundo na cor-chave, sobre o fundo claro do card. */
+.btn-accent {
+    border: none;
+    background: var(--accent);
+    color: var(--on-primary);
+}
+
+.btn-accent:hover:not(:disabled) {
+    background: var(--accent-strong);
+    box-shadow: var(--shadow-sm);
+    transform: translateY(-1px);
+}
+
+/* Remocao e destrutiva: contorno em vermelho, sem preencher, para nao competir
+   com a acao principal. */
+.btn-remove {
+    border: 1px solid var(--danger);
+    background: var(--surface);
+    color: var(--danger);
+}
+
+.btn-remove:hover {
+    background: var(--danger-soft);
 }
 
 /* ---- Acoes ---------------------------------------------------------- */

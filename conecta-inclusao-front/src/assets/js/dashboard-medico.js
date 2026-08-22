@@ -1,3 +1,15 @@
+/* ===========================================================================
+   dashboard-medico.js - painel do profissional
+   ===========================================================================
+   Os console.log de acompanhamento foram removidos. Eles imprimiam no console
+   do navegador o perfil completo do medico e a resposta inteira de
+   /api/agendamentos - que inclui nome, CPF e e-mail de cada paciente atendido.
+   Console fica gravado por extensoes e aparece em qualquer print de tela de
+   suporte; nao e lugar para prontuario.
+
+   Os console.warn/error que sobraram avisam o que falhou, sem despejar o corpo
+   da resposta junto.
+   =========================================================================== */
 import { getUserProfile, getProfessionalAppointments, getClinicProfessionals, getAvailableDoctors, updateAppointmentStatus } from './api.js';
 
 let professionalData = null;
@@ -5,13 +17,10 @@ let appointmentsData = [];
 
 async function loadProfessionalInfo() {
     try {
-        console.log('Iniciando carregamento de informações do profissional...');
         const profileResponse = await getUserProfile();
-        console.log('Resposta do perfil:', profileResponse);
 
         if (profileResponse.ok && profileResponse.data) {
             professionalData = profileResponse.data;
-            console.log('Dados do profissional carregados:', professionalData);
 
             if (professionalData.profile && professionalData.profile !== 'medico') {
                 window.ConectaSession.clearSession();
@@ -30,7 +39,6 @@ async function loadProfessionalInfo() {
             const avatarEl = document.getElementById('professionalAvatar');
             const unitBadge = document.getElementById('unitBadge');
 
-            console.log('Elementos encontrados:', { nameEl, registryEl, unitEl, welcomeEl, avatarEl, unitBadge });
 
             if (nameEl) nameEl.innerText = displayName;
             if (registryEl) registryEl.innerText = registry;
@@ -46,9 +54,8 @@ async function loadProfessionalInfo() {
             sessionStorage.setItem('professionalRegistry', registry);
             sessionStorage.setItem('professionalUnit', unit);
 
-            console.log('Informações do profissional atualizadas na UI');
         } else {
-            console.warn('Erro ao carregar perfil:', profileResponse);
+            console.warn('Erro ao carregar perfil do profissional.');
             loadProfessionalInfoFromStorage();
         }
     } catch (error) {
@@ -145,7 +152,7 @@ async function getTeamProfessionals() {
         return authenticatedResponse;
     }
 
-    console.warn('Token indisponivel para equipe; usando lista publica de medicos.', authenticatedResponse);
+    console.warn('Token indisponivel para equipe; usando lista publica de medicos.');
     return getAvailableDoctors();
 }
 
@@ -158,16 +165,13 @@ async function loadTeam() {
         return;
     }
 
-    console.log('Iniciando carregamento de equipe. Unidade:', unit);
 
     try {
         // Mostrar loading
         teamGrid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 20px; color: #64748b;">Carregando equipe...</div>`;
 
         // Tentar carregar profissionais do backend
-        console.log('Buscando profissionais da clínica...');
         const professionalsResponse = await getTeamProfessionals();
-        console.log('Resposta de profissionais:', professionalsResponse);
 
         let equipe = [];
 
@@ -177,7 +181,6 @@ async function loadTeam() {
                 ? professionalsResponse.data
                 : [professionalsResponse.data];
 
-            console.log('Profissionais carregados do backend:', equipe);
 
             // Filtrar por unidade se necessário
             equipe = equipe
@@ -188,7 +191,7 @@ async function loadTeam() {
                 specialty: member.especialidade || member.specialty || 'Especialidade não informada'
             }));
         } else {
-            console.warn('Erro ao carregar do backend:', professionalsResponse);
+            console.warn('Erro ao carregar a equipe do backend.');
             teamGrid.innerHTML = `
                 <div style="grid-column: 1/-1;">
                     <div class="empty-team-message">
@@ -275,7 +278,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         });
 
-        console.log("Dashboard Médico carregado.");
     } catch (error) {
         console.error('Erro ao carregar dashboard:', error);
     }
@@ -443,7 +445,6 @@ async function loadAgendaData() {
     }
 
     try {
-        console.log('Iniciando carregamento de agenda. professionalData:', professionalData);
 
         if (!professionalData || !professionalData.id) {
             console.warn('Dados do profissional não carregados ou sem ID.');
@@ -458,16 +459,13 @@ async function loadAgendaData() {
             return;
         }
 
-        console.log(`Buscando agendamentos para o profissional ID: ${professionalData.id}`);
         const appointmentsResponse = await getProfessionalAppointments(professionalData.id, { limit: 100 });
-        console.log('Resposta de agendamentos:', appointmentsResponse);
 
         if (appointmentsResponse.ok && appointmentsResponse.data) {
             const appointments = getResponseList(appointmentsResponse.data);
             appointmentsData = appointments;
             updateDashboardStats(appointments);
 
-            console.log('Agendamentos carregados:', appointments);
 
             // Limpar tabela
             agendaContent.innerHTML = '';
@@ -516,7 +514,7 @@ async function loadAgendaData() {
                 });
             });
         } else {
-            console.error('Erro ao carregar agendamentos:', appointmentsResponse);
+            console.error('Erro ao carregar agendamentos.');
             markDashboardStatsUnavailable();
             agendaContent.innerHTML = `
                 <tr>

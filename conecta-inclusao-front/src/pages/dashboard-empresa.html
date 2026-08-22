@@ -28,6 +28,7 @@
                 <button type="button" class="nav-link active" data-tab="overview" role="tab" aria-controls="overview" aria-selected="true"><i class="ph ph-house" aria-hidden="true"></i> Visão Geral</button>
                 <button type="button" class="nav-link" data-tab="register" role="tab" aria-controls="register" aria-selected="false"><i class="ph ph-user-square" aria-hidden="true"></i> Cadastrar Profissionais</button>
                 <button type="button" class="nav-link" data-tab="team" role="tab" aria-controls="team" aria-selected="false"><i class="ph ph-users" aria-hidden="true"></i> Equipe</button>
+                <button type="button" class="nav-link" data-tab="units" role="tab" aria-controls="units" aria-selected="false"><i class="ph ph-map-pin-area" aria-hidden="true"></i> Unidades</button>
                 <button type="button" class="nav-link" data-tab="reports" role="tab" aria-controls="reports" aria-selected="false"><i class="ph ph-chart-line" aria-hidden="true"></i> Relatórios</button>
                 <button type="button" class="nav-link" data-tab="settings" role="tab" aria-controls="settings" aria-selected="false"><i class="ph ph-gear" aria-hidden="true"></i> Configurações</button>
             </nav>
@@ -147,21 +148,95 @@
                             <input type="text" id="professionalName" placeholder="Dr. João Silva" required>
                         </div>
                         <div class="input-group">
-                            <label for="professionalCRM">CRM <span class="required" aria-hidden="true">*</span></label>
-                            <input type="text" id="professionalCRM" placeholder="ABC1234" maxlength="7" required>
-                        </div>
-                        <div class="input-group">
                             <label for="professionalEmail">E-mail</label>
                             <input type="email" id="professionalEmail" placeholder="medico@example.com">
                         </div>
+
+                        <!-- ---- Endereço do médico -------------------------
+                             O CEP vem antes do CRM de propósito: é ele que
+                             define a UF do conselho (validação do CRM) e é ele
+                             que ordena as unidades por proximidade. -->
+                        <div class="input-group full-width">
+                            <h4 class="form-subsection">
+                                <i class="ph ph-map-pin" aria-hidden="true"></i> Endereço do profissional
+                            </h4>
+                            <p class="field-hint">Usado para indicar qual unidade da clínica fica mais perto dele e para validar a UF do CRM.</p>
+                        </div>
+
+                        <div class="input-group" id="professionalCepField">
+                            <label for="professionalCep">CEP <span class="required" aria-hidden="true">*</span></label>
+                            <input type="text" id="professionalCep" placeholder="00000-000" maxlength="9" inputmode="numeric" autocomplete="postal-code">
+                            <small class="field-hint" id="professionalCepHint">Digite o CEP para localizar o endereço.</small>
+                        </div>
+
+                        <div class="input-group full-width">
+                            <label class="switch-field" for="unknownCep">
+                                <span class="switch-field-text">
+                                    <strong>Não sei meu CEP</strong>
+                                    <small>Ligue para digitar o endereço manualmente, sem o CEP.</small>
+                                </span>
+                                <span class="switch-control">
+                                    <input type="checkbox" id="unknownCep" aria-controls="manualAddressFields">
+                                    <span class="switch-track" aria-hidden="true"></span>
+                                </span>
+                            </label>
+                        </div>
+
+                        <!-- Campos que SUBSTITUEM o CEP quando o toggle está
+                             ligado. Ficam ocultos enquanto o CEP for usado. -->
+                        <div class="input-group full-width" id="manualAddressFields" data-switch-target hidden>
+                            <div class="address-grid">
+                                <div class="input-group">
+                                    <label for="professionalStreet">Rua / Avenida <span class="required" aria-hidden="true">*</span></label>
+                                    <input type="text" id="professionalStreet" placeholder="Rua das Acácias">
+                                </div>
+                                <div class="input-group">
+                                    <label for="professionalNumber">Número</label>
+                                    <input type="text" id="professionalNumber" placeholder="Ex: 120" maxlength="10">
+                                </div>
+                                <div class="input-group">
+                                    <label for="professionalNeighborhood">Bairro</label>
+                                    <input type="text" id="professionalNeighborhood" placeholder="Centro">
+                                </div>
+                                <div class="input-group">
+                                    <label for="professionalCity">Cidade <span class="required" aria-hidden="true">*</span></label>
+                                    <input type="text" id="professionalCity" placeholder="São Paulo">
+                                </div>
+                                <div class="input-group">
+                                    <label for="professionalState">UF <span class="required" aria-hidden="true">*</span></label>
+                                    <input type="text" id="professionalState" placeholder="SP" maxlength="2">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ---- Registro profissional --------------------- -->
+                        <div class="input-group full-width">
+                            <h4 class="form-subsection">
+                                <i class="ph ph-identification-card" aria-hidden="true"></i> Registro profissional
+                            </h4>
+                        </div>
                         <div class="input-group">
+                            <label for="professionalCRM">Número do CRM <span class="required" aria-hidden="true">*</span></label>
+                            <input type="text" id="professionalCRM" placeholder="123456" maxlength="7" inputmode="numeric" required>
+                        </div>
+                        <div class="input-group">
+                            <label for="professionalCrmUf">UF do CRM <span class="required" aria-hidden="true">*</span></label>
+                            <!-- Preenchida automaticamente pelo endereço, mas
+                                 editável: médico pode ter registro em outro
+                                 estado. O formulário avisa quando divergir. -->
+                            <select id="professionalCrmUf" required>
+                                <option value="">Selecione...</option>
+                            </select>
+                            <small class="field-hint" id="professionalCrmHint">Preenchida a partir do endereço do profissional.</small>
+                        </div>
+
+                        <!-- ---- Alocação --------------------------------- -->
+                        <div class="input-group full-width">
                             <label for="professionalUnit">Unidade <span class="required" aria-hidden="true">*</span></label>
                             <select id="professionalUnit" required>
                                 <option value="">Selecione uma unidade...</option>
-                                <option value="Unidade A">Unidade A</option>
-                                <option value="Unidade B">Unidade B</option>
-                                <option value="Unidade C">Unidade C</option>
                             </select>
+                            <small class="field-hint" id="professionalUnitHint">Informe o endereço acima para ordenar as unidades da mais próxima para a mais distante.</small>
                         </div>
                         <div class="input-group full-width">
                             <label for="professionalEspecialidade">Especialidade <span class="required" aria-hidden="true">*</span></label>
@@ -288,6 +363,82 @@
                 </div>
             </section>
 
+            <section class="tab-content" id="units">
+                <div class="section-header">
+                    <div>
+                        <h2>Unidades</h2>
+                        <p>Cadastre as filiais da clínica. O endereço de cada unidade é o que permite ordenar a lista pela mais próxima do médico no momento do cadastro.</p>
+                    </div>
+                </div>
+
+                <form id="unitForm" class="professional-form register-form">
+                    <div class="form-header">
+                        <i class="ph ph-map-pin-area" aria-hidden="true"></i>
+                        <h3>Nova unidade</h3>
+                    </div>
+                    <div class="form-grid">
+                        <div class="input-group">
+                            <label for="unitName">Nome da unidade <span class="required" aria-hidden="true">*</span></label>
+                            <input type="text" id="unitName" placeholder="Ex: Unidade Centro" maxlength="120" required>
+                        </div>
+                        <div class="input-group">
+                            <label for="unitCep">CEP <span class="required" aria-hidden="true">*</span></label>
+                            <input type="text" id="unitCep" placeholder="00000-000" maxlength="9" inputmode="numeric" required>
+                            <small class="field-hint" id="unitCepHint">O endereço é completado pelo CEP e convertido em coordenadas.</small>
+                        </div>
+                        <div class="input-group">
+                            <label for="unitStreet">Rua / Avenida</label>
+                            <input type="text" id="unitStreet" placeholder="Preenchido pelo CEP">
+                        </div>
+                        <div class="input-group">
+                            <label for="unitNumber">Número</label>
+                            <input type="text" id="unitNumber" placeholder="Ex: 500" maxlength="10">
+                        </div>
+                        <div class="input-group">
+                            <label for="unitCity">Cidade</label>
+                            <input type="text" id="unitCity" placeholder="Preenchido pelo CEP">
+                        </div>
+                        <div class="input-group">
+                            <label for="unitState">UF</label>
+                            <input type="text" id="unitState" placeholder="UF" maxlength="2">
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn-primary">
+                            <i class="ph ph-plus" aria-hidden="true"></i> Cadastrar unidade
+                        </button>
+                        <button type="reset" class="btn-secondary">
+                            <i class="ph ph-arrow-clockwise" aria-hidden="true"></i> Limpar
+                        </button>
+                    </div>
+                </form>
+
+                <section class="team-overview">
+                    <div class="section-header">
+                        <h2>Unidades cadastradas</h2>
+                        <span id="unitsCount">0 unidades</span>
+                    </div>
+                    <div class="table-scroll">
+                        <table class="team-table">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Unidade</th>
+                                    <th scope="col">Endereço</th>
+                                    <th scope="col">Cidade / UF</th>
+                                    <th scope="col">Coordenadas</th>
+                                    <th scope="col">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="unitsTableBody">
+                                <tr>
+                                    <td colspan="5" class="table-empty">Carregando unidades...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </section>
+
             <section class="tab-content" id="reports">
                 <div class="section-header">
                     <div>
@@ -358,8 +509,20 @@
     <script>window.ConectaSession.requireSession('clinica');</script>
     <script src="../assets/js/script.js"></script>
     <script src="../assets/js/utils.js"></script>
+    <!-- endereco.js vem antes dos dois scripts abaixo: e ele que expõe
+         window.ConectaEndereco (máscara de CEP, consulta e formatação de
+         distância), usado tanto pela aba Unidades quanto pelo cadastro de
+         médico. -->
+    <script src="../assets/js/endereco.js"></script>
     <script src="../assets/js/dashboard-empresa.js"></script>
+    <script src="../assets/js/dashboard-empresa-unidades.js"></script>
     <script src="../assets/js/dashboard-empresa-profissionais.js"></script>
-    <script src="../assets/js/register-doctor-dashboard.js"></script>
+    <!-- register-doctor-dashboard.js foi retirado daqui: era código morto.
+         Ele procurava um formulário com id "registerDoctorForm" e campos
+         "docCRM"/"docName", que não existem nesta página (o formulário é o
+         "registerProfessionalForm", tratado por
+         dashboard-empresa-profissionais.js). O arquivo saía early no
+         DOMContentLoaded e não fazia nada além de baixar 12 KB de JS em
+         todo carregamento do painel. -->
 </body>
 </html>

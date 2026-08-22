@@ -93,9 +93,9 @@ function handleDoctorRegistration(event) {
             showPopup('Médico cadastrado com sucesso!');
             document.getElementById('registerDoctorForm').reset();
             
-            // Armazenar dados em localStorage para pré-preenchimento no login
+            // Pre-preenchimento do CRM na tela de login, que apaga a chave logo
+            // depois de usar. 'lastUnidade' foi removida: nenhuma tela a lia.
             localStorage.setItem('lastCRM', crm);
-            localStorage.setItem('lastUnidade', unidade);
             localStorage.setItem('lastRegisteredCRM', crm);
             
             // Armazenar na sessionStorage para o dashboard

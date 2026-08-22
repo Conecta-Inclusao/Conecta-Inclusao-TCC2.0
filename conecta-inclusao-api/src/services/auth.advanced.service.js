@@ -1029,7 +1029,19 @@ export async function registerUser({ identifier, password, name, profile, userDa
   }
 }
 
-export async function registerProfessional({ crm, name, especialidade, clinicaId, bio = null, unidade, password, email = null }) {
+export async function registerProfessional({
+  crm,
+  crmUf = null,
+  name,
+  especialidade,
+  clinicaId,
+  bio = null,
+  unidade,
+  unidadeId = null,
+  password,
+  email = null,
+  endereco = null
+}) {
   try {
     if (!crm || !name || !clinicaId || !unidade || !password) {
       return { ok: false, statusCode: 400, message: "Todos os campos obrigatorios nao foram preenchidos." };
@@ -1049,9 +1061,32 @@ export async function registerProfessional({ crm, name, especialidade, clinicaId
 
     const [result] = await pool.execute(
       `INSERT INTO medicos
-       (name, clinica_id, crm, especialidade, bio, unidade, email, senha, status, must_change_password, temporary_password_token, temporary_password_expires_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', TRUE, ?, ?) RETURNING id`,
-      [name, clinicaId, crmInfo.value, especialidade || null, bio || null, unidade, email, passwordHash, passwordHash, nowPlusMinutes(60 * 24 * 7)]
+       (name, clinica_id, crm, crm_uf, especialidade, bio, unidade, unidade_id, email, senha,
+        cep, logradouro, numero, bairro, cidade, estado, latitude, longitude,
+        status, must_change_password, temporary_password_token, temporary_password_expires_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', TRUE, ?, ?) RETURNING id`,
+      [
+        name,
+        clinicaId,
+        crmInfo.value,
+        crmUf ? String(crmUf).toUpperCase() : null,
+        especialidade || null,
+        bio || null,
+        unidade,
+        unidadeId,
+        email,
+        passwordHash,
+        endereco?.cep || null,
+        endereco?.logradouro || null,
+        endereco?.numero || null,
+        endereco?.bairro || null,
+        endereco?.cidade || null,
+        endereco?.estado || null,
+        endereco?.latitude ?? null,
+        endereco?.longitude ?? null,
+        passwordHash,
+        nowPlusMinutes(60 * 24 * 7)
+      ]
     );
 
     return {
@@ -1063,8 +1098,10 @@ export async function registerProfessional({ crm, name, especialidade, clinicaId
       data: {
         id: result.insertId,
         crm: crmInfo.value,
+        crmUf: crmUf ? String(crmUf).toUpperCase() : null,
         name,
-        unidade
+        unidade,
+        unidadeId
       }
     };
   } catch (err) {

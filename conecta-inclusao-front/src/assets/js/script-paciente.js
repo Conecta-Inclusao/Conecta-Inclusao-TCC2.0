@@ -154,7 +154,10 @@ document.addEventListener('DOMContentLoaded', function() {
             if (result.ok) {
                 // Salvar token e dados
                 window.ConectaSession.saveSession(result.data.token, result.data.user);
-                localStorage.setItem('patientCPF', cpfDigits);
+                // 'patientCPF' saiu daqui: o CPF ficava gravado no localStorage
+                // (compartilhado por todas as abas e sem prazo de validade) e
+                // nenhuma tela chegava a le-lo. O CPF ja vem dentro do objeto
+                // `user` da sessao, em sessionStorage, com escopo de aba.
 
                 // Redireciona para a tela
                 setTimeout(() => {

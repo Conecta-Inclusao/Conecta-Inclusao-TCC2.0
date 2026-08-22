@@ -63,6 +63,20 @@
                     <p>Veja um resumo rápido da sua agenda médica, acompanhe consultas futuras e acesse os próximos passos do seu cuidado.</p>
                 </div>
 
+                <!-- Preenchido por dash-paciente.js a partir do tipo de
+                     deficiência do cadastro. Ajuste automático que o usuário não
+                     entende e não consegue desfazer vira armadilha, não
+                     acessibilidade: por isso o aviso diz o que mudou e aponta
+                     para o painel onde ele pode mudar de novo. -->
+                <div class="adaptation-notice" id="accessibilityAdaptationNotice" role="status" hidden>
+                    <i class="ph ph-sparkle" aria-hidden="true"></i>
+                    <div>
+                        <strong>Tela adaptada para você</strong>
+                        <p id="accessibilityAdaptationText"></p>
+                        <small>Você pode ajustar tudo isso no botão <strong>Acessibilidade</strong>, no canto da tela.</small>
+                    </div>
+                </div>
+
                 <div class="overview-grid">
                     <div class="status-card primary-card">
                         <div>
@@ -395,7 +409,14 @@
                     </div>
                     <div class="split-field">
                         <label for="modalTime">Horário</label>
-                        <input type="time" id="modalTime" required>
+                        <!-- Combobox, e não <input type="time">: a grade é de 30
+                             em 30 minutos dentro do expediente e só mostra o que
+                             está livre na agenda do profissional. O campo livre
+                             aceitava 03:47 e horários já ocupados - e o valor
+                             escolhido nem chegava a ser enviado ao servidor. -->
+                        <select id="modalTime" required disabled>
+                            <option value="">Escolha o profissional e a data</option>
+                        </select>
                     </div>
                 </div>
                 <div class="modal-footer">

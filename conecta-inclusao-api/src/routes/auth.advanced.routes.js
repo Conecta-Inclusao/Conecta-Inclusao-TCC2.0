@@ -19,8 +19,31 @@ import {
   guardianCreateSchema,
   guardianUpdateSchema,
   updatePatientProfileSchema,
-  changePasswordSchema
+  changePasswordSchema,
+  unidadeCreateSchema,
+  unidadeUpdateSchema,
+  localizacaoSchema,
+  registerProfessionalSchema,
+  patientAppointmentSchema,
+  patientAppointmentUpdateSchema
 } from "../validators/auth.advanced.validators.js";
+import {
+  buscarEnderecoPorCep,
+  resolverEndereco
+} from "../services/endereco.service.js";
+import {
+  listarUnidades,
+  listarUnidadesPorDistancia,
+  criarUnidade,
+  atualizarUnidade,
+  desativarUnidade,
+  garantirUnidadePrincipal,
+  buscarUnidade
+} from "../services/unidades.service.js";
+import {
+  listarHorariosDisponiveis,
+  horarioDentroDaGrade
+} from "../services/agendamentos.service.js";
 import {
   loginUniversal,
   registerUser,
@@ -51,6 +74,16 @@ const loginLimiter = rateLimit({
 const registerLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
   limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+// Consulta de CEP e geocodificacao batem em servicos publicos de terceiros
+// (ViaCEP e Nominatim). O limite protege as duas pontas: evita que a API vire
+// um proxy aberto para eles e evita que a gente seja bloqueado por abuso.
+const enderecoLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 30,
   standardHeaders: true,
   legacyHeaders: false
 });
@@ -475,30 +508,71 @@ router.post(
   registerLimiter,
   async (req, res, next) => {
     try {
+      const parsed = registerProfessionalSchema.safeParse(req.body);
+      if (!parsed.success) return validationError(res, parsed);
+
       const clinicResult = await getClinicDetails(req.user.sub);
       if (!clinicResult.ok) {
         return res.status(clinicResult.statusCode).json({ message: clinicResult.message });
       }
 
       const clinicId = clinicResult.data?.clinicaId ?? Number(req.user.sub);
-      const { crm, name, especialidade, bio, password, unidade, email } = req.body;
+      const dados = parsed.data;
 
-      if (!crm || !name || !unidade || !password) {
+      // A unidade e resolvida pelo id e conferida contra a clinica logada: sem
+      // isso uma clinica poderia vincular seu medico a uma filial de outra.
+      let unidade = null;
+      if (dados.unidadeId) {
+        unidade = await buscarUnidade(clinicId, dados.unidadeId);
+        if (!unidade) {
+          return res.status(404).json({ message: "Unidade nao encontrada nesta clinica." });
+        }
+      }
+
+      // Endereco do medico: alimenta a ordenacao por distancia e a UF do CRM.
+      // Falha de CEP nao impede o cadastro - o medico entra sem coordenada.
+      let endereco = null;
+      if (dados.cep || (dados.cidade && dados.estado)) {
+        const resolvido = await resolverEndereco({
+          cep: dados.cep,
+          manual: {
+            logradouro: dados.logradouro,
+            numero: dados.numero,
+            bairro: dados.bairro,
+            cidade: dados.cidade,
+            estado: dados.estado,
+            cep: dados.cep
+          }
+        });
+
+        if (resolvido.ok) endereco = resolvido.data;
+      }
+
+      // Validacao dinamica do CRM, parte do servidor.
+      //
+      // Quando o endereco chega pelo CEP, o schema nao tem como comparar nada -
+      // o corpo so traz o CEP, e a UF so aparece depois da consulta ao ViaCEP.
+      // E por isso que a comparacao acontece aqui, e nao la: e o primeiro
+      // momento em que os dois valores existem ao mesmo tempo.
+      if (endereco?.estado && endereco.estado !== dados.crmUf && dados.crmUfConfirmado !== true) {
         return res.status(400).json({
-          message: "Dados invalidos",
-          errors: [{ message: "CRM, nome, unidade e senha sao obrigatorios" }]
+          message: `O CEP informado e de ${endereco.estado}, mas o CRM foi cadastrado como ${dados.crmUf}. Confirme a UF do conselho antes de continuar.`,
+          conflitoDeUf: { enderecoUf: endereco.estado, crmUf: dados.crmUf }
         });
       }
 
       const result = await registerProfessional({
-        crm,
-        name,
-        especialidade,
+        crm: dados.crm,
+        crmUf: dados.crmUf,
+        name: dados.name,
+        especialidade: dados.especialidade,
         clinicaId: clinicId,
-        bio,
-        password,
-        unidade,
-        email
+        bio: dados.bio,
+        password: dados.password,
+        unidade: unidade?.nome ?? dados.unidade,
+        unidadeId: unidade?.id ?? null,
+        email: dados.email,
+        endereco
       });
 
       if (!result.ok) {
@@ -511,6 +585,202 @@ router.post(
     }
   }
 );
+
+// ===========================================================================
+// UNIDADES (FILIAIS) DA CLINICA
+//
+// Ate aqui a "unidade" do medico era um texto escolhido numa lista fixa no
+// HTML ("Unidade A/B/C"), sem endereco nenhum. Com CEP e coordenada por
+// unidade, o cadastro de medico passa a conseguir ordenar as filiais pela
+// distancia ate a casa dele.
+// ===========================================================================
+
+router.get(
+  "/clinic/units",
+  authenticateToken,
+  async (req, res, next) => {
+    try {
+      // O medico tambem le a lista (a tela dele mostra a unidade), mas so da
+      // propria clinica.
+      let clinicId = Number(req.user.sub);
+
+      if (req.user.profile === 'medico') {
+        const [[doctor]] = await pool.execute(
+          `SELECT clinica_id FROM medicos WHERE id = ? LIMIT 1`,
+          [req.user.sub]
+        );
+        clinicId = doctor?.clinica_id;
+      } else if (req.user.profile !== 'clinica') {
+        return res.status(403).json({ message: 'Acesso negado.' });
+      }
+
+      if (!clinicId) {
+        return res.status(404).json({ message: 'Clinica nao encontrada.' });
+      }
+
+      // Clinica que nunca cadastrou filial ganha a primeira a partir do proprio
+      // endereco - senao a combobox do cadastro de medico nasceria vazia.
+      const unidades = req.user.profile === 'clinica'
+        ? await garantirUnidadePrincipal(clinicId)
+        : await listarUnidades(clinicId, { apenasAtivas: true });
+
+      return res.status(200).json(unidades);
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+router.post(
+  "/clinic/units",
+  authenticateToken,
+  requireProfile('clinica'),
+  enderecoLimiter,
+  async (req, res, next) => {
+    try {
+      const parsed = unidadeCreateSchema.safeParse(req.body);
+      if (!parsed.success) return validationError(res, parsed);
+
+      const result = await criarUnidade(Number(req.user.sub), parsed.data);
+
+      if (!result.ok) {
+        return res.status(result.statusCode).json({ message: result.message });
+      }
+
+      return res.status(201).json(result.data);
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+router.put(
+  "/clinic/units/:id",
+  authenticateToken,
+  requireProfile('clinica'),
+  enderecoLimiter,
+  async (req, res, next) => {
+    try {
+      const unidadeId = Number(req.params.id);
+      if (!Number.isInteger(unidadeId) || unidadeId <= 0) {
+        return res.status(400).json({ message: 'Unidade invalida.' });
+      }
+
+      const parsed = unidadeUpdateSchema.safeParse(req.body);
+      if (!parsed.success) return validationError(res, parsed);
+
+      const result = await atualizarUnidade(Number(req.user.sub), unidadeId, parsed.data);
+
+      if (!result.ok) {
+        return res.status(result.statusCode).json({ message: result.message });
+      }
+
+      return res.status(200).json(result.data);
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+router.delete(
+  "/clinic/units/:id",
+  authenticateToken,
+  requireProfile('clinica'),
+  async (req, res, next) => {
+    try {
+      const unidadeId = Number(req.params.id);
+      if (!Number.isInteger(unidadeId) || unidadeId <= 0) {
+        return res.status(400).json({ message: 'Unidade invalida.' });
+      }
+
+      const result = await desativarUnidade(Number(req.user.sub), unidadeId);
+
+      if (!result.ok) {
+        return res.status(result.statusCode).json({ message: result.message });
+      }
+
+      return res.status(200).json({ message: result.message });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+/**
+ * POST /auth/clinic/units/nearest
+ *
+ * Recebe o CEP (ou o endereco digitado a mao) do medico, geocodifica pelo
+ * Nominatim e devolve as unidades da clinica ordenadas pela distancia ate esse
+ * ponto. E POST e nao GET porque o corpo carrega um endereco completo - e
+ * porque endereco de pessoa nao deve ficar registrado em log de acesso como
+ * query string.
+ */
+router.post(
+  "/clinic/units/nearest",
+  authenticateToken,
+  requireProfile('clinica'),
+  enderecoLimiter,
+  async (req, res, next) => {
+    try {
+      const parsed = localizacaoSchema.safeParse(req.body);
+      if (!parsed.success) return validationError(res, parsed);
+
+      const clinicId = Number(req.user.sub);
+
+      const endereco = await resolverEndereco({
+        cep: parsed.data.cep,
+        manual: {
+          logradouro: parsed.data.logradouro,
+          numero: parsed.data.numero,
+          bairro: parsed.data.bairro,
+          cidade: parsed.data.cidade,
+          estado: parsed.data.estado,
+          cep: parsed.data.cep
+        }
+      });
+
+      if (!endereco.ok) {
+        return res.status(endereco.statusCode).json({ message: endereco.message });
+      }
+
+      await garantirUnidadePrincipal(clinicId);
+
+      const unidades = await listarUnidadesPorDistancia(clinicId, {
+        latitude: endereco.data.latitude,
+        longitude: endereco.data.longitude
+      });
+
+      return res.status(200).json({
+        endereco: endereco.data,
+        unidades
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// ===========================================================================
+// CONSULTA DE CEP
+//
+// Proxy do ViaCEP. Precisa existir no servidor porque a CSP definida em app.js
+// so libera `connect-src 'self'`: um fetch do navegador direto para o ViaCEP e
+// bloqueado quando o front e servido pela propria API.
+// ===========================================================================
+
+router.get("/cep/:cep", enderecoLimiter, async (req, res, next) => {
+  try {
+    const result = await buscarEnderecoPorCep(req.params.cep);
+
+    if (!result.ok) {
+      return res.status(result.statusCode).json({ message: result.message });
+    }
+
+    return res.status(200).json(result.data);
+  } catch (err) {
+    next(err);
+  }
+});
 
 router.get(
   "/clinic/details",
@@ -550,7 +820,9 @@ router.get("/clinic/professionals", authenticateToken, async (req, res, next) =>
     }
 
     const [rows] = await pool.execute(
-      `SELECT id, name, email, crm, especialidade, unidade, bio, status, created_at AS "createdAt"
+      `SELECT id, name, email, crm, crm_uf AS "crmUf", especialidade,
+              unidade, unidade_id AS "unidadeId", cidade, estado,
+              bio, status, created_at AS "createdAt"
        FROM medicos
        WHERE clinica_id = ?
        ORDER BY name ASC`,
@@ -686,7 +958,7 @@ router.get(
 // Lista publica para agendamento: apenas dados profissionais, sem e-mail.
 // Antes /professional e /professionals (rotas duplicadas e identicas) expunham
 // o e-mail de todos os medicos a qualquer usuario autenticado.
-const PUBLIC_DOCTOR_COLUMNS = `id, name, crm, especialidade, unidade, bio, status`;
+const PUBLIC_DOCTOR_COLUMNS = `id, name, crm, crm_uf AS "crmUf", especialidade, unidade, bio, status`;
 
 async function listAvailableDoctors(res, next) {
   try {
@@ -786,6 +1058,40 @@ router.get("/doctors/filters", async (req, res, next) => {
   }
 });
 
+/**
+ * GET /auth/doctors/:id/slots?date=YYYY-MM-DD[&ignore=<id do agendamento>]
+ *
+ * Grade de horarios do medico no dia, de 30 em 30 minutos, marcando o que ja
+ * esta ocupado. E o que permite ao modal de agendamento mostrar so o que da
+ * para escolher - antes o campo era um <input type="time"> livre, que aceitava
+ * 03:47 e horario ja tomado por outro paciente.
+ *
+ * Exige token (qualquer perfil logado): a resposta revela a ocupacao da agenda
+ * de um profissional, ainda que sem dizer de quem e a consulta.
+ */
+router.get("/doctors/:id/slots", authenticateToken, async (req, res, next) => {
+  try {
+    const medicoId = Number(req.params.id);
+    if (!Number.isInteger(medicoId) || medicoId <= 0) {
+      return res.status(400).json({ message: 'Profissional invalido.' });
+    }
+
+    const ignorar = Number(req.query.ignore);
+
+    const result = await listarHorariosDisponiveis(medicoId, String(req.query.date || ''), {
+      ignorarAgendamentoId: Number.isInteger(ignorar) && ignorar > 0 ? ignorar : null
+    });
+
+    if (!result.ok) {
+      return res.status(result.statusCode).json({ message: result.message });
+    }
+
+    return res.status(200).json(result.data);
+  } catch (err) {
+    return next(err);
+  }
+});
+
 // ===========================================================================
 // AGENDAMENTOS DO PACIENTE
 // ===========================================================================
@@ -834,16 +1140,23 @@ router.post(
   requirePatientAccess('Gerenciar agendamentos'),
   async (req, res, next) => {
     try {
-      const { med_crm, date } = req.body;
-      if (!med_crm || !date) {
-        return res.status(400).json({ message: 'med_crm e date sao obrigatorios.' });
+      const parsed = patientAppointmentSchema.safeParse(req.body);
+      if (!parsed.success) return validationError(res, parsed);
+
+      const { med_crm, date, time } = parsed.data;
+
+      // O horario existia no formulario mas nunca chegava aqui: a tela mandava
+      // so a data e este endpoint completava com 00:00:00. Toda consulta ficava
+      // marcada para a meia-noite.
+      if (!time) {
+        return res.status(400).json({ message: 'Informe o horario da consulta.' });
       }
 
-      const rawDate = String(date).trim();
-      const appointmentDate = rawDate.length === 10 ? `${rawDate} 00:00:00` : rawDate;
-      if (Number.isNaN(new Date(appointmentDate).getTime())) {
-        return res.status(400).json({ message: 'Date invalido. Use formato YYYY-MM-DD ou YYYY-MM-DD HH:MM:SS.' });
+      if (!horarioDentroDaGrade(time)) {
+        return res.status(400).json({ message: 'Horario fora da grade de atendimento (08:00 as 17:30, de 30 em 30 minutos).' });
       }
+
+      const appointmentDate = `${date} ${time}:00`;
 
       const medico = await findDoctorByCRM(med_crm);
       if (!medico) {
@@ -854,13 +1167,61 @@ router.post(
         return res.status(400).json({ message: 'Profissional nao vinculado a nenhuma clinica. Atualize o cadastro do medico antes de agendar.' });
       }
 
-      const [insertResult] = await pool.execute(
-        `INSERT INTO agendamentos (clinica_id, paciente_id, medico_id, data_agendamento, status)
-         VALUES (?, ?, ?, ?, 'pendente') RETURNING id`,
-        [medico.clinica_id, req.patientId, medico.id, appointmentDate]
+      // A duplicata do proprio paciente e checada ANTES da agenda do medico.
+      // As duas situacoes acabam no mesmo 409, mas por motivos diferentes - e
+      // "esse horario acabou de ser ocupado" seria enganoso para quem esta
+      // apenas repetindo um agendamento que ele mesmo ja fez.
+      const [[duplicado]] = await pool.execute(
+        `SELECT id FROM agendamentos
+         WHERE paciente_id = ? AND medico_id = ? AND data_agendamento = ?
+           AND LOWER(status) <> 'cancelado'
+         LIMIT 1`,
+        [req.patientId, medico.id, appointmentDate]
       );
 
-      const createdId = insertResult.rows?.[0]?.id ?? insertResult.insertId;
+      if (duplicado) {
+        return res.status(409).json({
+          message: 'Voce ja tem uma consulta com esse profissional nesse dia e horario.'
+        });
+      }
+
+      // O horario precisa estar livre na agenda do medico - inclusive quando
+      // quem o ocupou foi outro paciente.
+      const disponibilidade = await listarHorariosDisponiveis(medico.id, date);
+      if (!disponibilidade.ok) {
+        return res.status(disponibilidade.statusCode).json({ message: disponibilidade.message });
+      }
+
+      const faixa = disponibilidade.data.horarios.find((item) => item.hora === time);
+      if (!faixa || !faixa.disponivel) {
+        return res.status(409).json({
+          message: faixa?.motivo === 'passado'
+            ? 'Esse horario ja passou. Escolha outro.'
+            : 'Esse horario acabou de ser ocupado. Escolha outro.'
+        });
+      }
+
+      let createdId;
+      try {
+        const [insertResult] = await pool.execute(
+          `INSERT INTO agendamentos (clinica_id, paciente_id, medico_id, data_agendamento, status)
+           VALUES (?, ?, ?, ?, 'pendente') RETURNING id`,
+          [medico.clinica_id, req.patientId, medico.id, appointmentDate]
+        );
+
+        createdId = insertResult.rows?.[0]?.id ?? insertResult.insertId;
+      } catch (erroInsercao) {
+        // 23505 vem do indice parcial idx_agendamentos_sem_duplicata. E ele que
+        // fecha a janela entre a checagem acima e o INSERT: dois cliques rapidos
+        // (ou duas abas) chegavam aqui juntos e criavam a consulta duas vezes.
+        if (erroInsercao.code === '23505') {
+          return res.status(409).json({
+            message: 'Voce ja tem uma consulta com esse profissional nesse dia e horario.'
+          });
+        }
+        throw erroInsercao;
+      }
+
       if (!createdId) {
         return res.status(500).json({ message: 'Nao foi possivel criar o agendamento no banco de dados.' });
       }
@@ -896,27 +1257,30 @@ router.put(
         return res.status(400).json({ message: 'ID de agendamento invalido.' });
       }
 
-      const { med_crm, date } = req.body;
-      if (!date) {
-        return res.status(400).json({ message: 'Date e obrigatorio para remarcar.' });
+      const parsed = patientAppointmentUpdateSchema.safeParse(req.body);
+      if (!parsed.success) return validationError(res, parsed);
+
+      const { med_crm, date, time } = parsed.data;
+
+      if (!time) {
+        return res.status(400).json({ message: 'Informe o horario da consulta.' });
       }
 
-      const rawDate = String(date).trim();
-      const appointmentDate = rawDate.length === 10 ? `${rawDate} 00:00:00` : rawDate;
-      if (Number.isNaN(new Date(appointmentDate).getTime())) {
-        return res.status(400).json({ message: 'Date invalido. Use formato YYYY-MM-DD ou YYYY-MM-DD HH:MM:SS.' });
+      if (!horarioDentroDaGrade(time)) {
+        return res.status(400).json({ message: 'Horario fora da grade de atendimento (08:00 as 17:30, de 30 em 30 minutos).' });
       }
+
+      const appointmentDate = `${date} ${time}:00`;
 
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      const compareDate = new Date(appointmentDate);
-      compareDate.setHours(0, 0, 0, 0);
+      const compareDate = new Date(`${date}T00:00:00`);
       if (compareDate < today) {
         return res.status(400).json({ message: 'Nao e possivel remarcar para uma data passada.' });
       }
 
       const [[existing]] = await pool.execute(
-        `SELECT id, paciente_id, status FROM agendamentos WHERE id = ? LIMIT 1`,
+        `SELECT id, paciente_id, medico_id, status FROM agendamentos WHERE id = ? LIMIT 1`,
         [appointmentId]
       );
 
@@ -932,21 +1296,52 @@ router.put(
         return res.status(400).json({ message: 'Agendamento ja cancelado.' });
       }
 
-      if (med_crm) {
-        const medico = await findDoctorByCRM(med_crm);
-        if (!medico) {
-          return res.status(404).json({ message: 'Profissional nao encontrado para o med_crm fornecido.' });
-        }
+      const medico = med_crm ? await findDoctorByCRM(med_crm) : null;
+      if (med_crm && !medico) {
+        return res.status(404).json({ message: 'Profissional nao encontrado para o med_crm fornecido.' });
+      }
 
-        await pool.execute(
-          `UPDATE agendamentos SET medico_id = ?, clinica_id = ?, data_agendamento = ? WHERE id = ?`,
-          [medico.id, medico.clinica_id, appointmentDate, appointmentId]
-        );
-      } else {
-        await pool.execute(
-          `UPDATE agendamentos SET data_agendamento = ? WHERE id = ?`,
-          [appointmentDate, appointmentId]
-        );
+      const medicoAlvo = medico?.id ?? Number(existing.medico_id);
+
+      // Mesma checagem de agenda da criacao. `ignorarAgendamentoId` mantem o
+      // horario atual selecionavel: sem isso a consulta bloquearia a si mesma e
+      // remarcar para o mesmo horario com outro medico ficaria impossivel.
+      const disponibilidade = await listarHorariosDisponiveis(medicoAlvo, date, {
+        ignorarAgendamentoId: appointmentId
+      });
+
+      if (!disponibilidade.ok) {
+        return res.status(disponibilidade.statusCode).json({ message: disponibilidade.message });
+      }
+
+      const faixa = disponibilidade.data.horarios.find((item) => item.hora === time);
+      if (!faixa || !faixa.disponivel) {
+        return res.status(409).json({
+          message: faixa?.motivo === 'passado'
+            ? 'Esse horario ja passou. Escolha outro.'
+            : 'Esse horario acabou de ser ocupado. Escolha outro.'
+        });
+      }
+
+      try {
+        if (medico) {
+          await pool.execute(
+            `UPDATE agendamentos SET medico_id = ?, clinica_id = ?, data_agendamento = ? WHERE id = ?`,
+            [medico.id, medico.clinica_id, appointmentDate, appointmentId]
+          );
+        } else {
+          await pool.execute(
+            `UPDATE agendamentos SET data_agendamento = ? WHERE id = ?`,
+            [appointmentDate, appointmentId]
+          );
+        }
+      } catch (erroAtualizacao) {
+        if (erroAtualizacao.code === '23505') {
+          return res.status(409).json({
+            message: 'Voce ja tem uma consulta com esse profissional nesse dia e horario.'
+          });
+        }
+        throw erroAtualizacao;
       }
 
       const [rows] = await pool.execute(

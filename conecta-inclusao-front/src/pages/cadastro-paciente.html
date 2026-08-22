@@ -82,11 +82,28 @@
                     <p id="guardianAdvice" class="field-note">Preencha a data de nascimento para verificar se responsável é necessário.</p>
                 </div>
 
-                <div class="form-group" id="guardianSummary" style="display:none;">
-                    <label>Responsável</label>
-                    <div class="guardian-summary-box">
-                        <p id="guardianSummaryText">Nenhum responsável adicionado.</p>
-                        <button type="button" class="btn btn-cancel" id="openGuardianModalButton">Adicionar responsável</button>
+                <div class="form-group" id="guardianSummary" hidden>
+                    <!-- O card usa a cor-chave do paciente (azul, --accent nesta
+                         pagina). Antes era um bloco cinza com um botao de estilo
+                         "cancelar", que dava a impressao de acao secundaria - e
+                         adicionar responsavel e o passo obrigatorio quando o
+                         paciente e menor de idade. -->
+                    <div class="guardian-card" id="guardianCard">
+                        <div class="guardian-card-icon" aria-hidden="true">
+                            <i class="ph ph-user-circle-plus"></i>
+                        </div>
+                        <div class="guardian-card-body">
+                            <strong id="guardianCardTitle">Nenhum responsável adicionado</strong>
+                            <p id="guardianSummaryText">Um responsável pode acompanhar agendamentos e mensagens do paciente.</p>
+                        </div>
+                        <div class="guardian-card-actions">
+                            <button type="button" class="btn btn-accent" id="openGuardianModalButton">
+                                <i class="ph ph-plus" aria-hidden="true"></i> Adicionar responsável
+                            </button>
+                            <button type="button" class="btn btn-remove" id="removeGuardianButton" hidden>
+                                <i class="ph ph-trash" aria-hidden="true"></i> Remover
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -111,11 +128,16 @@
                 </div>
             </form>
 
-            <div id="guardianModal" class="modal" aria-hidden="true">
+            <!-- role/aria-modal declaram o dialogo para o leitor de tela; o foco
+                 fica preso aqui dentro enquanto ele estiver aberto (ver
+                 cadastro-paciente.js). Clicar fora NAO fecha mais: so os botoes
+                 Fechar, Cancelar e Salvar responsável saem do modal. -->
+            <div id="guardianModal" class="modal" aria-hidden="true" role="dialog"
+                 aria-modal="true" aria-labelledby="guardianModalTitle">
                 <div class="modal-content">
                     <div class="modal-header">
                         <div>
-                            <h3>Cadastrar responsável</h3>
+                            <h3 id="guardianModalTitle">Cadastrar responsável</h3>
                             <p>Preencha os dados do responsável do paciente.</p>
                         </div>
                         <button type="button" id="closeGuardianModalButton" class="btn btn-cancel modal-close-btn">Fechar</button>

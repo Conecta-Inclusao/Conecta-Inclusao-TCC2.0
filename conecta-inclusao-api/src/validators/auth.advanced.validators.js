@@ -138,10 +138,16 @@ export const registerPatientSchema = z.object({
     .trim()
     .min(3, "Nome muito curto")
     .max(100),
-  email: z
-    .string()
-    .email("Email inválido")
-    .optional(),
+  // `.nullish()` e nao `.optional()`: o e-mail do paciente nao e obrigatorio na
+  // tela, e o formulario envia `null` quando o campo fica em branco. Com
+  // `.optional()` (que so aceita `string | undefined`) esse `null` derrubava o
+  // cadastro inteiro com "Dados invalidos" - e era o caminho mais comum
+  // justamente no cadastro de menor de idade com responsavel, onde quem tem
+  // e-mail e o responsavel, nao a crianca.
+  email: z.preprocess(
+    (valor) => (valor === null || (typeof valor === "string" && !valor.trim()) ? undefined : valor),
+    z.string().trim().email("Email inválido").optional()
+  ),
   responsavel: guardianCreateSchema.optional(),
   tipoDeficiencia: z
     .string()
@@ -265,5 +271,142 @@ export const registerClinicSchema = z.object({
     .string()
     .trim()
     .max(100)
+    .optional()
+});
+
+// ---------------------------------------------------------------------------
+// Unidades (filiais) e endereco
+// ---------------------------------------------------------------------------
+
+// Siglas das 27 unidades federativas. Usada tanto na validacao de endereco
+// quanto na UF do CRM - a "validacao dinamica de CRM de acordo com o local do
+// medico" e, na pratica, exigir que essas duas concordem.
+export const UFS = [
+  "AC", "AL", "AM", "AP", "BA", "CE", "DF", "ES", "GO", "MA", "MG", "MS",
+  "MT", "PA", "PB", "PE", "PI", "PR", "RJ", "RN", "RO", "RR", "RS", "SC",
+  "SE", "SP", "TO"
+];
+
+const ufSchema = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .refine((valor) => UFS.includes(valor), "UF invalida");
+
+const cepSchema = z
+  .string()
+  .trim()
+  .refine((valor) => valor.replace(/\D/g, "").length === 8, "CEP deve ter 8 digitos");
+
+// O endereco chega de duas formas: pelo CEP (o servidor completa via ViaCEP) ou
+// preenchido a mao, quando o usuario marca "nao sei meu CEP". Por isso todos os
+// campos sao opcionais aqui e a exigencia de cidade/estado fica no servico, que
+// e quem enxerga o resultado das duas fontes juntas.
+const enderecoFields = {
+  cep: cepSchema.optional(),
+  logradouro: z.string().trim().max(255).optional(),
+  numero: z.string().trim().max(20).optional(),
+  bairro: z.string().trim().max(120).optional(),
+  cidade: z.string().trim().max(120).optional(),
+  estado: ufSchema.optional()
+};
+
+export const unidadeCreateSchema = z.object({
+  nome: z.string().trim().min(2, "Nome da unidade muito curto").max(120),
+  ...enderecoFields
+}).refine(
+  (dados) => Boolean(dados.cep) || Boolean(dados.cidade && dados.estado),
+  { message: "Informe o CEP ou preencha cidade e estado.", path: ["cep"] }
+);
+
+export const unidadeUpdateSchema = z.object({
+  nome: z.string().trim().min(2, "Nome da unidade muito curto").max(120).optional(),
+  ativo: z.boolean().optional(),
+  ...enderecoFields
+});
+
+// Ponto de referencia para ordenar unidades por distancia. Aceita CEP OU
+// endereco manual - o servidor geocodifica e devolve a lista ordenada.
+export const localizacaoSchema = z.object(enderecoFields).refine(
+  (dados) => Boolean(dados.cep) || Boolean(dados.cidade && dados.estado),
+  { message: "Informe o CEP ou preencha cidade e estado.", path: ["cep"] }
+);
+
+// ---------------------------------------------------------------------------
+// Cadastro de profissional pela clinica
+//
+// Antes a rota validava com `if (!crm || !name || !unidade || !password)`, o
+// que aceitava e-mail malformado, unidade inexistente e CRM em qualquer
+// formato. Passa a usar schema, como o resto do projeto.
+// ---------------------------------------------------------------------------
+
+// O numero do CRM tem de 4 a 7 digitos; a identidade completa do registro so
+// existe junto com a UF (CRM/SP 123456). Manter o numero puro em `medicos.crm`
+// preserva o login de quem ja esta cadastrado.
+const crmNumeroSchema = z
+  .string()
+  .trim()
+  .transform((valor) => valor.replace(/[^0-9A-Za-z]/g, "").toUpperCase().replace(/^CRM/, ""))
+  .refine((valor) => /^\d{4,7}$/.test(valor), "O numero do CRM deve ter de 4 a 7 digitos");
+
+export const registerProfessionalSchema = z.object({
+  crm: crmNumeroSchema,
+  crmUf: ufSchema,
+  name: z.string().trim().min(3, "Nome muito curto").max(100),
+  especialidade: z.string().trim().min(1, "Informe a especialidade").max(100),
+  password: strongPasswordSchema,
+  email: z.string().trim().email("Email invalido").optional().nullable(),
+  bio: z.string().trim().max(500).optional().nullable(),
+  // A unidade agora e escolhida pelo id da tabela `unidades`; `unidade` (texto)
+  // continua aceito para nao quebrar chamadas antigas da API.
+  unidadeId: z.coerce.number().int().positive().optional(),
+  unidade: z.string().trim().min(1).max(100).optional(),
+  // Excecao consciente: medico com registro em UF diferente da que mora existe
+  // (transferencia recente, atendimento em divisa). A clinica confirma na tela e
+  // o servidor aceita - mas so com esta confirmacao explicita, nunca em silencio.
+  crmUfConfirmado: z.boolean().optional(),
+  ...enderecoFields
+}).refine(
+  (dados) => Boolean(dados.unidadeId) || Boolean(dados.unidade),
+  { message: "Selecione a unidade do profissional.", path: ["unidadeId"] }
+).refine(
+  // O nucleo da validacao dinamica: se o endereco do medico ja diz o estado, a
+  // UF do CRM tem de ser a mesma. Sem isso o campo UF viraria decorativo.
+  (dados) => !dados.estado || dados.estado === dados.crmUf || dados.crmUfConfirmado === true,
+  { message: "A UF do CRM deve ser a mesma do estado do endereco do medico.", path: ["crmUf"] }
+);
+
+// ---------------------------------------------------------------------------
+// Agendamento feito pelo paciente
+// ---------------------------------------------------------------------------
+
+export const patientAppointmentSchema = z.object({
+  med_crm: z.string().trim().min(3, "Profissional invalido").max(20),
+  date: z
+    .string()
+    .trim()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Data invalida. Use o formato YYYY-MM-DD"),
+  // Horario da grade de 30 em 30 minutos. Opcional apenas por compatibilidade
+  // com chamadas antigas, que gravavam 00:00 - a tela sempre envia.
+  time: z
+    .string()
+    .trim()
+    .regex(/^\d{2}:\d{2}$/, "Horario invalido. Use o formato HH:MM")
+    .optional()
+});
+
+// Na remarcacao o profissional pode nao mudar: o corpo entao traz apenas data e
+// horario. Schema proprio em vez de `.partial()` para deixar explicito o que
+// muda entre criar e remarcar.
+export const patientAppointmentUpdateSchema = z.object({
+  med_crm: z.string().trim().min(3, "Profissional invalido").max(20).optional(),
+  date: z
+    .string()
+    .trim()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Data invalida. Use o formato YYYY-MM-DD"),
+  time: z
+    .string()
+    .trim()
+    .regex(/^\d{2}:\d{2}$/, "Horario invalido. Use o formato HH:MM")
     .optional()
 });

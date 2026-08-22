@@ -49,7 +49,15 @@ export async function registerClinic(data) {
     });
 }
 
-export async function registerProfessional(crm, name, especialidade, unidade, password, email, bio) {
+/**
+ * Cadastro de medico pela clinica.
+ *
+ * Passou a receber um objeto em vez de sete parametros posicionais: o corpo
+ * cresceu para incluir UF do CRM, id da unidade e o endereco do profissional
+ * (CEP ou campos manuais), e uma lista posicional com doze itens e um convite
+ * a trocar dois argumentos de lugar sem ninguem perceber.
+ */
+export async function registerProfessional(payload) {
     const token = getToken();
     if (!token) {
         return { ok: false, error: 'Token não encontrado' };
@@ -60,7 +68,7 @@ export async function registerProfessional(crm, name, especialidade, unidade, pa
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ crm, name, especialidade, unidade, password, email, bio })
+        body: JSON.stringify(payload)
     });
 }
 

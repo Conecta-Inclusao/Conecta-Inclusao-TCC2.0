@@ -196,3 +196,113 @@ CREATE INDEX IF NOT EXISTS idx_paciente_responsavel_responsavel
 -- removido do cadastro.
 ALTER TABLE pacientes ADD COLUMN IF NOT EXISTS telefone VARCHAR(20);
 ALTER TABLE pacientes ADD COLUMN IF NOT EXISTS unidade_preferencia VARCHAR(120);
+
+-- ---------------------------------------------------------------------------
+-- Unidades (filiais) da clinica
+--
+-- Ate aqui "unidade" era uma string solta: o formulario de cadastro de medico
+-- oferecia "Unidade A/B/C" fixas no HTML e gravava o texto em medicos.unidade.
+-- Sem endereco nao havia como responder a pergunta que a clinica realmente faz
+-- no momento do cadastro - "qual das minhas unidades fica mais perto desse
+-- medico?".
+--
+-- latitude/longitude sao preenchidas por geocodificacao (Nominatim/OSM) a
+-- partir do CEP no momento do cadastro da unidade. NUMERIC(9,6) cobre a
+-- precisao util de ~10 cm, bem mais do que o necessario aqui.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS unidades (
+    id SERIAL PRIMARY KEY,
+    clinica_id INTEGER NOT NULL,
+    nome VARCHAR(120) NOT NULL,
+    cep VARCHAR(10),
+    logradouro VARCHAR(255),
+    numero VARCHAR(20),
+    bairro VARCHAR(120),
+    cidade VARCHAR(120),
+    estado VARCHAR(2),
+    latitude NUMERIC(9, 6),
+    longitude NUMERIC(9, 6),
+    ativo BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_unidades_clinica FOREIGN KEY (clinica_id) REFERENCES clinicas(id) ON DELETE CASCADE
+);
+
+-- Duas unidades da mesma clinica nao podem ter o mesmo nome: o nome e o que
+-- aparece na combobox e o que continua sendo gravado em medicos.unidade.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_unidades_clinica_nome
+    ON unidades (clinica_id, LOWER(nome));
+
+CREATE INDEX IF NOT EXISTS idx_unidades_clinica ON unidades (clinica_id);
+
+-- ---------------------------------------------------------------------------
+-- Endereco e coordenadas do medico
+--
+-- Alimentados pelo CEP no cadastro (ViaCEP -> Nominatim). Servem para ordenar
+-- as unidades por distancia e, no caso de `estado`, para validar a UF do CRM.
+-- ---------------------------------------------------------------------------
+ALTER TABLE medicos ADD COLUMN IF NOT EXISTS cep VARCHAR(10);
+ALTER TABLE medicos ADD COLUMN IF NOT EXISTS logradouro VARCHAR(255);
+ALTER TABLE medicos ADD COLUMN IF NOT EXISTS numero VARCHAR(20);
+ALTER TABLE medicos ADD COLUMN IF NOT EXISTS bairro VARCHAR(120);
+ALTER TABLE medicos ADD COLUMN IF NOT EXISTS cidade VARCHAR(120);
+ALTER TABLE medicos ADD COLUMN IF NOT EXISTS estado VARCHAR(2);
+ALTER TABLE medicos ADD COLUMN IF NOT EXISTS latitude NUMERIC(9, 6);
+ALTER TABLE medicos ADD COLUMN IF NOT EXISTS longitude NUMERIC(9, 6);
+
+-- UF do conselho. Fica separada de `crm` de proposito: `crm` continua sendo o
+-- identificador de login (so o numero), entao mudar o formato dele quebraria o
+-- acesso de todo medico ja cadastrado. A exibicao "CRM/SP 123456" e montada
+-- juntando as duas colunas.
+ALTER TABLE medicos ADD COLUMN IF NOT EXISTS crm_uf VARCHAR(2);
+
+-- Vinculo com a unidade escolhida. medicos.unidade (texto) continua preenchido
+-- para nao quebrar as telas e filtros que leem essa coluna.
+ALTER TABLE medicos ADD COLUMN IF NOT EXISTS unidade_id INTEGER;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'fk_medicos_unidade'
+    ) THEN
+        ALTER TABLE medicos
+            ADD CONSTRAINT fk_medicos_unidade
+            FOREIGN KEY (unidade_id) REFERENCES unidades(id) ON DELETE SET NULL;
+    END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_medicos_unidade ON medicos (unidade_id);
+
+-- ---------------------------------------------------------------------------
+-- Agendamento duplicado
+--
+-- Nada impedia o mesmo paciente de marcar duas vezes com o mesmo medico no
+-- mesmo horario: a rota de agendamento do paciente nao fazia checagem nenhuma
+-- e o servico so olhava conflito de agenda do medico com OUTROS pacientes.
+-- O indice parcial resolve na raiz - inclusive em duas requisicoes simultaneas,
+-- que uma checagem em SELECT antes do INSERT nao pega.
+--
+-- Consultas canceladas ficam de fora: depois de cancelar, o paciente precisa
+-- poder remarcar o mesmo horario.
+--
+-- ATENCAO: se o banco JA tiver duplicatas gravadas, a criacao do indice falha
+-- ("could not create unique index"). Rode a consulta abaixo antes para ver se
+-- ha algo a limpar:
+--
+--   SELECT paciente_id, medico_id, data_agendamento, COUNT(*), ARRAY_AGG(id)
+--   FROM agendamentos
+--   WHERE status <> 'cancelado'
+--   GROUP BY paciente_id, medico_id, data_agendamento
+--   HAVING COUNT(*) > 1;
+--
+-- Para cada grupo devolvido, mantenha o menor id e cancele os demais:
+--
+--   UPDATE agendamentos SET status = 'cancelado' WHERE id IN (<ids extras>);
+-- ---------------------------------------------------------------------------
+CREATE UNIQUE INDEX IF NOT EXISTS idx_agendamentos_sem_duplicata
+    ON agendamentos (paciente_id, medico_id, data_agendamento)
+    WHERE status <> 'cancelado';
+
+-- Consulta de horarios livres do medico num dia: filtra por medico e faixa de
+-- data_agendamento.
+CREATE INDEX IF NOT EXISTS idx_agendamentos_medico_data
+    ON agendamentos (medico_id, data_agendamento);

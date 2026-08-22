@@ -14,41 +14,276 @@ function getClinicAuthToken() {
     return window.ConectaSession.getToken();
 }
 
-// Máscara de CRM automática
+// O numero do CRM e so digito; a identidade do registro se completa com a UF,
+// que fica num campo proprio (professionalCrmUf).
 function applyCRMMask(value) {
-    let v = value.toUpperCase().replace(/[^A-Z0-9]/g, '');
-    if (v.length > 7) v = v.slice(0, 7);
-    return v;
+    return String(value).replace(/\D/g, '').slice(0, 7);
+}
+
+/* ---------------------------------------------------------------------------
+   Endereco do medico -> unidade mais proxima
+   ---------------------------------------------------------------------------
+   FLUXO: CEP digitado -> ViaCEP devolve o endereco -> Nominatim (OSM) devolve
+   latitude/longitude -> o banco calcula a distancia ate cada unidade da clinica
+   -> a combobox reordena, da mais proxima para a mais distante.
+
+   Os dois primeiros passos e o calculo acontecem no servidor
+   (POST /auth/clinic/units/nearest); aqui so entram o disparo e a exibicao.
+   --------------------------------------------------------------------------- */
+
+// Ultimo endereco resolvido, enviado junto no cadastro para ficar gravado no
+// medico (e permitir reordenar unidades no futuro sem geocodificar de novo).
+let enderecoDoProfissional = null;
+let buscaDeUnidadesEmAndamento = false;
+
+function usandoEnderecoManual() {
+    return Boolean(document.getElementById('unknownCep')?.checked);
+}
+
+/** Corpo do endereco conforme o modo escolhido (CEP ou manual). */
+function lerEnderecoDoFormulario() {
+    if (usandoEnderecoManual()) {
+        const estado = document.getElementById('professionalState')?.value.trim().toUpperCase() || '';
+        const cidade = document.getElementById('professionalCity')?.value.trim() || '';
+
+        if (!cidade || estado.length !== 2) return null;
+
+        return {
+            logradouro: document.getElementById('professionalStreet')?.value.trim() || undefined,
+            numero: document.getElementById('professionalNumber')?.value.trim() || undefined,
+            bairro: document.getElementById('professionalNeighborhood')?.value.trim() || undefined,
+            cidade,
+            estado
+        };
+    }
+
+    const cep = document.getElementById('professionalCep')?.value || '';
+    if (window.ConectaEndereco.apenasDigitos(cep).length !== 8) return null;
+
+    return { cep: window.ConectaEndereco.apenasDigitos(cep) };
+}
+
+/** Preenche a combobox de unidades, com a distancia quando ela existe. */
+function renderizarOpcoesDeUnidade(unidades, { comDistancia = false } = {}) {
+    const select = document.getElementById('professionalUnit');
+    if (!select) return;
+
+    const anterior = select.value;
+    select.innerHTML = '<option value="">Selecione uma unidade...</option>';
+
+    if (!unidades.length) {
+        const opcao = document.createElement('option');
+        opcao.value = '';
+        opcao.textContent = 'Nenhuma unidade cadastrada — cadastre em "Unidades"';
+        opcao.disabled = true;
+        select.appendChild(opcao);
+        return;
+    }
+
+    unidades.forEach((unidade) => {
+        const opcao = document.createElement('option');
+        opcao.value = String(unidade.id);
+        opcao.dataset.nome = unidade.nome;
+
+        const distancia = comDistancia
+            ? window.ConectaEndereco.formatarDistancia(unidade.distanciaKm)
+            : '';
+
+        opcao.textContent = distancia ? `${unidade.nome} — ${distancia}` : unidade.nome;
+        select.appendChild(opcao);
+    });
+
+    // Mantem a escolha do usuario se a unidade continuar na lista; se a ordem
+    // mudou, ela apenas trocou de posicao.
+    if (unidades.some((unidade) => String(unidade.id) === anterior)) {
+        select.value = anterior;
+    } else if (comDistancia) {
+        // Depois de ordenar por distancia, a primeira opcao e a mais proxima -
+        // que e exatamente a sugestao que a clinica quer.
+        select.selectedIndex = 1;
+    }
+}
+
+/** Carrega as unidades sem ordenacao (estado inicial da tela). */
+async function carregarUnidadesParaCadastro() {
+    const token = getClinicAuthToken();
+    if (!token) return;
+
+    try {
+        const resposta = await fetch(`${AUTH_API_BASE}/clinic/units`, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+
+        if (!resposta.ok) return;
+
+        const unidades = await resposta.json();
+        renderizarOpcoesDeUnidade(Array.isArray(unidades) ? unidades : []);
+    } catch (erro) {
+        console.error('Erro ao carregar unidades:', erro);
+    }
+}
+
+/**
+ * Geocodifica o endereco informado e reordena as unidades por distancia.
+ * Chamada quando o CEP fica completo ou quando o endereco manual e preenchido.
+ */
+async function ordenarUnidadesPelaProximidade() {
+    const endereco = lerEnderecoDoFormulario();
+    const dica = 'professionalUnitHint';
+
+    if (!endereco) {
+        window.ConectaEndereco.definirDica(
+            dica,
+            'Informe o endereço acima para ordenar as unidades da mais próxima para a mais distante.'
+        );
+        return;
+    }
+
+    if (buscaDeUnidadesEmAndamento) return;
+    buscaDeUnidadesEmAndamento = true;
+
+    window.ConectaEndereco.definirDica(dica, 'Calculando a unidade mais próxima...');
+
+    try {
+        const resposta = await fetch(`${AUTH_API_BASE}/clinic/units/nearest`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${getClinicAuthToken()}`
+            },
+            body: JSON.stringify(endereco)
+        });
+
+        const corpo = await resposta.json().catch(() => ({}));
+
+        if (!resposta.ok) {
+            window.ConectaEndereco.definirDica(dica, corpo.message || 'Não foi possível ordenar as unidades.', 'erro');
+            return;
+        }
+
+        enderecoDoProfissional = corpo.endereco || null;
+        const unidades = Array.isArray(corpo.unidades) ? corpo.unidades : [];
+
+        // A UF do CRM acompanha o estado do endereco: e a "validacao dinamica"
+        // pedida. Continua editavel para quem tem registro em outro estado.
+        aplicarUfDoEndereco(enderecoDoProfissional?.estado);
+        preencherCamposManuais(enderecoDoProfissional);
+
+        renderizarOpcoesDeUnidade(unidades, { comDistancia: true });
+
+        if (!unidades.length) {
+            window.ConectaEndereco.definirDica(dica, 'Nenhuma unidade cadastrada. Cadastre em "Unidades".', 'erro');
+            return;
+        }
+
+        const maisProxima = unidades[0];
+        window.ConectaEndereco.definirDica(
+            dica,
+            maisProxima.distanciaKm === null
+                ? 'Unidades listadas, mas sem coordenadas para calcular a distância.'
+                : `Unidade mais próxima: ${maisProxima.nome} (${window.ConectaEndereco.formatarDistancia(maisProxima.distanciaKm)}).`,
+            maisProxima.distanciaKm === null ? '' : 'ok'
+        );
+    } catch (erro) {
+        console.error('Erro ao ordenar unidades:', erro);
+        window.ConectaEndereco.definirDica(dica, 'Erro de conexão ao calcular as distâncias.', 'erro');
+    } finally {
+        buscaDeUnidadesEmAndamento = false;
+    }
+}
+
+/** Reflete no formulario o endereco que o servidor resolveu a partir do CEP. */
+function preencherCamposManuais(endereco) {
+    if (!endereco) return;
+
+    const mapa = {
+        professionalStreet: endereco.logradouro,
+        professionalNeighborhood: endereco.bairro,
+        professionalCity: endereco.cidade,
+        professionalState: endereco.estado
+    };
+
+    Object.entries(mapa).forEach(([id, valor]) => {
+        const campo = document.getElementById(id);
+        if (campo && valor && !campo.value) campo.value = valor;
+    });
+}
+
+function aplicarUfDoEndereco(uf) {
+    const select = document.getElementById('professionalCrmUf');
+    if (!select || !uf) return;
+
+    // So preenche enquanto o usuario nao escolheu nada: sobrescrever uma UF
+    // digitada a mao seria apagar uma decisao dele.
+    if (!select.value) select.value = uf;
+
+    window.ConectaEndereco.definirDica(
+        'professionalCrmHint',
+        select.value === uf
+            ? `UF preenchida pelo endereço (${uf}).`
+            : `Atenção: o endereço é ${uf}, mas o CRM está como ${select.value}.`,
+        select.value === uf ? '' : 'erro'
+    );
 }
 
 // Registrar novo profissional
 async function handleRegisterProfessional(event) {
     event.preventDefault();
-    
+
     const form = event.target;
     const submitBtn = form.querySelector('button[type="submit"]');
     const originalText = submitBtn.innerText;
-    
-    const crm = document.getElementById('professionalCRM').value.trim();
+
+    const crm = applyCRMMask(document.getElementById('professionalCRM').value);
+    const crmUf = document.getElementById('professionalCrmUf').value;
     const name = document.getElementById('professionalName').value.trim();
     const especialidade = document.getElementById('professionalEspecialidade').value.trim();
-    const unidade = document.getElementById('professionalUnit').value.trim();
+    const unidadeSelect = document.getElementById('professionalUnit');
+    const unidadeId = Number(unidadeSelect.value);
     const password = document.getElementById('professionalPassword').value.trim();
     const confirmPassword = document.getElementById('professionalConfirmPassword').value.trim();
     const email = document.getElementById('professionalEmail').value.trim();
     const bio = document.getElementById('professionalBio').value.trim();
-    
-    // Validações
-    if (!crm || !name || !especialidade || !unidade || !password) {
+    const endereco = lerEnderecoDoFormulario();
+
+    if (!crm || !name || !especialidade || !unidadeId || !password) {
         showPopup('Preencha todos os campos obrigatórios.');
         return;
     }
-    
+
     if (crm.length < 4) {
-        showPopup('CRM inválido.');
+        showPopup('O número do CRM deve ter de 4 a 7 dígitos.');
         return;
     }
-    
+
+    if (!crmUf) {
+        showPopup('Selecione a UF do CRM.');
+        return;
+    }
+
+    if (!endereco) {
+        showPopup(usandoEnderecoManual()
+            ? 'Informe pelo menos cidade e UF do endereço do profissional.'
+            : 'Informe um CEP válido ou ligue a opção "Não sei meu CEP".');
+        return;
+    }
+
+    // Validacao dinamica do CRM: a UF do conselho tem de bater com o estado do
+    // endereco do medico. O servidor tambem recusa a divergencia - aqui o aviso
+    // so chega antes, e com a chance de a clinica confirmar a excecao (medico
+    // recem-transferido, atendimento em divisa de estado).
+    const ufDoEndereco = endereco.estado || enderecoDoProfissional?.estado;
+    let crmUfConfirmado = false;
+
+    if (ufDoEndereco && ufDoEndereco !== crmUf) {
+        const confirmado = await showPopup(
+            `O endereço do profissional é ${ufDoEndereco}, mas o CRM está registrado como ${crmUf}. Deseja continuar mesmo assim?`,
+            'confirm'
+        );
+        if (!confirmado) return;
+        crmUfConfirmado = true;
+    }
+
     if (!isStrongPassword(password)) {
         showPopup('A senha deve ter 8 caracteres, maiúscula, minúscula, número e caractere especial.');
         return;
@@ -58,84 +293,102 @@ async function handleRegisterProfessional(event) {
         showPopup('As senhas não coincidem.');
         return;
     }
-    
-    // Obter clinicaId da sessao da aba
-    const userData = window.ConectaSession.getToken()
-        ? JSON.stringify(window.ConectaSession.getUser())
-        : null;
-    if (!userData) {
-        showPopup('Erro: Dados do usuário não encontrados. Faça login novamente.');
+
+    if (!getClinicAuthToken()) {
+        showPopup('Sessão expirada. Faça login novamente.');
         return;
     }
-    const user = JSON.parse(userData);
-    const userId = user.id;
-    
+
     submitBtn.disabled = true;
     submitBtn.innerHTML = '<i class="ph ph-circle-notch-bold" style="animation: spin 1s linear infinite;"></i> Registrando...';
-    
+
     try {
         const apiModule = await loadAPI();
-        
-        const result = await apiModule.registerProfessional(
-            crm.toUpperCase(),
+
+        const enviar = (confirmandoUf) => apiModule.registerProfessional({
+            crm,
+            crmUf,
+            // Sinaliza que a divergencia de UF foi vista e aceita por uma
+            // pessoa. Sem esta flag o servidor recusa o cadastro.
+            crmUfConfirmado: confirmandoUf,
             name,
             especialidade,
-            unidade,
+            unidadeId,
             password,
-            email,
-            bio
-        );
-        
+            email: email || undefined,
+            bio: bio || undefined,
+            ...endereco
+        });
+
+        let result = await enviar(crmUfConfirmado);
+
+        // No modo CEP o navegador nao sabe a UF ate o servidor consultar o
+        // ViaCEP. Se a divergencia so aparecer la, o servidor devolve
+        // `conflitoDeUf`; perguntamos e reenviamos, em vez de deixar a clinica
+        // diante de um erro sem saida.
+        if (!result.ok && result.data?.conflitoDeUf) {
+            const conflito = result.data.conflitoDeUf;
+            const confirmado = await showPopup(
+                `O CEP informado é de ${conflito.enderecoUf}, mas o CRM está como ${conflito.crmUf}. Deseja cadastrar assim mesmo?`,
+                'confirm'
+            );
+
+            if (!confirmado) {
+                aplicarUfDoEndereco(conflito.enderecoUf);
+                return;
+            }
+
+            result = await enviar(true);
+        }
+
         if (!result.ok) {
-            showPopup(`Erro: ${result.data?.message || result.error || 'Erro ao registrar profissional'}`);
-            submitBtn.disabled = false;
-            submitBtn.innerText = originalText;
+            const detalhe = Array.isArray(result.data?.errors) && result.data.errors.length
+                ? result.data.errors.map((problema) => problema.message).join(' ')
+                : '';
+            showPopup(detalhe || result.data?.message || result.error || 'Erro ao registrar profissional');
             return;
         }
-        
-        const registeredCRM = result.data?.data?.crm || result.data?.crm || crm.toUpperCase();
-        // Sucesso
-        showPopup(`Profissional ${name} registrado com sucesso! CRM: ${registeredCRM}`);
-        
-        // Limpar formulário
+
+        const registrado = result.data?.data || {};
+        const crmExibido = registrado.crmUf
+            ? `CRM/${registrado.crmUf} ${registrado.crm}`
+            : `CRM ${registrado.crm || crm}`;
+
+        showPopup(`Profissional ${name} registrado com sucesso! ${crmExibido}`);
+
         form.reset();
-        submitBtn.disabled = false;
-        submitBtn.innerText = originalText;
-        
-        // Atualizar lista de profissionais
+        enderecoDoProfissional = null;
+        sincronizarModoDeEndereco();
+        carregarUnidadesParaCadastro();
         loadProfessionalsList();
-        
     } catch (error) {
         console.error('Erro ao registrar profissional:', error);
-        showPopup(`Erro: ${error.message}`);
+        showPopup('Erro ao registrar profissional. Tente novamente.');
+    } finally {
         submitBtn.disabled = false;
         submitBtn.innerText = originalText;
     }
 }
 
-// Buscar ID da clínica pelo ID do usuário
-async function getClinicaIdByUserId(userId) {
-    try {
-        const token = getClinicAuthToken();
-        
-        if (!token) return null;
-        
-        const response = await fetch(`${window.APP_CONFIG?.API_BASE_URL || ''}/clinic/id/${userId}`, {
-            method: 'GET',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            }
-        });
-        
-        if (!response.ok) return null;
-        
-        const data = await response.json();
-        return data.clinicaId || null;
-    } catch (error) {
-        console.error('Erro ao buscar ID da clínica:', error);
-        return null;
-    }
+/**
+ * Alterna entre CEP e endereco manual. O toggle "Não sei meu CEP" TROCA o campo
+ * de CEP pelos campos de endereco, em vez de mostrar os dois - pedir as duas
+ * coisas ao mesmo tempo e o que fazia o formulario parecer longo demais.
+ */
+function sincronizarModoDeEndereco() {
+    const manual = usandoEnderecoManual();
+    const campoCep = document.getElementById('professionalCepField');
+    const camposManuais = document.getElementById('manualAddressFields');
+    const inputCep = document.getElementById('professionalCep');
+
+    if (campoCep) campoCep.hidden = manual;
+    if (camposManuais) camposManuais.hidden = !manual;
+    if (inputCep) inputCep.required = !manual;
+
+    ['professionalStreet', 'professionalCity', 'professionalState'].forEach((id) => {
+        const campo = document.getElementById(id);
+        if (campo) campo.required = manual;
+    });
 }
 
 // Carregar lista de profissionais
@@ -143,11 +396,8 @@ async function loadProfessionalsList() {
     try {
         const token = getClinicAuthToken();
         
-        if (!token) {
-            console.log('Usuário não autenticado');
-            return;
-        }
-        
+        if (!token) return;
+
         const response = await fetch(`${AUTH_API_BASE}/clinic/professionals`, {
             method: 'GET',
             headers: {
@@ -201,7 +451,7 @@ function displayProfessionalsList(professionals) {
                     ${normalizeStatus(prof.status) === 'inativo' ? '<div class="inactive-warning">Profissional desativado</div>' : ''}
                 </td>
                 <td>${prof.especialidade || 'Médico'}</td>
-                <td>${prof.crm || 'N/A'}</td>
+                <td>${formatarRegistro(prof)}</td>
                 <td><span class="status-dot ${getStatusClass(prof.status)}">${formatProfessionalStatus(prof.status)}</span></td>
                 <td>${prof.unidade || 'N/A'}</td>
                 <td>
@@ -231,7 +481,7 @@ function displayProfessionalsList(professionals) {
                         ${prof.name ? prof.name.charAt(0).toUpperCase() : '?'}
                     </div>
                     <h3>${prof.name || 'N/A'}</h3>
-                    <span>${prof.crm || 'Sem CRM'}</span>
+                    <span>${formatarRegistro(prof)}</span>
                 </div>
                 <div class="professional-card-body">
                     <div class="professional-info-item">
@@ -293,6 +543,17 @@ function displayProfessionalsList(professionals) {
     
     updateTeamSummary(professionals);
     updateUnitFilterOptions(professionals);
+}
+
+/**
+ * Registro do profissional para exibicao. O numero sozinho ("123456") nao
+ * identifica um CRM - e a UF do conselho que fecha a identidade. Medicos
+ * cadastrados antes da coluna crm_uf existir continuam aparecendo como
+ * "CRM 123456", sem UF.
+ */
+function formatarRegistro(prof) {
+    if (!prof.crm) return 'Sem CRM';
+    return prof.crmUf ? `CRM/${prof.crmUf} ${prof.crm}` : `CRM ${prof.crm}`;
 }
 
 function getStatusIcon(status) {
@@ -507,16 +768,85 @@ async function activateProfessional(id) {
 document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('registerProfessionalForm');
     const crmInput = document.getElementById('professionalCRM');
-    
+
     if (form) {
         form.addEventListener('submit', handleRegisterProfessional);
     }
-    
+
     if (crmInput) {
         crmInput.addEventListener('input', function(e) {
             e.target.value = applyCRMMask(e.target.value);
         });
     }
+
+    // ---- Endereco do medico, UF do CRM e unidades por distancia ----------
+    const ufSelect = document.getElementById('professionalCrmUf');
+    const cepInput = document.getElementById('professionalCep');
+    const unknownCepToggle = document.getElementById('unknownCep');
+    const stateInput = document.getElementById('professionalState');
+
+    if (ufSelect) {
+        window.ConectaEndereco.preencherSelectDeUf(ufSelect, 'Selecione...');
+        ufSelect.addEventListener('change', () => {
+            aplicarUfDoEndereco(enderecoDoProfissional?.estado
+                || stateInput?.value.trim().toUpperCase()
+                || null);
+        });
+    }
+
+    if (cepInput) {
+        window.ConectaEndereco.ligarMascaraDeCep(cepInput);
+        window.ConectaEndereco.ligarBuscaDeCep(cepInput, {
+            idDaDica: 'professionalCepHint',
+            textoInicial: 'Digite o CEP para localizar o endereço.',
+            aoEncontrar(endereco) {
+                window.ConectaEndereco.definirDica(
+                    'professionalCepHint',
+                    `${[endereco.logradouro, endereco.bairro].filter(Boolean).join(', ')} — ${endereco.cidade}/${endereco.estado}`,
+                    'ok'
+                );
+                aplicarUfDoEndereco(endereco.estado);
+                // A ordenacao das unidades depende da geocodificacao, que roda
+                // no servidor a partir do mesmo CEP.
+                ordenarUnidadesPelaProximidade();
+            },
+            aoLimpar() {
+                enderecoDoProfissional = null;
+            }
+        });
+    }
+
+    if (stateInput) {
+        window.ConectaEndereco.ligarMascaraDeUf(stateInput);
+    }
+
+    // No modo manual nao ha CEP para disparar a busca: o gatilho e sair do
+    // campo de cidade ou de UF com os dois preenchidos.
+    ['professionalCity', 'professionalState'].forEach((id) => {
+        const campo = document.getElementById(id);
+        if (!campo) return;
+        campo.addEventListener('blur', () => {
+            if (usandoEnderecoManual()) ordenarUnidadesPelaProximidade();
+        });
+    });
+
+    if (unknownCepToggle) {
+        unknownCepToggle.addEventListener('change', () => {
+            sincronizarModoDeEndereco();
+            enderecoDoProfissional = null;
+            window.ConectaEndereco.definirDica(
+                'professionalUnitHint',
+                'Informe o endereço acima para ordenar as unidades da mais próxima para a mais distante.'
+            );
+        });
+        sincronizarModoDeEndereco();
+    }
+
+    carregarUnidadesParaCadastro();
+
+    // A aba "Unidades" avisa quando a lista muda, para a combobox nao ficar
+    // desatualizada sem recarregar a pagina.
+    window.recarregarUnidadesDoCadastro = carregarUnidadesParaCadastro;
 
     const filterButton = document.getElementById('btnApplyUnitFilter');
     if (filterButton) {

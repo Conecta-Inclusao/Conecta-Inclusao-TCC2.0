@@ -32,21 +32,44 @@ function calculateAge(dateString) {
     return age;
 }
 
+/**
+ * Reflete no card o estado atual do responsavel. Com responsavel preenchido, o
+ * botao principal vira "Editar" e o de remover aparece; sem responsavel, so o
+ * convite para adicionar.
+ */
 function updateGuardianSummary() {
+    const cardTitle = document.getElementById('guardianCardTitle');
     const summaryText = document.getElementById('guardianSummaryText');
     const hiddenName = document.getElementById('nomeResponsavel');
+    const openModalBtn = document.getElementById('openGuardianModalButton');
+    const removeBtn = document.getElementById('removeGuardianButton');
 
     if (!guardianData) {
-        summaryText.textContent = 'Nenhum responsável adicionado.';
-        hiddenName.value = '';
+        if (cardTitle) cardTitle.textContent = 'Nenhum responsável adicionado';
+        if (summaryText) summaryText.textContent = 'Um responsável pode acompanhar agendamentos e mensagens do paciente.';
+        if (hiddenName) hiddenName.value = '';
+        if (removeBtn) removeBtn.hidden = true;
+        if (openModalBtn) {
+            openModalBtn.innerHTML = '<i class="ph ph-plus" aria-hidden="true"></i> Adicionar responsável';
+        }
         return;
     }
 
-    const parts = [guardianData.name];
-    if (guardianData.relationship) parts.push(`(${guardianData.relationship})`);
-    if (guardianData.email) parts.push(guardianData.email);
-    summaryText.textContent = parts.join(' ');
-    hiddenName.value = guardianData.name;
+    const detalhes = [];
+    if (guardianData.relationship) detalhes.push(guardianData.relationship);
+    if (guardianData.email) detalhes.push(guardianData.email);
+
+    if (cardTitle) cardTitle.textContent = guardianData.name;
+    if (summaryText) {
+        summaryText.textContent = detalhes.length
+            ? detalhes.join(' • ')
+            : 'Responsável pronto para ser cadastrado junto com o paciente.';
+    }
+    if (hiddenName) hiddenName.value = guardianData.name;
+    if (removeBtn) removeBtn.hidden = false;
+    if (openModalBtn) {
+        openModalBtn.innerHTML = '<i class="ph ph-pencil-simple" aria-hidden="true"></i> Editar responsável';
+    }
 }
 
 function updateGuardianSection() {
@@ -55,23 +78,41 @@ function updateGuardianSection() {
     const guardianAdvice = document.getElementById('guardianAdvice');
     const guardianSummary = document.getElementById('guardianSummary');
 
-    const openModalBtn = document.getElementById('openGuardianModalButton');
-
     if (age !== null && age < 18) {
         guardianAdvice.textContent = 'Paciente menor de idade exige responsável. Preencha os dados do responsável.';
-        guardianSummary.style.display = 'block';
-        if (openModalBtn) openModalBtn.innerText = 'Adicionar responsável';
+        guardianSummary.hidden = false;
     } else if (age !== null && age >= 18) {
         guardianAdvice.textContent = 'Paciente maior de idade. Adicionar responsável é opcional.';
-        guardianSummary.style.display = 'block';
-        if (openModalBtn) openModalBtn.innerText = 'Adicionar responsável (opcional)';
+        guardianSummary.hidden = false;
     } else {
         guardianAdvice.textContent = 'Preencha a data de nascimento para verificar se responsável é necessário.';
-        guardianSummary.style.display = 'none';
+        guardianSummary.hidden = true;
     }
 
     // Atualiza o texto do resumo conforme os dados do responsável
     updateGuardianSummary();
+}
+
+/**
+ * Remove o responsavel ja adicionado. Nada foi gravado no servidor ainda - o
+ * responsavel so e criado junto com o paciente, no submit -, entao aqui basta
+ * limpar o rascunho em memoria. Sem este botao, quem adicionava o responsavel
+ * errado nao tinha como desfazer sem recarregar a pagina inteira e perder todo
+ * o formulario.
+ */
+async function removeGuardian() {
+    if (!guardianData) return;
+
+    const confirmado = await showPopup(
+        `Remover ${guardianData.name} como responsável deste cadastro?`,
+        'confirm'
+    );
+
+    if (!confirmado) return;
+
+    guardianData = null;
+    updateGuardianSummary();
+    await showPopup('Responsável removido do cadastro.');
 }
 
 function validatePatientForm() {
@@ -181,7 +222,76 @@ function getSelectedGuardianPermissions() {
         .filter(id => Number.isInteger(id) && id > 0);
 }
 
-function openGuardianModal() {
+/* ---------------------------------------------------------------------------
+   Modal do responsavel: foco preso e saida so pelos botoes
+   ---------------------------------------------------------------------------
+   Duas mudancas andam juntas aqui.
+
+   1. Clicar fora nao fecha mais. O formulario do responsavel tem seis campos;
+      um clique distraido na area escura descartava tudo o que ja havia sido
+      digitado, sem aviso. Agora a saida e sempre explicita: Fechar, Cancelar ou
+      Salvar responsável.
+
+   2. O TAB circula dentro do modal. Antes o foco continuava passeando pelo
+      formulario do paciente atras do modal - quem navega por teclado ou usa
+      leitor de tela ficava editando campos que nem estavam visiveis, sem
+      perceber. Com o foco preso, o modal se comporta como uma tela propria.
+   --------------------------------------------------------------------------- */
+
+// Elemento que tinha o foco antes da abertura, para devolve-lo no fechamento.
+let elementoComFocoAnterior = null;
+
+const SELETOR_FOCAVEL = [
+    'a[href]',
+    'button:not([disabled])',
+    'input:not([disabled]):not([type="hidden"])',
+    'select:not([disabled])',
+    'textarea:not([disabled])',
+    '[tabindex]:not([tabindex="-1"])'
+].join(', ');
+
+function elementosFocaveisDoModal(modal) {
+    // offsetParent nulo = elemento escondido: nao deve receber foco.
+    return Array.from(modal.querySelectorAll(SELETOR_FOCAVEL))
+        .filter(elemento => elemento.offsetParent !== null || elemento === document.activeElement);
+}
+
+/**
+ * Mantem o TAB dentro do modal: no ultimo elemento, TAB volta para o primeiro;
+ * no primeiro, SHIFT+TAB vai para o ultimo.
+ */
+function prenderFocoNoModal(event) {
+    if (event.key !== 'Tab') return;
+
+    const modal = document.getElementById('guardianModal');
+    if (!modal || !modal.classList.contains('active')) return;
+
+    const focaveis = elementosFocaveisDoModal(modal);
+    if (!focaveis.length) return;
+
+    const primeiro = focaveis[0];
+    const ultimo = focaveis[focaveis.length - 1];
+
+    // Foco fora do modal (por exemplo, apos um clique no fundo): traz de volta.
+    if (!modal.contains(document.activeElement)) {
+        event.preventDefault();
+        primeiro.focus();
+        return;
+    }
+
+    if (event.shiftKey && document.activeElement === primeiro) {
+        event.preventDefault();
+        ultimo.focus();
+        return;
+    }
+
+    if (!event.shiftKey && document.activeElement === ultimo) {
+        event.preventDefault();
+        primeiro.focus();
+    }
+}
+
+async function openGuardianModal() {
     const modal = document.getElementById('guardianModal');
     if (!modal) return;
 
@@ -191,7 +301,11 @@ function openGuardianModal() {
     const guardianEmail = document.getElementById('guardianEmail');
     const guardianPassword = document.getElementById('guardianPassword');
 
-    loadGuardianPermissions();
+    elementoComFocoAnterior = document.activeElement;
+
+    modal.classList.add('active');
+    modal.setAttribute('aria-hidden', 'false');
+    document.addEventListener('keydown', prenderFocoNoModal, true);
 
     if (guardianData) {
         guardianName.value = guardianData.name;
@@ -207,12 +321,18 @@ function openGuardianModal() {
         guardianPassword.value = '';
     }
 
+    guardianName.focus();
+
+    // O `await` importa: loadGuardianPermissions() monta os checkboxes por
+    // fetch. Sem esperar, a marcacao abaixo rodava enquanto a grade ainda
+    // mostrava "Carregando permissões..." e nao havia checkbox nenhum para
+    // marcar - ao reabrir o modal, as permissoes ja escolhidas apareciam
+    // desmarcadas.
+    await loadGuardianPermissions();
+
     document.querySelectorAll('input[name="guardianPermission"]').forEach(input => {
         input.checked = Boolean(guardianData?.permissions?.includes(Number(input.value)));
     });
-
-    modal.classList.add('active');
-    modal.setAttribute('aria-hidden', 'false');
 }
 
 function closeGuardianModal() {
@@ -221,6 +341,15 @@ function closeGuardianModal() {
         modal.classList.remove('active');
         modal.setAttribute('aria-hidden', 'true');
     }
+
+    document.removeEventListener('keydown', prenderFocoNoModal, true);
+
+    // Devolve o foco a quem abriu o modal, em vez de joga-lo no inicio da
+    // pagina - quem usa teclado perderia a posicao no formulario.
+    if (elementoComFocoAnterior && document.contains(elementoComFocoAnterior)) {
+        elementoComFocoAnterior.focus();
+    }
+    elementoComFocoAnterior = null;
 }
 
 function validateGuardianModalForm() {
@@ -305,11 +434,25 @@ async function handlePatientRegistration(event) {
             cpf: cpfDigits,
             password: password,
             name: name,
-            email: email || null,
-            nomeResponsavel: guardianData?.name || null,
             tipoDeficiencia: tipoDeficiencia,
             dataNascimento: dataNascimento
         };
+
+        // O e-mail do paciente e opcional e so entra no corpo quando existe de
+        // verdade. Antes era enviado como `email: null`, e o schema do backend
+        // (z.string().email().optional(), que aceita string ou undefined - nunca
+        // null) recusava o cadastro inteiro com "Dados invalidos".
+        //
+        // Isso derrubava justamente o caso mais comum do cadastro com
+        // responsavel: crianca nao tem e-mail proprio, entao o campo ficava em
+        // branco, quem tinha e-mail era o responsavel. O backend tambem foi
+        // corrigido para tolerar null, mas nao ha razao para mandar o campo.
+        if (email) {
+            registrationData.email = email;
+        }
+
+        // `nomeResponsavel` foi removido do corpo: o nome do responsavel ja vai
+        // dentro de `responsavel.name`, e o backend descartava a chave solta.
 
         if (guardianData) {
             // As chaves seguem o schema do backend (name/relationship/...), nao a
@@ -361,6 +504,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     const guardianCpfInput = document.getElementById('guardianCPF');
 
+    const removeGuardianButton = document.getElementById('removeGuardianButton');
+
     if (cpfInput) applyMask(cpfInput, cpfMask);
     if (guardianCpfInput) applyMask(guardianCpfInput, cpfMask);
     if (form) form.addEventListener('submit', handlePatientRegistration);
@@ -368,12 +513,19 @@ document.addEventListener('DOMContentLoaded', function() {
     if (openModalButton) openModalButton.addEventListener('click', openGuardianModal);
     if (closeModalButton) closeModalButton.addEventListener('click', closeGuardianModal);
     if (cancelGuardianButton) cancelGuardianButton.addEventListener('click', closeGuardianModal);
+    if (removeGuardianButton) removeGuardianButton.addEventListener('click', removeGuardian);
     if (guardianForm) guardianForm.addEventListener('submit', handleGuardianModalSubmit);
 
+    // O listener que fechava o modal ao clicar no fundo foi removido de
+    // proposito: era o que fazia o formulario do responsavel se perder inteiro
+    // com um clique fora. A saida agora e so por Fechar, Cancelar ou Salvar.
     if (modal) {
-        modal.addEventListener('click', event => {
+        modal.addEventListener('mousedown', event => {
+            // Clique no fundo apenas devolve o foco para dentro do modal, para
+            // que o TAB continue circulando no lugar certo.
             if (event.target === modal) {
-                closeGuardianModal();
+                event.preventDefault();
+                document.getElementById('guardianName')?.focus();
             }
         });
     }

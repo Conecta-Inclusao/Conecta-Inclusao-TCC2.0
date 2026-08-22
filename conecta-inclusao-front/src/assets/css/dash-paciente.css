@@ -700,3 +700,53 @@ body {
         grid-template-columns: 1fr;
     }
 }
+
+/* ---------------------------------------------------------------------------
+   Aviso de adaptacao por deficiencia
+
+   Aparece no topo da Visao Geral quando acessibilidade.js aplica um perfil a
+   partir do tipo de deficiencia do cadastro. Usa `--success` (verde-agua do
+   sistema) e nao `--accent`: nao e uma acao a executar nem um alerta, e a
+   confirmacao de que algo foi feito a favor do paciente.
+   --------------------------------------------------------------------------- */
+.adaptation-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-4);
+    margin-bottom: var(--space-6);
+    padding: var(--space-4) var(--space-5);
+    border: 1px solid var(--success);
+    border-left: 4px solid var(--success);
+    border-radius: var(--radius-md);
+    background: var(--success-soft);
+}
+
+.adaptation-notice[hidden] {
+    display: none;
+}
+
+.adaptation-notice > i {
+    flex-shrink: 0;
+    margin-top: 0.15rem;
+    color: var(--success);
+    font-size: 1.5rem;
+}
+
+.adaptation-notice strong {
+    display: block;
+    margin-bottom: var(--space-1);
+    color: var(--text);
+    font-size: var(--fs-md);
+}
+
+.adaptation-notice p {
+    margin-bottom: var(--space-2);
+    color: var(--text-soft);
+    font-size: var(--fs-sm);
+    line-height: var(--lh-normal);
+}
+
+.adaptation-notice small {
+    color: var(--text-muted);
+    font-size: var(--fs-xs);
+}

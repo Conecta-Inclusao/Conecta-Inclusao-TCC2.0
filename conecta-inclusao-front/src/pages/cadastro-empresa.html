@@ -62,23 +62,53 @@
                     </div>
                     <div class="input-group">
                         <label for="companyBranch">Ramo de Atuação</label>
-                        <input type="text" id="companyBranch" placeholder="Ex: Indústria, Serviços, Comércio" required>
+                        <!-- Placeholder com termos de saude: o campo descreve a
+                             area de atuacao de uma CLINICA, nao de uma empresa
+                             qualquer. "Indústria, Serviços, Comércio" induzia ao
+                             preenchimento errado. -->
+                        <input type="text" id="companyBranch" placeholder="Ex: Clínica Pediátrica, Reabilitação, Fonoaudiologia" required>
                     </div>
-                    <div class="input-group full-width">
-                        <label for="address">Endereço</label>
-                        <input type="text" id="address" placeholder="Rua, número, complemento" required>
+
+                    <!-- O CEP vem antes do restante do endereco porque e ele que
+                         preenche os demais campos: pedir a rua primeiro faz o
+                         usuario digitar o que o proprio formulario ia completar. -->
+                    <div class="input-group">
+                        <label for="zip">CEP</label>
+                        <input type="text" id="zip" placeholder="00000-000" maxlength="9" inputmode="numeric" autocomplete="postal-code" required>
+                        <small class="field-hint" id="zipHint">Digite o CEP para preencher o endereço automaticamente.</small>
+                    </div>
+                    <div class="input-group">
+                        <label for="street">Endereço (rua/avenida)</label>
+                        <input type="text" id="street" placeholder="Rua, avenida ou logradouro" autocomplete="address-line1" required>
                     </div>
                     <div class="input-group">
                         <label for="city">Cidade</label>
-                        <input type="text" id="city" placeholder="Cidade" required>
+                        <input type="text" id="city" placeholder="Cidade" autocomplete="address-level2" required>
                     </div>
                     <div class="input-group">
                         <label for="state">Estado</label>
-                        <input type="text" id="state" placeholder="UF" maxlength="2" required>
+                        <input type="text" id="state" placeholder="UF" maxlength="2" autocomplete="address-level1" required>
+                    </div>
+                    <div class="input-group full-width">
+                        <label class="switch-field" for="hasStreetNumber">
+                            <span class="switch-field-text">
+                                <strong>O endereço possui número?</strong>
+                                <small>Desligue para endereços sem número (registrado como “s/n”).</small>
+                            </span>
+                            <span class="switch-control">
+                                <input type="checkbox" id="hasStreetNumber" checked
+                                       aria-controls="streetNumberField">
+                                <span class="switch-track" aria-hidden="true"></span>
+                            </span>
+                        </label>
+                    </div>
+                    <div class="input-group" id="streetNumberField" data-switch-target>
+                        <label for="streetNumber">Número</label>
+                        <input type="text" id="streetNumber" placeholder="Ex: 1250" maxlength="10" inputmode="numeric" autocomplete="address-line2">
                     </div>
                     <div class="input-group">
-                        <label for="zip">CEP</label>
-                        <input type="text" id="zip" placeholder="00000-000" maxlength="9" required>
+                        <label for="addressComplement">Complemento <span class="optional-tag">(opcional)</span></label>
+                        <input type="text" id="addressComplement" placeholder="Sala, bloco, andar" maxlength="60">
                     </div>
                     <div class="input-group full-width">
                         <label for="password">Senha</label>
