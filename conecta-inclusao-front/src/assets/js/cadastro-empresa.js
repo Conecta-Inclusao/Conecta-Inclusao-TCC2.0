@@ -195,8 +195,13 @@ function validarFormulario(dados) {
         return 'Informe o número do endereço ou desligue a opção "O endereço possui número?".';
     }
 
-    if (dados.cnpj.replace(/\D/g, '').length !== 14) {
-        return 'Insira um CNPJ válido.';
+    // Confere o digito verificador, nao so o tamanho. Antes, um CNPJ digitado
+    // errado passava daqui e so era recusado pelo servidor, que respondia
+    // "Dados invalidos" sem dizer qual campo estava errado.
+    if (!validarCNPJ(dados.cnpj)) {
+        return dados.cnpj.replace(/\D/g, '').length !== 14
+            ? 'O CNPJ deve ter 14 dígitos.'
+            : 'CNPJ inválido: confira os números, o dígito verificador não bate.';
     }
 
     if (dados.zip.replace(/\D/g, '').length !== 8) {
@@ -284,7 +289,20 @@ function handleCompanyRegistration(event) {
             return;
         }
 
-        showPopup(result.data.message || 'Erro ao cadastrar. Tente novamente.');
+        // O servidor devolve os problemas de schema em `errors`, campo a campo.
+        // Mostrar so `message` deixava a tela repetindo "Dados invalidos" sem
+        // dizer o que estava errado - a informacao util so aparecia para quem
+        // abrisse o console do navegador.
+        const detalhe = Array.isArray(result.data.errors) && result.data.errors.length
+            ? result.data.errors
+                .map((problema) => {
+                    const campo = Array.isArray(problema.path) ? problema.path.join('.') : '';
+                    return campo ? `${campo}: ${problema.message}` : problema.message;
+                })
+                .join(' | ')
+            : '';
+
+        showPopup(detalhe || result.data.message || 'Erro ao cadastrar. Tente novamente.');
         submitButton.disabled = false;
         submitButton.innerText = 'Criar Conta';
     });

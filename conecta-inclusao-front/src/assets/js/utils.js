@@ -426,6 +426,41 @@ if (document.readyState === 'loading') {
    conteudo sem precisar publica-lo dentro da pagina.
    --------------------------------------------------------------------------- */
 
+/**
+ * Valida CNPJ com digito verificador.
+ *
+ * O front so tinha validarCPF; o CNPJ era conferido apenas pelo tamanho (14
+ * digitos). Resultado: um CNPJ digitado errado so era recusado la no servidor,
+ * e a tela mostrava "Dados invalidos" sem dizer qual campo.
+ *
+ * Os pesos sao tabelas explicitas, e nao formula: a versao do backend tentava
+ * gerar essa sequencia com aritmetica e errava - a serie reinicia em 9, nao em
+ * 5, e por isso ela recusava todo CNPJ valido.
+ */
+function validarCNPJ(cnpj) {
+    const digitos = String(cnpj || '').replace(/\D/g, '');
+
+    if (digitos.length !== 14) return false;
+    // Sequencia repetida (00000000000000, 11111111111111...) passa na conta do
+    // digito verificador, mas nao e CNPJ.
+    if (/^(\d)\1+$/.test(digitos)) return false;
+
+    const calcularDigito = (pesos) => {
+        const soma = pesos.reduce(
+            (total, peso, indice) => total + Number(digitos[indice]) * peso,
+            0
+        );
+        const resto = soma % 11;
+        return resto < 2 ? 0 : 11 - resto;
+    };
+
+    if (calcularDigito([5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]) !== Number(digitos[12])) {
+        return false;
+    }
+
+    return calcularDigito([6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]) === Number(digitos[13]);
+}
+
 // Função para validar CPF
 function validarCPF(cpf) {
     // Remove caracteres não numéricos
