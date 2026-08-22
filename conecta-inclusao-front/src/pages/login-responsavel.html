@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#1a56b8">
+    <title>Entrar como responsável | Conecta Inclusao</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <link rel="stylesheet" href="../assets/css/theme.css">
+    <link rel="stylesheet" href="../assets/css/auth.css">
+    <link rel="stylesheet" href="../assets/css/login-paciente.css">
+    <link rel="stylesheet" href="../assets/css/responsive.css">
+    <script src="../assets/js/acessibilidade.js"></script>
+</head>
+<body class="auth-page">
+    <a class="skip-link" href="#conteudo">Pular para o formulário</a>
+
+    <div class="auth-layout">
+        <aside class="auth-aside on-dark">
+            <a class="auth-back" href="lndex.html">
+                <i class="ph ph-arrow-left" aria-hidden="true"></i> Voltar para o início
+            </a>
+
+            <div class="auth-brand">
+                <span class="brand-mark" aria-hidden="true"><i class="ph ph-heartbeat"></i></span>
+                Conecta Inclusão
+            </div>
+
+            <h2>Acompanhe quem você cuida, com o seu próprio acesso</h2>
+            <p class="auth-aside-text">
+                Entre com o seu CPF de responsável para acompanhar as consultas
+                de quem você é responsável. O paciente define o que você pode ver
+                e fazer.
+            </p>
+
+            <ul class="auth-aside-list">
+                <li><i class="ph ph-user-switch" aria-hidden="true"></i> Um acesso só, mesmo cuidando de mais de uma pessoa</li>
+                <li><i class="ph ph-calendar-check" aria-hidden="true"></i> Consultas marcadas sempre à vista</li>
+                <li><i class="ph ph-shield-check" aria-hidden="true"></i> Você vê apenas o que foi autorizado</li>
+            </ul>
+        </aside>
+
+        <main class="auth-main" id="conteudo">
+            <div class="login-container">
+                <div class="login-header">
+                    <div class="patient-icon" aria-hidden="true">
+                        <i class="ph ph-users-three"></i>
+                    </div>
+                    <h1>Área do Responsável</h1>
+                    <p>Acompanhe as consultas de quem você cuida.</p>
+                </div>
+
+                <form id="loginFormResponsavel">
+                    <div class="input-group">
+                        <label for="identifier">CPF ou e-mail</label>
+                        <!-- O login aceita os dois: o CPF foi adicionado ao
+                             cadastro do responsavel, mas quem se cadastrou antes
+                             disso so tem e-mail. -->
+                        <input type="text" id="identifier" autocomplete="username"
+                               placeholder="000.000.000-00 ou email@exemplo.com" required>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="password">Senha</label>
+                        <input type="password" id="password" autocomplete="current-password"
+                               placeholder="Sua senha" required>
+                    </div>
+
+                    <button type="submit" class="btn-login">Acessar</button>
+
+                    <div class="login-footer">
+                        <p>É o paciente? <a href="login-paciente.html">Entre por aqui</a></p>
+                        <p class="auth-note">
+                            O cadastro de responsável é feito pelo paciente, na aba
+                            Responsáveis do portal dele.
+                        </p>
+                    </div>
+                </form>
+            </div>
+        </main>
+    </div>
+
+    <script src="../assets/js/config.js"></script>
+    <script src="../assets/js/session.js"></script>
+    <script src="../assets/js/utils.js"></script>
+    <script src="../assets/js/script-responsavel.js"></script>
+</body>
+</html>

@@ -76,21 +76,6 @@
                     </select>
                 </div>
 
-                <div class="form-group">
-                    <label for="planoAtual">Plano de Saúde <span class="required">*</span></label>
-                    <select id="planoAtual" name="planoAtual" required>
-                        <option value="">Selecione o plano atual...</option>
-                        <option value="Particular">Particular</option>
-                        <option value="SUS">SUS</option>
-                        <option value="Unimed">Unimed</option>
-                        <option value="Amil">Amil</option>
-                        <option value="Bradesco Saúde">Bradesco Saúde</option>
-                        <option value="SulAmérica">SulAmérica</option>
-                        <option value="NotreDame">NotreDame</option>
-                        <option value="Outro">Outro</option>
-                    </select>
-                </div>
-
                 <h3 class="section-title">Informações do Responsável</h3>
 
                 <div class="form-group">
@@ -135,14 +120,31 @@
                         </div>
                         <button type="button" id="closeGuardianModalButton" class="btn btn-cancel modal-close-btn">Fechar</button>
                     </div>
+                    <!-- Mesmos campos do modal da aba "Responsáveis" do dashboard:
+                         os dois caminhos gravam o mesmo responsavel e passam pelo
+                         mesmo schema de validacao no backend. -->
                     <form id="guardianModalForm">
                         <div class="form-group">
                             <label for="guardianName">Nome completo</label>
                             <input type="text" id="guardianName" placeholder="Nome do responsável">
                         </div>
                         <div class="form-group">
+                            <label for="guardianCPF">CPF</label>
+                            <input type="text" id="guardianCPF" inputmode="numeric" maxlength="14" placeholder="000.000.000-00">
+                        </div>
+                        <div class="form-group">
                             <label for="guardianRelationship">Parentesco</label>
-                            <input type="text" id="guardianRelationship" placeholder="Ex: Mãe, Pai, Tutor">
+                            <select id="guardianRelationship">
+                                <option value="">Selecione...</option>
+                                <option value="Mãe">Mãe</option>
+                                <option value="Pai">Pai</option>
+                                <option value="Avó">Avó</option>
+                                <option value="Avô">Avô</option>
+                                <option value="Irmão">Irmão</option>
+                                <option value="Irmã">Irmã</option>
+                                <option value="Tutor Legal">Tutor Legal</option>
+                                <option value="Outro">Outro</option>
+                            </select>
                         </div>
                         <div class="form-group">
                             <label for="guardianEmail">E-mail</label>
@@ -150,7 +152,15 @@
                         </div>
                         <div class="form-group">
                             <label for="guardianPassword">Senha de acesso</label>
-                            <input type="password" id="guardianPassword" placeholder="Senha para acesso">
+                            <input type="password" id="guardianPassword" data-password-guidance="true" placeholder="Senha forte (8+ caracteres, maiúscula, minúscula, número e especial)">
+                        </div>
+                        <div class="form-group">
+                            <label>Permissões</label>
+                            <!-- Preenchido por GET /auth/permissoes (rota publica):
+                                 os values sao ids da tabela `permissoes`. -->
+                            <div class="permissions-grid" id="guardianPermissionsGrid">
+                                <span class="loading-inline">Carregando permissões...</span>
+                            </div>
                         </div>
                         <div class="form-actions" style="justify-content:flex-end; gap:12px; margin-top:18px;">
                             <button type="button" class="btn btn-cancel" id="cancelGuardianButton">Cancelar</button>

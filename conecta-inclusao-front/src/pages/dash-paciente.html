@@ -40,11 +40,10 @@
         </aside>
 
         <main class="main-content" id="conteudo">
-            <header class="top-bar">
-                <div class="page-title">
-                    <h1>Portal do Paciente</h1>
-                    <p>Acompanhe consultas, encontre atendimento e mantenha sua rotina de saúde organizada.</p>
-                </div>
+            <!-- Sem bloco .page-title: o modificador abaixo encosta o perfil na
+                 direita, ja que o space-between do .top-bar so funciona com dois
+                 filhos. -->
+            <header class="top-bar top-bar--titleless">
                 <div class="user-profile">
                     <div class="user-info">
                         <strong id="patientHeaderName">Carregando...</strong>
@@ -88,41 +87,20 @@
                     </div>
                 </div>
 
-                <article class="summary-card">
-                    <div class="section-header">
-                        <div>
-                            <h3>Resumo do cuidado</h3>
-                            <p>Informações principais para o seu acompanhamento no portal.</p>
-                        </div>
-                        <button class="btn-primary" type="button" id="btnOverviewNewAppointment">
-                            <i class="ph ph-plus"></i> Novo Agendamento
-                        </button>
-                    </div>
-                    <div class="summary-body">
-                        <div class="summary-item">
-                            <span>Hospital frequente</span>
-                            <strong id="favoriteHospital">--</strong>
-                        </div>
-                        <div class="summary-item">
-                            <span>Plano atual</span>
-                            <strong id="favoritePlan">--</strong>
-                        </div>
-                        <div class="summary-item">
-                            <span>Status cadastral</span>
-                            <strong id="registrationStatus">--</strong>
-                        </div>
-                    </div>
-                </article>
-
                 <section class="table-card">
                     <div class="section-header">
                         <div>
                             <h3>Próximos agendamentos</h3>
                             <p>Uma visão resumida das suas consultas já marcadas.</p>
                         </div>
-                        <button class="btn-secondary" type="button" id="btnGoAppointments">
-                            Ver todos
-                        </button>
+                        <div class="section-header-actions">
+                            <button class="btn-secondary" type="button" id="btnGoAppointments">
+                                Ver todos
+                            </button>
+                            <button class="btn-primary" type="button" id="btnOverviewNewAppointment">
+                                <i class="ph ph-plus"></i> Novo Agendamento
+                            </button>
+                        </div>
                     </div>
                     <div class="table-scroll">
                         <table class="appointments-table">
@@ -169,42 +147,33 @@
                 <div class="section-header">
                     <div>
                         <h2>Buscar Atendimento</h2>
-                        <p>Filtre por especialidade, unidade ou plano para encontrar a melhor opção para você.</p>
+                        <p>Filtre por especialidade ou unidade, ou busque pelo nome do profissional.</p>
                     </div>
                 </div>
 
                 <article class="filter-card">
                     <div class="filter-grid">
+                        <!-- As opcoes destes selects vem de /auth/doctors/filters.
+                             A lista fixa que existia aqui nao correspondia aos
+                             dados reais do banco. O filtro de Plano saiu junto
+                             com o campo de plano de saude do cadastro. -->
                         <div class="input-group">
                             <label for="searchSpecialty"><i class="ph ph-stethoscope"></i> Especialidade</label>
                             <select id="searchSpecialty">
                                 <option value="">Todas as áreas</option>
-                                <option>Cardiologia</option>
-                                <option>Pediatria</option>
-                                <option>Ortopedia</option>
-                                <option>Clinico Geral</option>
                             </select>
                         </div>
 
                         <div class="input-group">
                             <label for="searchHospital"><i class="ph ph-hospital"></i> Hospital / Unidade</label>
                             <select id="searchHospital">
-                                <option value="">Todos os hospitais</option>
-                                <option>Hospital Central</option>
-                                <option>Unidade Botafogo</option>
-                                <option>Clinica Santa Maria</option>
+                                <option value="">Todas as unidades</option>
                             </select>
                         </div>
 
                         <div class="input-group">
-                            <label for="searchPlan"><i class="ph ph-cardholder"></i> Plano de Saúde</label>
-                            <select id="searchPlan">
-                                <option value="">Todos os planos / Particular</option>
-                                <option>Unimed</option>
-                                <option>Amil</option>
-                                <option>Bradesco Saude</option>
-                                <option>SulAmerica</option>
-                            </select>
+                            <label for="searchTerm"><i class="ph ph-magnifying-glass"></i> Buscar por nome</label>
+                            <input type="search" id="searchTerm" placeholder="Nome, especialidade ou unidade">
                         </div>
 
                         <button class="btn-primary btn-search-filter" type="button" onclick="filterResults()">
@@ -216,8 +185,8 @@
                 <section class="table-card">
                     <div class="section-header">
                         <div>
-                            <h3>Especialidades Disponíveis</h3>
-                            <p>Profissionais e especialidades cadastrados no sistema.</p>
+                            <h3 id="searchResultsTitle">Especialidades Disponíveis</h3>
+                            <p id="searchResultsSubtitle">Profissionais e especialidades cadastrados no sistema.</p>
                         </div>
                     </div>
                     <div id="suggestionGrid" class="suggestion-grid"></div>
@@ -296,45 +265,98 @@
                 </div>
 
                 <div class="profile-grid">
-                    <article class="info-card">
+                    <!-- Antes esta aba era so leitura: cada valor era um <strong>
+                         sem formulario por tras. Agora e um formulario de fato.
+                         CPF e Responsavel seguem em leitura: o CPF e o
+                         identificador de login, e o responsavel se gerencia na
+                         aba Responsaveis. O topico "Plano" saiu junto com o
+                         campo de plano de saude do cadastro. -->
+                    <form class="info-card" id="formPatientProfile">
                         <h3>Dados pessoais</h3>
-                        <div class="profile-list">
-                            <div>
-                                <span>Paciente</span>
-                                <strong id="profilePatientName">Paciente</strong>
-                            </div>
+
+                        <div class="profile-readonly">
                             <div>
                                 <span>CPF</span>
                                 <strong id="profilePatientCPF">--</strong>
-                            </div>
-                            <div>
-                                <span>Data de nascimento</span>
-                                <strong id="profileBirthDate">01/01/2000</strong>
                             </div>
                             <div>
                                 <span>Responsável</span>
                                 <strong id="profilePatientResponsible">--</strong>
                             </div>
                         </div>
-                    </article>
 
-                    <article class="info-card">
-                        <h3>Saúde e atendimento</h3>
-                        <div class="profile-list">
-                            <div>
-                                <span>Tipo de deficiência</span>
-                                <strong id="profileDisabilityType">Deficiência Motora</strong>
-                            </div>
-                            <div>
-                                <span>Plano</span>
-                                <strong id="profilePlan">Unimed</strong>
-                            </div>
-                            <div>
-                                <span>Unidade de preferência</span>
-                                <strong id="profilePreferredUnit">Hospital Central</strong>
-                            </div>
+                        <div class="input-group">
+                            <label for="profileName">Nome completo</label>
+                            <input type="text" id="profileName" name="name" required maxlength="100">
                         </div>
-                    </article>
+
+                        <div class="input-group">
+                            <label for="profileEmail">E-mail</label>
+                            <input type="email" id="profileEmail" name="email" placeholder="email@exemplo.com">
+                        </div>
+
+                        <div class="input-group">
+                            <label for="profilePhone">Telefone</label>
+                            <input type="tel" id="profilePhone" name="telefone" inputmode="numeric" maxlength="15" placeholder="(00) 00000-0000">
+                        </div>
+
+                        <div class="input-group">
+                            <label for="profileBirthDate">Data de nascimento</label>
+                            <input type="date" id="profileBirthDate" name="dataNascimento">
+                        </div>
+
+                        <div class="input-group">
+                            <label for="profileDisabilityType">Tipo de deficiência</label>
+                            <select id="profileDisabilityType" name="tipoDeficiencia">
+                                <option value="">Não informar</option>
+                                <option value="Deficiência Auditiva">Deficiência Auditiva</option>
+                                <option value="Deficiência Visual">Deficiência Visual</option>
+                                <option value="Deficiência Intelectual">Deficiência Intelectual</option>
+                                <option value="Deficiência Motora">Deficiência Motora</option>
+                                <option value="Deficiência Múltipla">Deficiência Múltipla</option>
+                                <option value="Transtorno do Espectro Autista">Transtorno do Espectro Autista</option>
+                                <option value="Outra">Outra</option>
+                            </select>
+                        </div>
+
+                        <div class="input-group">
+                            <label for="profilePreferredUnit">Unidade de preferência</label>
+                            <!-- Opcoes vindas de /auth/doctors/filters, as mesmas
+                                 unidades usadas na busca de atendimento. -->
+                            <select id="profilePreferredUnit" name="unidadePreferencia">
+                                <option value="">Sem preferência</option>
+                            </select>
+                        </div>
+
+                        <div class="profile-form-actions">
+                            <button type="button" class="btn-secondary" id="btnResetProfile">Desfazer</button>
+                            <button type="submit" class="btn-primary">Salvar alterações</button>
+                        </div>
+                    </form>
+
+                    <form class="info-card" id="formChangePassword">
+                        <h3>Alterar senha</h3>
+                        <p class="info-card-hint">Esqueceu a senha? Saia da conta e use "Esqueci minha senha" na tela de login.</p>
+
+                        <div class="input-group">
+                            <label for="currentPassword">Senha atual</label>
+                            <input type="password" id="currentPassword" required autocomplete="current-password">
+                        </div>
+
+                        <div class="input-group">
+                            <label for="newPassword">Nova senha</label>
+                            <input type="password" id="newPassword" data-password-guidance="true" required autocomplete="new-password" placeholder="8+ caracteres, maiúscula, minúscula, número e especial">
+                        </div>
+
+                        <div class="input-group">
+                            <label for="confirmNewPassword">Confirmar nova senha</label>
+                            <input type="password" id="confirmNewPassword" required autocomplete="new-password">
+                        </div>
+
+                        <div class="profile-form-actions">
+                            <button type="submit" class="btn-primary">Alterar senha</button>
+                        </div>
+                    </form>
                 </div>
             </section>
         </main>
@@ -401,26 +423,37 @@
                     <input type="text" id="guardianName" required placeholder="Digite o nome do responsável">
                 </div>
                 <div class="input-group">
+                    <label for="guardianCPF">CPF</label>
+                    <!-- O CPF identifica o responsavel: e por ele que ele faz
+                         login e que o sistema reconhece a mesma pessoa quando ela
+                         acompanha mais de um paciente. -->
+                    <input type="text" id="guardianCPF" required inputmode="numeric" maxlength="14" placeholder="000.000.000-00">
+                </div>
+                <div class="input-group">
                     <label for="guardianRelationship">Parentesco/Relação</label>
+                    <!-- Havia duas opcoes "Avó" identicas (mesmo value): a segunda
+                         era o avo. Os values passaram a ser o proprio rotulo, que
+                         e o texto gravado em paciente_responsavel.parentesco e
+                         exibido de volta no card. -->
                     <select id="guardianRelationship" required>
                         <option value="">Selecione...</option>
-                        <option value="Mae">Mãe</option>
+                        <option value="Mãe">Mãe</option>
                         <option value="Pai">Pai</option>
-                        <option value="Avo">Avó</option>
-                        <option value="Avo">Avó</option>
-                        <option value="Irmao">Irmão</option>
-                        <option value="Irma">Irmã</option>
-                        <option value="Tutor">Tutor Legal</option>
+                        <option value="Avó">Avó</option>
+                        <option value="Avô">Avô</option>
+                        <option value="Irmão">Irmão</option>
+                        <option value="Irmã">Irmã</option>
+                        <option value="Tutor Legal">Tutor Legal</option>
                         <option value="Outro">Outro</option>
                     </select>
                 </div>
                 <div class="input-group">
-                    <label for="guardianPassword">Senha de acesso</label>
-                    <input type="password" id="guardianPassword" required placeholder="Digite uma senha de acesso">
-                </div>
-                <div class="input-group">
                     <label for="guardianEmail">E-mail</label>
                     <input type="email" id="guardianEmail" required placeholder="email@exemplo.com">
+                </div>
+                <div class="input-group">
+                    <label for="guardianPassword">Senha de acesso</label>
+                    <input type="password" id="guardianPassword" data-password-guidance="true" required placeholder="Senha forte (8+ caracteres, maiúscula, minúscula, número e especial)">
                 </div>
                 <div class="input-group">
                     <label for="guardianPermissions">Permissões</label>

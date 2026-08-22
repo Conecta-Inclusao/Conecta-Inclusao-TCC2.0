@@ -1,4 +1,4 @@
-import { getUserProfile, getPatientAppointments, getAvailableDoctors } from './api.js';
+import { getUserProfile, getAvailableDoctors } from './api.js';
 import {
     createChatClient,
     fetchContacts,
@@ -19,9 +19,11 @@ const CHATBOT_CONTACT = {
 };
 const CHATBOT_QUICK_ACTIONS = [
     'Quero agendar uma consulta',
-    'Quais sao meus proximos agendamentos?',
+    'Qual e a minha proxima consulta?',
     'O que levar para a consulta?',
-    'Como desmarcar uma consulta?'
+    'Como desmarcar uma consulta?',
+    'Preciso de acessibilidade no atendimento',
+    'Como cadastro um responsavel?'
 ];
 let activeChatContactKey = CHATBOT_CONTACT.key;
 let chatbotScheduleDraft = null;
@@ -48,6 +50,13 @@ let erroHistoricoConversa = '';
 let chatClient = null;
 let patientAppointments = [];
 let patientAppointmentsLoaded = false;
+// Responsaveis como vieram do servidor. As acoes de editar/remover trabalham por
+// id a partir daqui, e nao mais pelo indice de um array do localStorage.
+let patientGuardians = [];
+// Resultado da aba "Buscar Atendimento". searchApplied distingue "ainda nao
+// buscou" de "buscou e nao achou nada".
+let searchResults = [];
+let searchApplied = false;
 let availableProfessionals = [];
 let appointmentsMonthFilter = '';
 let user = null;
@@ -68,26 +77,14 @@ async function loadUserInfo() {
             user = {};
         }
 
-        const patientId = user?.id || sessionStorage.getItem('patientId');
-        if (patientId) {
-            try {
-                const appointmentsResult = await getPatientAppointments(patientId);
-                const appointmentsData = Array.isArray(appointmentsResult.data)
-                    ? appointmentsResult.data
-                    : (appointmentsResult.data?.data && Array.isArray(appointmentsResult.data.data) ? appointmentsResult.data.data : []);
-
-                if (appointmentsResult.ok && Array.isArray(appointmentsData)) {
-                    patientAppointments = appointmentsData;
-                } else {
-                    console.error('Falha ao carregar agendamentos do paciente:', appointmentsResult);
-                    patientAppointments = [];
-                }
-            } catch (error) {
-                console.error('Erro ao buscar agendamentos do paciente:', error);
-                patientAppointments = [];
-            }
-            patientAppointmentsLoaded = true;
-        }
+        // Antes isto chamava getPatientAppointments() (rota /api/agendamentos),
+        // que devolve as colunas cruas do banco: data_agendamento,
+        // profissional_nome, profissional_especialidade. Só que todo o resto do
+        // dashboard le .date/.doctor/.specialty/.hospital - dai o "undefined" nas
+        // tabelas e o traco no lugar da data. fetchPatientAppointments() usa
+        // /auth/patient/appointments (ja em camelCase, sem canceladas e ordenado
+        // da mais proxima para a mais distante) e normaliza para esses nomes.
+        await fetchPatientAppointments();
 
         await fetchAvailableProfessionals();
         renderGuardians();
@@ -135,21 +132,16 @@ function updatePatientAvatar(name) {
 function loadPatientData() {
     const patientHeaderName = document.getElementById('patientHeaderName');
     const patientHeaderSubtitle = document.getElementById('patientHeaderSubtitle');
-    const profilePatientName = document.getElementById('profilePatientName');
     const profilePatientCPF = document.getElementById('profilePatientCPF');
     const profileBirthDate = document.getElementById('profileBirthDate');
     const profilePatientResponsible = document.getElementById('profilePatientResponsible');
     const profileDisabilityType = document.getElementById('profileDisabilityType');
-    const profilePlan = document.getElementById('profilePlan');
     const profilePreferredUnit = document.getElementById('profilePreferredUnit');
+    const profileName = document.getElementById('profileName');
+    const profileEmail = document.getElementById('profileEmail');
+    const profilePhone = document.getElementById('profilePhone');
 
     const name = user?.name || 'Paciente';
-    const cpf = user?.cpf || '--';
-    const birthDate = user?.data_nascimento ? formatDate(user.data_nascimento) : '--';
-    const responsible = user?.responsible || sessionStorage.getItem('patientResponsible') || '--';
-    const disabilityType = user?.tipo_deficiencia || '--';
-    const plan = user?.plan || '--';
-    const preferredUnit = user?.unidade || user?.unit || '--';
 
     if (patientHeaderName) {
         patientHeaderName.textContent = name;
@@ -162,26 +154,198 @@ function loadPatientData() {
     }
 
     updatePatientAvatar(name);
-    if (profilePatientName) {
-        profilePatientName.textContent = name;
-    }
+
+    // Campos so de leitura.
     if (profilePatientCPF) {
-        profilePatientCPF.textContent = cpf;
+        profilePatientCPF.textContent = formatCPF(user?.cpf);
     }
-    if (profileBirthDate) {
-        profileBirthDate.textContent = birthDate;
-    }
+    // O nome do responsavel agora vem de /auth/profile (JOIN com
+    // paciente_responsavel). Antes o codigo lia user.responsible, campo que a
+    // API nunca devolveu, e caia num sessionStorage que ninguem preenchia - por
+    // isso o traco fixo.
     if (profilePatientResponsible) {
-        profilePatientResponsible.textContent = responsible;
+        profilePatientResponsible.textContent = user?.responsible || 'Nenhum responsável cadastrado';
     }
-    if (profileDisabilityType) {
-        profileDisabilityType.textContent = disabilityType;
-    }
-    if (profilePlan) {
-        profilePlan.textContent = plan;
-    }
+
+    // Campos editaveis.
+    if (profileName) profileName.value = user?.name || '';
+    if (profileEmail) profileEmail.value = user?.email || '';
+    if (profilePhone) profilePhone.value = user?.telefone || '';
+    // O input date exige exatamente YYYY-MM-DD, formato em que a API ja entrega.
+    if (profileBirthDate) profileBirthDate.value = user?.data_nascimento || '';
+    if (profileDisabilityType) profileDisabilityType.value = user?.tipo_deficiencia || '';
+
     if (profilePreferredUnit) {
-        profilePreferredUnit.textContent = preferredUnit;
+        garantirOpcaoDeUnidade(profilePreferredUnit, user?.unidade_preferencia);
+        profilePreferredUnit.value = user?.unidade_preferencia || '';
+    }
+}
+
+/**
+ * O select de unidade e preenchido por /auth/doctors/filters, que so lista
+ * unidades com profissional ativo. Se a unidade salva do paciente nao estiver
+ * mais nessa lista, o select cairia para vazio e um simples "salvar" apagaria a
+ * preferencia sem o paciente perceber.
+ */
+function garantirOpcaoDeUnidade(select, unidade) {
+    if (!select || !unidade) return;
+    const jaExiste = Array.from(select.options).some(opcao => opcao.value === unidade);
+    if (jaExiste) return;
+
+    const option = document.createElement('option');
+    option.value = unidade;
+    option.textContent = unidade;
+    select.appendChild(option);
+}
+
+/**
+ * Envia apenas o que mudou em relacao ao perfil carregado. Mandar o objeto
+ * inteiro faria um campo intocado sobrescrever alteracao feita em outro lugar.
+ */
+async function handleProfileSubmit(event) {
+    event.preventDefault();
+
+    const form = event.currentTarget;
+    const submitButton = form.querySelector('button[type="submit"]');
+
+    const atual = {
+        name: user?.name || '',
+        email: user?.email || '',
+        telefone: user?.telefone || '',
+        dataNascimento: user?.data_nascimento || '',
+        tipoDeficiencia: user?.tipo_deficiencia || '',
+        unidadePreferencia: user?.unidade_preferencia || ''
+    };
+
+    const novo = {
+        name: document.getElementById('profileName')?.value.trim() || '',
+        email: document.getElementById('profileEmail')?.value.trim() || '',
+        telefone: document.getElementById('profilePhone')?.value.trim() || '',
+        dataNascimento: document.getElementById('profileBirthDate')?.value || '',
+        tipoDeficiencia: document.getElementById('profileDisabilityType')?.value || '',
+        unidadePreferencia: document.getElementById('profilePreferredUnit')?.value || ''
+    };
+
+    if (!novo.name || novo.name.length < 3) {
+        await showPopup('Informe seu nome completo (mínimo 3 caracteres).');
+        return;
+    }
+
+    const alteracoes = {};
+    Object.keys(novo).forEach(campo => {
+        if (novo[campo] !== atual[campo]) alteracoes[campo] = novo[campo];
+    });
+
+    if (!Object.keys(alteracoes).length) {
+        await showPopup('Nenhuma alteração para salvar.');
+        return;
+    }
+
+    const token = window.ConectaSession.getToken();
+    if (!token) {
+        await showPopup('Sessão expirada. Faça login novamente.');
+        return;
+    }
+
+    if (submitButton) submitButton.disabled = true;
+
+    try {
+        const response = await fetch(`${window.APP_CONFIG?.AUTH_API_URL || '/auth'}/profile`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify(alteracoes)
+        });
+
+        const body = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            const detalhe = Array.isArray(body.errors) && body.errors.length
+                ? body.errors.map(issue => issue.message).join(' ')
+                : '';
+            await showPopup(detalhe || body.message || 'Não foi possível salvar o perfil.');
+            return;
+        }
+
+        // A rota devolve o perfil ja atualizado, entao nao e preciso recarregar.
+        user = body;
+        if (user?.name) sessionStorage.setItem('patientName', String(user.name));
+        loadPatientData();
+        await showPopup('Perfil atualizado com sucesso.');
+    } catch (error) {
+        console.error('Erro ao salvar perfil:', error);
+        await showPopup('Erro de conexão ao salvar o perfil.');
+    } finally {
+        if (submitButton) submitButton.disabled = false;
+    }
+}
+
+async function handleChangePasswordSubmit(event) {
+    event.preventDefault();
+
+    const form = event.currentTarget;
+    const submitButton = form.querySelector('button[type="submit"]');
+    const currentPassword = document.getElementById('currentPassword')?.value || '';
+    const newPassword = document.getElementById('newPassword')?.value || '';
+    const confirmNewPassword = document.getElementById('confirmNewPassword')?.value || '';
+
+    if (!currentPassword) {
+        await showPopup('Informe sua senha atual.');
+        return;
+    }
+
+    if (!isStrongPassword(newPassword)) {
+        await showPopup('A nova senha deve ter 8+ caracteres, com maiúscula, minúscula, número e caractere especial.');
+        return;
+    }
+
+    if (newPassword !== confirmNewPassword) {
+        await showPopup('A confirmação não confere com a nova senha.');
+        return;
+    }
+
+    if (newPassword === currentPassword) {
+        await showPopup('A nova senha deve ser diferente da atual.');
+        return;
+    }
+
+    const token = window.ConectaSession.getToken();
+    if (!token) {
+        await showPopup('Sessão expirada. Faça login novamente.');
+        return;
+    }
+
+    if (submitButton) submitButton.disabled = true;
+
+    try {
+        const response = await fetch(`${window.APP_CONFIG?.AUTH_API_URL || '/auth'}/profile/password`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ currentPassword, newPassword })
+        });
+
+        const body = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            const detalhe = Array.isArray(body.errors) && body.errors.length
+                ? body.errors.map(issue => issue.message).join(' ')
+                : '';
+            await showPopup(detalhe || body.message || 'Não foi possível alterar a senha.');
+            return;
+        }
+
+        form.reset();
+        await showPopup('Senha alterada com sucesso.');
+    } catch (error) {
+        console.error('Erro ao alterar senha:', error);
+        await showPopup('Erro de conexão ao alterar a senha.');
+    } finally {
+        if (submitButton) submitButton.disabled = false;
     }
 }
 
@@ -199,7 +363,9 @@ function formatMonthLabel(monthValue) {
 
 function applyAppointmentsMonthFilter(appointments) {
     if (!appointmentsMonthFilter) return appointments;
-    return appointments.filter(appointment => String(appointment.date).slice(0, 7) === appointmentsMonthFilter);
+    // Mesma chave usada para montar a grade, para que filtro e calendario nunca
+    // discordem sobre a que mes a consulta pertence.
+    return appointments.filter(appointment => getAppointmentDateKey(appointment.date).slice(0, 7) === appointmentsMonthFilter);
 }
 
 function updateAppointmentsMonthPicker(value) {
@@ -319,10 +485,18 @@ async function fetchPatientAppointments() {
 // Função para abrir modal de responsável
 function openGuardianModal() {
     const modal = document.getElementById('guardianModal');
-    if (modal) {
-        modal.style.display = 'flex';
-        if (typeof setupPasswordVisibilityToggles === 'function') setupPasswordVisibilityToggles();
+    if (!modal) return;
+
+    // editGuardian() preenche o formulario e marca o editId antes de abrir; sem
+    // esse marcador a abertura e um cadastro novo e o formulario volta ao zero.
+    const form = document.getElementById('formNewGuardian');
+    if (form && !form.dataset.editId) {
+        resetGuardianForm();
     }
+
+    modal.style.display = 'flex';
+    if (typeof setupPasswordVisibilityToggles === 'function') setupPasswordVisibilityToggles();
+    if (typeof setupPasswordRuleFeedback === 'function') setupPasswordRuleFeedback();
 }
 
 // Função para fechar modal de responsável
@@ -331,10 +505,9 @@ function closeGuardianModal() {
     if (modal) {
         modal.style.display = 'none';
     }
-    const form = document.getElementById('formNewGuardian');
-    if (form) {
-        form.reset();
-    }
+    // Limpa tambem o modo de edicao: fechar no meio de uma edicao nao pode
+    // deixar o editId preso para a proxima abertura.
+    resetGuardianForm();
 }
 
 // Catalogo de permissoes vindo do banco (tabela `permissoes`).
@@ -414,12 +587,17 @@ function renderGuardians() {
                 });
                 if (resp.ok) {
                     const data = await resp.json();
+                    // permissionIds/permissionNames passaram a vir da API. Antes
+                    // este map descartava as permissoes, e por isso o card
+                    // sempre dizia "Nenhuma permissão" mesmo com elas gravadas.
                     guardians = Array.isArray(data) ? data.map(g => ({
                         id: g.id,
-                        name: g.name || g.nome,
-                        relationship: g.relationship || g.parentesco,
+                        name: g.name || g.nome || '',
+                        cpf: g.cpf || '',
+                        relationship: g.relationship || g.parentesco || '',
                         email: g.email || '',
-                        dateAdded: g.createdAt || ''
+                        permissions: Array.isArray(g.permissionIds) ? g.permissionIds.map(Number) : [],
+                        permissionNames: Array.isArray(g.permissionNames) ? g.permissionNames : []
                     })) : [];
                     // cache locally for offline fallback
                     saveGuardians(guardians);
@@ -445,12 +623,15 @@ function renderGuardians() {
             return;
         }
 
+        patientGuardians = guardians;
         guardiansList.innerHTML = '';
 
-        guardians.forEach((guardian, index) => {
-        const permissionsText = (guardian.permissions || [])
-            .map(permissionLabelById)
-            .join(', ');
+        guardians.forEach((guardian) => {
+        // Prefere os nomes ja resolvidos pela API; permissionLabelById so entra
+        // quando os dados vieram do cache local.
+        const permissionLabels = (guardian.permissionNames && guardian.permissionNames.length)
+            ? guardian.permissionNames
+            : (guardian.permissions || []).map(permissionLabelById);
 
         const card = document.createElement('div');
         card.className = 'guardian-card';
@@ -461,10 +642,10 @@ function renderGuardians() {
                     <span>${escapeHTML(guardian.relationship || '')}</span>
                 </div>
                 <div class="guardian-actions">
-                    <button class="btn-secondary" type="button" onclick="editGuardian(${index})">
+                    <button class="btn-secondary" type="button" data-edit-guardian="${escapeHTML(String(guardian.id))}" aria-label="Editar responsável">
                         <i class="ph ph-pencil"></i>
                     </button>
-                    <button class="btn-danger" type="button" onclick="removeGuardian(${index})">
+                    <button class="btn-danger" type="button" data-remove-guardian="${escapeHTML(String(guardian.id))}" aria-label="Remover responsável">
                         <i class="ph ph-trash"></i>
                     </button>
                 </div>
@@ -472,62 +653,146 @@ function renderGuardians() {
             <div class="guardian-details">
                 <div class="guardian-detail">
                     <label>E-mail</label>
-                    <p>${escapeHTML(guardian.email || '')}</p>
+                    <p>${escapeHTML(guardian.email || '--')}</p>
                 </div>
                 <div class="guardian-detail">
-                    <label>Acesso desde</label>
-                    <p>${escapeHTML(guardian.dateAdded || 'Hoje')}</p>
+                    <label>CPF</label>
+                    <p>${escapeHTML(formatCPF(guardian.cpf))}</p>
                 </div>
             </div>
             <div class="guardian-permissions">
                 <div class="guardian-permissions-label">Permissões concedidas:</div>
                 <div class="permissions-list">
-                    ${permissionsText ? permissionsText.split(', ').map(p => `<span class="permission-badge"><i class="ph ph-check-circle"></i>${escapeHTML(p)}</span>`).join('') : '<span style="color: #64748b;">Nenhuma permissão</span>'}
+                    ${permissionLabels.length
+                        ? permissionLabels.map(label => `<span class="permission-badge"><i class="ph ph-check-circle"></i>${escapeHTML(label)}</span>`).join('')
+                        : '<span class="permissions-empty">Nenhuma permissão concedida</span>'}
                 </div>
             </div>
         `;
+
+        card.querySelector('[data-edit-guardian]')?.addEventListener('click', () => editGuardian(guardian.id));
+        card.querySelector('[data-remove-guardian]')?.addEventListener('click', () => removeGuardian(guardian.id));
+
         guardiansList.appendChild(card);
         });
     })();
 }
 
-// Remover responsável
-function removeGuardian(index) {
-        const guardians = loadGuardians();
-        if (index >= 0 && index < guardians.length) {
-            const guardian = guardians[index];
-            guardians.splice(index, 1);
-            saveGuardians(guardians);
-            renderGuardians();
-            showPopup(`Responsável ${guardian.name} removido com sucesso.`);
+function findGuardianById(id) {
+    return patientGuardians.find(guardian => String(guardian.id) === String(id)) || null;
+}
+
+// Remover responsável - agora apaga no servidor. Antes so tirava do
+// localStorage, entao o responsavel reaparecia no proximo carregamento.
+async function removeGuardian(id) {
+    const guardian = findGuardianById(id);
+    if (!guardian) return;
+
+    const confirmado = await showPopup(
+        `Remover o responsável ${guardian.name}? Ele perderá o acesso aos seus dados.`,
+        'confirm'
+    );
+    if (!confirmado) return;
+
+    const token = window.ConectaSession.getToken();
+    if (!token) {
+        await showPopup('Sessão expirada. Faça login novamente.');
+        return;
+    }
+
+    try {
+        const resp = await fetch(`${window.APP_CONFIG?.AUTH_API_URL || '/auth'}/patient/guardians/${encodeURIComponent(id)}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (!resp.ok) {
+            const body = await resp.json().catch(() => ({}));
+            await showPopup(body.message || 'Não foi possível remover o responsável.');
+            return;
         }
+
+        await showPopup(`Responsável ${guardian.name} removido com sucesso.`);
+        renderGuardians();
+    } catch (error) {
+        console.error('Erro ao remover responsável:', error);
+        await showPopup('Erro de conexão ao remover o responsável.');
+    }
 }
 
 // Editar responsável
-function editGuardian(index) {
-    const guardians = loadGuardians();
-    if (index >= 0 && index < guardians.length) {
-        const guardian = guardians[index];
-        
-        // Preencher o formulário com os dados do responsável
-        document.getElementById('guardianName').value = guardian.name;
-        document.getElementById('guardianRelationship').value = guardian.relationship;
-        document.getElementById('guardianPassword').value = guardian.password || '';
-        document.getElementById('guardianEmail').value = guardian.email;
+function editGuardian(id) {
+    const guardian = findGuardianById(id);
+    if (!guardian) return;
 
-        // Selecionar as permissões
-        const checkboxes = document.querySelectorAll('input[name="permissions"]');
-        checkboxes.forEach(checkbox => {
-            checkbox.checked = guardian.permissions.includes(checkbox.value);
-        });
+    const form = document.getElementById('formNewGuardian');
+    const modal = document.getElementById('guardianModal');
+    if (!form || !modal) return;
 
-        // Armazenar o índice para atualização
-        document.getElementById('formNewGuardian').dataset.editIndex = index;
-        document.querySelector('.modal-header div h3').textContent = 'Editar Responsável';
-        document.querySelector('button[type="submit"]').textContent = 'Atualizar Responsável';
+    document.getElementById('guardianName').value = guardian.name || '';
+    document.getElementById('guardianCPF').value = formatCPF(guardian.cpf);
+    document.getElementById('guardianRelationship').value = guardian.relationship || '';
+    document.getElementById('guardianEmail').value = guardian.email || '';
 
-        openGuardianModal();
+    const permissoesDoResponsavel = (guardian.permissions || []).map(String);
+    form.querySelectorAll('input[name="permissions"]').forEach(checkbox => {
+        checkbox.checked = permissoesDoResponsavel.includes(String(checkbox.value));
+    });
+
+    // Na edicao nao se troca a senha do responsavel: quem faz isso e ele, pelo
+    // proprio login. O campo sai de cena e deixa de ser obrigatorio.
+    const passwordField = document.getElementById('guardianPassword');
+    const passwordGroup = passwordField?.closest('.input-group');
+    if (passwordField) {
+        passwordField.value = '';
+        passwordField.required = false;
     }
+    if (passwordGroup) passwordGroup.hidden = true;
+
+    // O CPF identifica o responsavel e nao pode mudar numa edicao.
+    document.getElementById('guardianCPF').readOnly = true;
+
+    form.dataset.editId = String(guardian.id);
+
+    // Estes seletores eram globais (document.querySelector) e pegavam o primeiro
+    // modal/botao da pagina, que e o de agendamento. Agora sao presos ao modal
+    // do responsavel.
+    const title = modal.querySelector('.modal-header h3');
+    if (title) title.textContent = 'Editar Responsável';
+    const submitButton = form.querySelector('button[type="submit"]');
+    if (submitButton) submitButton.textContent = 'Salvar alterações';
+
+    openGuardianModal();
+}
+
+/**
+ * Reverte o modal para o estado de cadastro. Sem isto, abrir "Adicionar" depois
+ * de uma edicao reaproveitava o editId e acabava atualizando o responsavel
+ * anterior em vez de criar um novo.
+ */
+function resetGuardianForm() {
+    const form = document.getElementById('formNewGuardian');
+    const modal = document.getElementById('guardianModal');
+    if (!form || !modal) return;
+
+    form.reset();
+    delete form.dataset.editId;
+
+    const passwordField = document.getElementById('guardianPassword');
+    const passwordGroup = passwordField?.closest('.input-group');
+    if (passwordField) passwordField.required = true;
+    if (passwordGroup) passwordGroup.hidden = false;
+
+    const cpfField = document.getElementById('guardianCPF');
+    if (cpfField) cpfField.readOnly = false;
+
+    const title = modal.querySelector('.modal-header h3');
+    if (title) title.textContent = 'Adicionar Responsável';
+    const submitButton = form.querySelector('button[type="submit"]');
+    if (submitButton) submitButton.textContent = 'Adicionar Responsável';
 }
 
 // Renderizar sugestões de atendimento baseadas em profissionais cadastrados
@@ -535,18 +800,63 @@ function renderSuggestions() {
     const suggestionGrid = document.getElementById('suggestionGrid');
     if (!suggestionGrid) return;
 
-    const professionals = availableProfessionals;
-    const specialtiesMap = new Map();
+    const title = document.getElementById('searchResultsTitle');
+    const subtitle = document.getElementById('searchResultsSubtitle');
 
-    // Agrupar profissionais por especialidade
-    professionals.forEach(prof => {
+    // Com filtro aplicado a lista mostra os profissionais que casaram com a
+    // busca; sem filtro, volta ao panorama por especialidade.
+    if (searchApplied) {
+        if (title) title.textContent = 'Resultados da busca';
+        if (subtitle) {
+            subtitle.textContent = searchResults.length === 1
+                ? '1 profissional encontrado.'
+                : `${searchResults.length} profissionais encontrados.`;
+        }
+
+        if (!searchResults.length) {
+            suggestionGrid.innerHTML = `
+                <div class="suggestion-empty">
+                    <i class="ph ph-magnifying-glass"></i>
+                    <p>Nenhum profissional encontrado com esses filtros.</p>
+                </div>
+            `;
+            return;
+        }
+
+        suggestionGrid.innerHTML = '';
+        searchResults.forEach(professional => {
+            const local = [professional.unidade, professional.clinicName]
+                .filter(Boolean)
+                .join(' - ') || 'Unidade não informada';
+            const cidade = [professional.cidade, professional.estado].filter(Boolean).join('/');
+
+            const card = document.createElement('div');
+            card.className = 'suggestion-card';
+            card.innerHTML = `
+                <strong>${escapeHTML(professional.name)}</strong>
+                <span>${escapeHTML(professional.especialidade || 'Especialidade não informada')}</span>
+                <p>${escapeHTML(local)}${cidade ? ` (${escapeHTML(cidade)})` : ''}</p>
+                <button class="btn-schedule-suggestion" type="button">Agendar</button>
+            `;
+            card.querySelector('.btn-schedule-suggestion')
+                ?.addEventListener('click', () => scheduleWithProfessional(professional));
+
+            suggestionGrid.appendChild(card);
+        });
+        return;
+    }
+
+    if (title) title.textContent = 'Especialidades Disponíveis';
+    if (subtitle) subtitle.textContent = 'Profissionais e especialidades cadastrados no sistema.';
+
+    const specialtiesMap = new Map();
+    availableProfessionals.forEach(prof => {
         if (!specialtiesMap.has(prof.especialidade)) {
             specialtiesMap.set(prof.especialidade, []);
         }
         specialtiesMap.get(prof.especialidade).push(prof);
     });
 
-    // Se não há profissionais, mostrar mensagem vazia
     if (specialtiesMap.size === 0) {
         suggestionGrid.innerHTML = `
             <div class="suggestion-empty">
@@ -559,7 +869,6 @@ function renderSuggestions() {
 
     suggestionGrid.innerHTML = '';
 
-    // Renderizar cards para cada especialidade
     let cardCount = 0;
     specialtiesMap.forEach((professionals, specialty) => {
         if (cardCount >= 6) return; // Limitar a 6 sugestões
@@ -586,6 +895,20 @@ function renderSuggestions() {
         suggestionGrid.appendChild(card);
         cardCount++;
     });
+}
+
+/**
+ * Abre o modal de agendamento ja apontando para o profissional escolhido no
+ * resultado da busca. O select do modal e populado por CRM (registry).
+ */
+function scheduleWithProfessional(professional) {
+    switchTab('appointments');
+    const select = document.getElementById('modalProfessional');
+    if (select && professional?.registry) {
+        select.value = professional.registry;
+        updateSelectedProfessionalDetails();
+    }
+    openModal();
 }
 
 // Função auxiliar para scroll até a especialidade
@@ -645,15 +968,52 @@ function switchTab(tabKey) {
     buttons.forEach(button => button.classList.toggle('active', button.dataset.tab === tabKey));
 }
 
+/**
+ * Monta um Date local a partir da hora de parede devolvida pela API. Componentes
+ * separados (e nao `new Date(string)`) de proposito: assim o navegador nao trata
+ * a string como UTC e desloca o horario pelo fuso do usuario.
+ *
+ * A hora tambem entra na conta - antes so a data era lida, o que fazia o
+ * formatDateTime exibir sempre 00:00 e a ordenacao empatar consultas do mesmo
+ * dia sem respeitar o horario.
+ */
 function parseAppointmentDate(dateString) {
     if (!dateString) {
         return new Date(NaN);
     }
 
     const normalized = String(dateString).replace(' ', 'T');
-    const datePart = normalized.split('T')[0];
+    const [datePart, timePart = ''] = normalized.split('T');
     const [year, month, day] = datePart.split('-').map(Number);
-    return new Date(year, month - 1, day);
+
+    if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
+        return new Date(NaN);
+    }
+
+    const [hour = 0, minute = 0] = timePart
+        .split(':')
+        .slice(0, 2)
+        .map(value => Number.parseInt(value, 10) || 0);
+
+    return new Date(year, month - 1, day, hour, minute);
+}
+
+/**
+ * Chave de dia (YYYY-MM-DD) usada para casar a consulta com a celula do
+ * calendario e com o filtro de mes. Le a data textualmente - a API devolve a
+ * hora de parede, sem fuso, entao nao ha conversao a fazer aqui.
+ */
+function formatCPF(cpf) {
+    const digits = String(cpf || '').replace(/\D/g, '');
+    if (digits.length !== 11) return '--';
+    return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
+}
+
+function getAppointmentDateKey(dateString) {
+    if (!dateString) return '';
+    const normalized = String(dateString).replace(' ', 'T');
+    const datePart = normalized.split('T')[0];
+    return /^\d{4}-\d{2}-\d{2}$/.test(datePart) ? datePart : '';
 }
 
 function formatDate(dateString) {
@@ -837,31 +1197,10 @@ function populateProfessionalOptions() {
     updateSelectedProfessionalDetails();
 }
 
-function populateSearchFilters() {
-    const specialtySelect = document.getElementById('searchSpecialty');
-    const unitSelect = document.getElementById('searchHospital');
-    if (!specialtySelect || !unitSelect) return;
-
-    const professionals = availableProfessionals;
-    const specialties = Array.from(new Set(professionals.map(professional => professional.especialidade).filter(Boolean))).sort();
-    const units = Array.from(new Set(professionals.map(professional => professional.unidade).filter(Boolean))).sort();
-
-    specialtySelect.innerHTML = '<option value="">Todas as areas</option>';
-    specialties.forEach(specialty => {
-        const option = document.createElement('option');
-        option.value = specialty;
-        option.textContent = specialty;
-        specialtySelect.appendChild(option);
-    });
-
-    unitSelect.innerHTML = '<option value="">Todas as unidades</option>';
-    units.forEach(unit => {
-        const option = document.createElement('option');
-        option.value = unit;
-        option.textContent = unit;
-        unitSelect.appendChild(option);
-    });
-}
+// populateSearchFilters() foi substituida por loadSearchFilterOptions(): ela
+// era chamada a cada refreshDashboard e reconstruia os selects do zero,
+// descartando a opcao que o paciente tinha acabado de escolher. Os valores
+// agora vem de /auth/doctors/filters e sao carregados uma vez.
 
 function getAppointmentData() {
     if (!patientAppointmentsLoaded) {
@@ -1142,71 +1481,167 @@ function handleChatbotScheduling(userMessage) {
     return null;
 }
 
+/**
+ * Intencoes do Assistente Conecta, em ordem de prioridade: a primeira que casar
+ * responde. Emergencia vem antes de tudo, de proposito.
+ *
+ * Os padroes sao regex com \\b (limite de palavra) e nao includes(). A versao
+ * anterior usava normalizedMessage.includes('oi'), que casava dentro de
+ * "depois", "foi" e "oito" - perguntar "quero remarcar depois" era respondido
+ * com uma saudacao. O mesmo valia para 'agendamento' dentro de outras frases.
+ */
+const CHATBOT_INTENTS = [
+    {
+        nome: 'emergencia',
+        padroes: [/\b(emergencia|urgencia|urgente|socorro|passando mal|falta de ar|dor no peito|dor forte|desmaio|desmaiei|sangramento|convulsao)\b/],
+        responder: () => 'Se for uma urgencia, procure atendimento imediato na unidade de emergencia mais proxima ou ligue 192 (SAMU). Em risco de vida, nao espere resposta pelo portal. Eu nao substituo avaliacao medica.'
+    },
+    {
+        nome: 'saudacao',
+        padroes: [/\b(oi|ola|opa|eai|e ai|bom dia|boa tarde|boa noite|tudo bem)\b/],
+        responder: ({ nome }) => `Ola${nome ? `, ${nome}` : ''}. Posso ajudar com agendar consulta, ver suas proximas consultas, o que levar no dia, desmarcar, responsaveis, acessibilidade e seus dados de perfil. O que voce precisa?`
+    },
+    {
+        nome: 'proximas-consultas',
+        padroes: [/\b(proxima|proximas|minhas consultas|minha consulta|tenho consulta|quando (e|sera)|ja tenho|agendada|agendadas|marcada|marcadas)\b/],
+        responder: ({ appointments }) => {
+            if (!appointments.length) {
+                return 'Voce nao tem nenhuma consulta agendada no momento. Para marcar, va em Agendamentos e clique em Novo Agendamento - ou me diga "quero agendar" que eu marco por aqui.';
+            }
+
+            const proxima = appointments[0];
+            const partes = [
+                `Sua proxima consulta e em ${formatDateTime(proxima.date)}`,
+                proxima.doctor ? `com ${proxima.doctor}` : '',
+                proxima.specialty ? `(${proxima.specialty})` : '',
+                proxima.hospital ? `na unidade ${proxima.hospital}` : ''
+            ].filter(Boolean).join(' ');
+
+            const restantes = appointments.length - 1;
+            const extra = restantes > 0
+                ? ` Voce tem mais ${restantes} consulta(s) marcada(s) - veja todas na aba Agendamentos.`
+                : '';
+
+            return `${partes}.${extra}`;
+        }
+    },
+    {
+        nome: 'agendar',
+        padroes: [/\b(agendar|marcar|nova consulta|consulta nova|quero consulta|preciso de consulta)\b/],
+        responder: ({ professionals }) => {
+            if (!professionals.length) {
+                return 'Ainda nao ha profissionais ativos cadastrados para agendamento. Assim que houver, eles aparecem em Buscar Atendimento e no Novo Agendamento.';
+            }
+
+            const especialidades = Array.from(new Set(professionals.map(p => p.especialidade).filter(Boolean))).slice(0, 4).join(', ');
+            return `Temos ${professionals.length} profissional(is) disponivel(is)${especialidades ? `, incluindo ${especialidades}` : ''}. Escreva "agendar consulta" que eu marco por aqui, ou use Agendamentos > Novo Agendamento.`;
+        }
+    },
+    {
+        nome: 'desmarcar',
+        padroes: [/\b(desmarc\w*|cancel\w*|remarc\w*|adiar|mudar (a )?data|trocar (o )?horario)\b/],
+        responder: () => 'Para desmarcar ou remarcar, abra a aba Agendamentos, clique na consulta no calendario e escolha a acao. Atencao: o cancelamento so e permitido com no minimo 14 dias de antecedencia. Dentro desse prazo, fale direto com a unidade.'
+    },
+    {
+        nome: 'acessibilidade',
+        padroes: [/\b(acessibilidade|acessivel|libras|interprete|cadeira de rodas|cadeirante|rampa|deficiencia|autista|autismo|tea|braille|cao guia|surdo|cego|mobilidade|acompanhante)\b/],
+        responder: () => 'Sobre acessibilidade: informe sua necessidade ao agendar para a unidade se preparar (interprete de Libras, acompanhante, sala acessivel, atendimento prioritario). Voce tem direito a acompanhante. O proprio portal tem ajustes de contraste e tamanho de fonte na barra de acessibilidade no topo da pagina.'
+    },
+    {
+        nome: 'preparo-documentos',
+        padroes: [/\b(documento|documentos|levar|preparo|jejum|exame|exames|rg|carteirinha|o que preciso)\b/],
+        responder: () => 'Leve documento oficial com foto, seu CPF, exames recentes e a lista de remedios que voce usa. Se a consulta pedir jejum ou algum preparo especifico, a unidade avisa antes - na duvida, confirme com ela pelo chat com o profissional.'
+    },
+    {
+        nome: 'responsaveis',
+        padroes: [/\b(responsavel|responsaveis|autorizado|permissao|permissoes|tutor|acompanhar|meu filho|minha filha)\b/],
+        responder: () => 'Na aba Responsaveis voce cadastra quem pode acompanhar seu atendimento. Cada responsavel entra com o proprio CPF e senha, e voce escolhe o que ele pode fazer: ver agendamentos, gerenciar agendamentos ou enviar mensagens. Da para editar ou remover esse acesso quando quiser.'
+    },
+    {
+        nome: 'perfil',
+        padroes: [/\b(perfil|meus dados|meu cadastro|cpf|telefone|endereco de cadastro|atualizar dados|mudar email|data de nascimento)\b/],
+        responder: () => 'Seus dados ficam em Meu Perfil. Ali voce edita nome, e-mail, telefone, data de nascimento, tipo de deficiencia e unidade de preferencia, e tambem troca sua senha. O CPF nao muda, por ser o seu identificador de acesso.'
+    },
+    {
+        nome: 'senha-acesso',
+        padroes: [/\b(senha|login|entrar|acesso|esqueci|bloqueado|nao consigo entrar)\b/],
+        responder: () => 'Para trocar a senha estando logado, va em Meu Perfil > Alterar senha (pedimos a senha atual por seguranca). Se esqueceu a senha, use "Esqueci minha senha" na tela de login: enviamos um link de redefinicao para o seu e-mail cadastrado.'
+    },
+    {
+        nome: 'buscar-profissional',
+        padroes: [/\b(medico|medica|profissional|profissionais|especialidade|especialidades|quem atende|tem cardiologista|procurar)\b/],
+        responder: ({ professionals }) => {
+            if (!professionals.length) {
+                return 'Ainda nao ha profissionais ativos cadastrados. Quando houver, eles aparecem na aba Buscar Atendimento.';
+            }
+            return `Temos ${professionals.length} profissional(is) ativo(s). Use a aba Buscar Atendimento para filtrar por especialidade ou unidade, ou buscar pelo nome. De la mesmo da para ja abrir o agendamento.`;
+        }
+    },
+    {
+        nome: 'localizacao',
+        padroes: [/\b(onde|endereco|local|localizacao|como chegar|unidade fica|mapa)\b/],
+        responder: ({ appointments }) => {
+            const proxima = appointments[0];
+            if (proxima?.hospital) {
+                return `Sua proxima consulta e na unidade ${proxima.hospital}. O endereco completo aparece nos detalhes da consulta, na aba Agendamentos - clique nela no calendario.`;
+            }
+            return 'A unidade de cada consulta aparece nos detalhes dela, na aba Agendamentos. Em Buscar Atendimento voce tambem ve a unidade e a cidade de cada profissional.';
+        }
+    },
+    {
+        nome: 'atraso',
+        padroes: [/\b(atraso|atrasar|atrasado|vou chegar tarde|perdi a consulta|nao consegui ir|faltei)\b/],
+        responder: () => 'Se voce vai se atrasar, avise a unidade o quanto antes pelo chat com o profissional, nesta mesma aba. Atrasos longos costumam exigir remarcacao. Se ja perdeu a consulta, marque uma nova em Agendamentos > Novo Agendamento.'
+    },
+    {
+        nome: 'resultado-receita',
+        padroes: [/\b(resultado|laudo|receita|atestado|prescricao|encaminhamento|relatorio)\b/],
+        responder: () => 'Resultados, receitas e atestados sao emitidos pelo profissional que te atendeu. Peca diretamente a ele pelo chat desta aba, escolhendo o profissional na lista ao lado. O portal ainda nao armazena esses documentos para download.'
+    },
+    {
+        nome: 'custo',
+        padroes: [/\b(valor|preco|custa|custo|pagar|pagamento|gratuito|de graca|quanto)\b/],
+        responder: () => 'Os valores dependem da unidade e do tipo de atendimento. Confirme direto com a unidade pelo chat com o profissional antes da consulta - o portal nao processa pagamentos.'
+    },
+    {
+        nome: 'falar-humano',
+        padroes: [/\b(atendente|humano|pessoa|falar com alguem|suporte|ajuda de verdade|reclamacao)\b/],
+        responder: () => 'Para falar com uma pessoa, use a lista ao lado desta conversa e escolha o profissional do seu atendimento - a mensagem chega direto para ele. Eu sou um assistente automatico e respondo so o que envolve o uso do portal.'
+    },
+    {
+        nome: 'agradecimento',
+        padroes: [/\b(obrigad\w*|valeu|agradec\w*|show|otim\w*|perfeito)\b/],
+        responder: () => 'Por nada. Quando precisar, e so me chamar por aqui.'
+    }
+];
+
 function buildChatbotReply(userMessage) {
     const normalizedMessage = normalizeText(userMessage);
     const appointments = getAppointmentData();
     const professionals = availableProfessionals;
 
+    // O fluxo de agendamento pelo chat tem estado proprio e precisa continuar
+    // sendo consultado antes das intencoes soltas.
     const schedulingReply = handleChatbotScheduling(userMessage);
     if (schedulingReply) {
         return schedulingReply;
     }
 
-    if (normalizedMessage.includes('oi') || normalizedMessage.includes('ola') || normalizedMessage.includes('bom dia') || normalizedMessage.includes('boa tarde') || normalizedMessage.includes('boa noite')) {
-        return 'Ola. Eu posso te ajudar com agendamentos, consultas marcadas, preparo, documentos, responsaveis e uso do portal. Me diga o que voce precisa fazer agora.';
+    const contexto = {
+        appointments,
+        professionals,
+        nome: String(getPatientName() || '').split(' ')[0]
+    };
+
+    const intencao = CHATBOT_INTENTS.find(item =>
+        item.padroes.some(padrao => padrao.test(normalizedMessage))
+    );
+
+    if (intencao) {
+        return intencao.responder(contexto);
     }
 
-    if (normalizedMessage.includes('emergencia') || normalizedMessage.includes('urgente') || normalizedMessage.includes('falta de ar') || normalizedMessage.includes('dor forte') || normalizedMessage.includes('desmaio') || normalizedMessage.includes('sangramento')) {
-        return 'Se for uma urgencia, procure atendimento imediato na unidade de emergencia mais proxima ou acione o servico de emergencia da sua regiao. O chatbot nao substitui avaliacao medica em situacoes graves.';
-    }
-
-    if (normalizedMessage.includes('agendar') || normalizedMessage.includes('marcar') || normalizedMessage.includes('consulta nova')) {
-        if (!professionals.length) {
-            return 'No momento nao ha medicos cadastrados disponiveis para agendamento. Assim que a empresa cadastrar medicos ativos, eles aparecerao em Agendamentos > Novo Agendamento.';
-        }
-
-        const specialties = Array.from(new Set(professionals.map(professional => professional.especialidade))).slice(0, 4).join(', ');
-        return `Temos ${professionals.length} medico(s) disponivel(is)${specialties ? `, incluindo ${specialties}` : ''}. Escreva "agendar consulta" para eu marcar pelo chat.`;
-    }
-
-    if (normalizedMessage.includes('proximo') || normalizedMessage.includes('minhas consultas') || normalizedMessage.includes('agendamento') || normalizedMessage.includes('horario')) {
-        if (!appointments.length) {
-            return 'Voce ainda nao possui consultas agendadas. Para marcar uma, va em Agendamentos e clique em Novo Agendamento.';
-        }
-
-        const nextAppointment = appointments[0];
-        return `Sua proxima consulta esta marcada para ${formatDate(nextAppointment.date)} com ${nextAppointment.doctor}, em ${nextAppointment.hospital}, na especialidade ${nextAppointment.specialty}.`;
-    }
-
-    if (normalizedMessage.includes('desmarcar') || normalizedMessage.includes('cancelar') || normalizedMessage.includes('remarcar')) {
-        return 'Para desmarcar, abra Agendamentos e clique em Desmarcar na consulta desejada. O sistema permite cancelar apenas com no minimo 2 semanas de antecedencia.';
-    }
-
-    if (normalizedMessage.includes('documento') || normalizedMessage.includes('levar') || normalizedMessage.includes('exame') || normalizedMessage.includes('preparo')) {
-        return 'Para a consulta, leve documento com foto, CPF, carteirinha do plano se houver, exames recentes e receitas em uso. Se a consulta tiver preparo especifico, confirme com a unidade antes do atendimento.';
-    }
-
-    if (normalizedMessage.includes('responsavel') || normalizedMessage.includes('autorizado') || normalizedMessage.includes('permissao')) {
-        return 'Voce pode gerenciar responsaveis na aba Responsaveis. La e possivel adicionar contatos autorizados e definir permissoes como ver agendamentos, registros e enviar mensagens.';
-    }
-
-    if (normalizedMessage.includes('cpf') || normalizedMessage.includes('perfil') || normalizedMessage.includes('meus dados') || normalizedMessage.includes('cadastro')) {
-        return 'Seus dados principais ficam em Meu Perfil. Confira nome, CPF e responsavel cadastrado. Para alterar informacoes sensiveis, procure o suporte da unidade responsavel.';
-    }
-
-    if (normalizedMessage.includes('medico') || normalizedMessage.includes('profissional') || normalizedMessage.includes('especialidade')) {
-        if (!professionals.length) {
-            return 'Ainda nao ha medicos cadastrados disponiveis no sistema. Quando houver, eles aparecerao em Buscar Atendimento e no modal de Novo Agendamento.';
-        }
-
-        return `Encontrei ${professionals.length} medico(s) disponivel(is). Voce pode ver as especialidades em Buscar Atendimento ou iniciar um agendamento pela aba Agendamentos.`;
-    }
-
-    if (normalizedMessage.includes('obrigad')) {
-        return 'Por nada. Quando precisar, me chame por aqui e eu te ajudo a navegar pelo portal.';
-    }
-
-    return 'Entendi. Posso te ajudar com: agendar consulta, ver proximos agendamentos, saber o que levar, desmarcar consulta, gerenciar responsaveis ou conferir dados do perfil. Escreva uma dessas opcoes para eu te orientar.';
+    return 'Nao tenho certeza do que voce precisa. Posso ajudar com: agendar consulta, ver proximas consultas, desmarcar ou remarcar, o que levar no dia, responsaveis, acessibilidade, dados do perfil e senha. Escreva um desses assuntos que eu te oriento.';
 }
 
 function isScheduleIntent(message) {
@@ -1455,13 +1890,20 @@ function renderOverviewAppointments() {
         return;
     }
 
+    // Campo vazio vira "--" em vez de celula em branco (ou do "undefined" que
+    // aparecia quando os dados vinham da rota com nomes de coluna diferentes).
+    const ouTraco = valor => {
+        const texto = String(valor ?? '').trim();
+        return texto ? escapeHTML(texto) : '--';
+    };
+
     appointments.slice(0, 4).forEach(appointment => {
         const row = document.createElement('tr');
         row.innerHTML = `
-            <td>${escapeHTML(appointment.specialty)}</td>
-            <td>${escapeHTML(appointment.doctor)}</td>
-            <td>${escapeHTML(appointment.hospital)}</td>
-            <td>${escapeHTML(formatDate(appointment.date))}</td>
+            <td>${ouTraco(appointment.specialty)}</td>
+            <td>${ouTraco(appointment.doctor)}</td>
+            <td>${ouTraco(appointment.hospital)}</td>
+            <td>${ouTraco(formatDateTime(appointment.date))}</td>
         `;
         tableBody.appendChild(row);
     });
@@ -1472,22 +1914,31 @@ function updateOverviewCards() {
     const totalAppointments = document.getElementById('totalAppointments');
     const nextAppointmentDate = document.getElementById('nextAppointmentDate');
     const specialtyCount = document.getElementById('specialtyCount');
-    const favoriteHospital = document.getElementById('favoriteHospital');
 
     if (totalAppointments) {
         totalAppointments.innerText = appointments.length;
     }
 
     if (nextAppointmentDate) {
-        nextAppointmentDate.innerText = appointments.length ? formatDateTime(appointments[0].date) : '--';
+        // getAppointmentData() ordena da mais proxima para a mais distante e a
+        // API ja exclui canceladas, entao a primeira e a proxima consulta.
+        const nextAppointment = appointments.find(appointment => getAppointmentDateKey(appointment.date));
+
+        if (nextAppointment) {
+            nextAppointmentDate.innerText = formatDateTime(nextAppointment.date);
+            nextAppointmentDate.classList.remove('is-empty');
+            nextAppointmentDate.title = [nextAppointment.specialty, nextAppointment.doctor]
+                .filter(Boolean)
+                .join(' - ');
+        } else {
+            nextAppointmentDate.innerText = 'Sem consulta agendada';
+            nextAppointmentDate.classList.add('is-empty');
+            nextAppointmentDate.removeAttribute('title');
+        }
     }
 
     if (specialtyCount) {
         specialtyCount.innerText = new Set(appointments.map(appointment => appointment.specialty)).size;
-    }
-
-    if (favoriteHospital) {
-        favoriteHospital.innerText = appointments.length ? appointments[0].hospital : 'Nenhum';
     }
 }
 
@@ -1570,21 +2021,16 @@ function renderAppointmentsList() {
     list.innerHTML = '';
     const appointments = applyAppointmentsMonthFilter(getAppointmentData());
 
-    if (!appointments.length) {
-        const monthLabel = appointmentsMonthFilter ? formatMonthLabel(appointmentsMonthFilter) : 'mês selecionado';
-        const message = document.createElement('div');
-        message.className = 'empty-state';
-        message.innerHTML = `
-            <i class="ph ph-calendar-x"></i>
-            <p>Voce nao possui consultas agendadas para ${escapeHTML(monthLabel)}.</p>
-        `;
-        list.appendChild(message);
-        return;
-    }
+    // O calendario e montado sempre. Antes, quando o mes nao tinha consulta, a
+    // funcao desenhava so a mensagem de vazio e dava return - o paciente perdia
+    // a grade e nao tinha como navegar para outro mes pela propria tela.
+    // Agora o aviso de "nenhuma consulta" vai abaixo da grade, no fim da funcao.
 
-    // Group appointments by ISO date key YYYY-MM-DD
+    // Agrupa por dia (YYYY-MM-DD) usando a mesma leitura textual do restante do
+    // arquivo, que agora casa com o formato devolvido pela API.
     const groupedAppointments = appointments.reduce((groups, appointment) => {
-        const dateKey = String(appointment.date || '').split('T')[0] || 'unknown';
+        const dateKey = getAppointmentDateKey(appointment.date);
+        if (!dateKey) return groups;
         if (!groups[dateKey]) groups[dateKey] = [];
         groups[dateKey].push(appointment);
         return groups;
@@ -1685,6 +2131,17 @@ function renderAppointmentsList() {
     dayColumn.appendChild(monthCalendar);
 
     list.appendChild(dayColumn);
+
+    // Aviso de mes vazio: complementa a grade em vez de substitui-la.
+    if (!appointments.length) {
+        const message = document.createElement('div');
+        message.className = 'empty-state';
+        message.innerHTML = `
+            <i class="ph ph-calendar-x"></i>
+            <p>Você não possui consultas agendadas para ${escapeHTML(formatMonthLabel(monthValue))}.</p>
+        `;
+        list.appendChild(message);
+    }
 }
 
 function showAppointmentDetail(appointment) {
@@ -1842,7 +2299,6 @@ function addAppointmentToDashboard(selectedProfessional, date) {
 }
 
 function refreshDashboard() {
-    populateSearchFilters();
     updateOverviewCards();
     renderOverviewAppointments();
     renderAppointmentsList();
@@ -1860,10 +2316,18 @@ async function handleLogout() {
     }
 }
 
+/**
+ * Executa a busca no servidor com os filtros escolhidos.
+ *
+ * Antes esta funcao nao chamava API nenhuma: esperava 800ms num setTimeout e
+ * abria um popup dizendo "Filtro aplicado", enquanto a lista abaixo continuava
+ * mostrando todos os profissionais. Agora consulta /auth/doctors/search e
+ * desenha o resultado real.
+ */
 async function filterResults() {
     const specialty = document.getElementById('searchSpecialty')?.value || '';
-    const hospital = document.getElementById('searchHospital')?.value || '';
-    const plan = document.getElementById('searchPlan')?.value || '';
+    const unit = document.getElementById('searchHospital')?.value || '';
+    const term = document.getElementById('searchTerm')?.value.trim() || '';
     const button = document.querySelector('.btn-search-filter');
 
     if (button) {
@@ -1871,15 +2335,94 @@ async function filterResults() {
         button.disabled = true;
     }
 
-    setTimeout(async () => {
-        const description = [specialty || 'todas as areas', hospital || 'todos os hospitais', plan || 'todos os planos'].join(', ');
-        await showPopup(`Filtro aplicado para ${description}.`);
+    try {
+        const params = new URLSearchParams();
+        if (specialty) params.set('especialidade', specialty);
+        if (unit) params.set('unidade', unit);
+        if (term) params.set('termo', term);
 
+        const response = await fetch(`${window.APP_CONFIG?.AUTH_API_URL || '/auth'}/doctors/search?${params}`);
+        const data = await response.json();
+
+        if (!response.ok) {
+            console.error('Falha na busca de atendimento:', data);
+            await showPopup(data.message || 'Nao foi possivel buscar os profissionais.');
+            return;
+        }
+
+        searchResults = Array.isArray(data) ? data.map(professional => ({
+            id: professional.id,
+            name: professional.name || '',
+            registry: professional.crm || '',
+            especialidade: professional.especialidade || '',
+            unidade: professional.unidade || '',
+            clinicName: professional.clinicName || '',
+            cidade: professional.cidade || '',
+            estado: professional.estado || '',
+            bio: professional.bio || ''
+        })) : [];
+        searchApplied = Boolean(specialty || unit || term);
+
+        renderSuggestions();
+    } catch (error) {
+        console.error('Erro ao buscar profissionais:', error);
+        await showPopup('Erro de conexao ao buscar profissionais.');
+    } finally {
         if (button) {
             button.innerHTML = '<i class="ph ph-magnifying-glass"></i> Filtrar';
             button.disabled = false;
         }
-    }, 800);
+    }
+}
+
+/**
+ * Preenche os selects de filtro com os valores que existem de fato no banco.
+ * O HTML trazia uma lista fixa (Cardiologia, Hospital Central...) que nao tinha
+ * relacao com os profissionais cadastrados.
+ */
+async function loadSearchFilterOptions() {
+    const specialtySelect = document.getElementById('searchSpecialty');
+    const unitSelect = document.getElementById('searchHospital');
+    if (!specialtySelect || !unitSelect) return;
+
+    try {
+        const response = await fetch(`${window.APP_CONFIG?.AUTH_API_URL || '/auth'}/doctors/filters`);
+        const data = await response.json();
+        if (!response.ok) return;
+
+        const preencher = (select, valores, rotuloVazio) => {
+            const escolhido = select.value;
+            select.innerHTML = '';
+            const vazio = document.createElement('option');
+            vazio.value = '';
+            vazio.textContent = rotuloVazio;
+            select.appendChild(vazio);
+
+            (valores || []).forEach(valor => {
+                const option = document.createElement('option');
+                option.value = valor;
+                option.textContent = valor;
+                select.appendChild(option);
+            });
+
+            select.value = escolhido;
+        };
+
+        preencher(specialtySelect, data.especialidades, 'Todas as áreas');
+        preencher(unitSelect, data.unidades, 'Todas as unidades');
+
+        // A unidade de preferencia do perfil sai da mesma lista. Como esta
+        // funcao pode terminar depois de loadPatientData(), o valor salvo e
+        // reaplicado aqui - senao o select voltaria para "Sem preferência".
+        const preferredUnitSelect = document.getElementById('profilePreferredUnit');
+        if (preferredUnitSelect) {
+            preencher(preferredUnitSelect, data.unidades, 'Sem preferência');
+            garantirOpcaoDeUnidade(preferredUnitSelect, user?.unidade_preferencia);
+            preferredUnitSelect.value = user?.unidade_preferencia || '';
+        }
+    } catch (error) {
+        console.error('Erro ao carregar filtros de busca:', error);
+    }
 }
 
 async function cancelAppointment(button) {
@@ -1957,6 +2500,48 @@ document.addEventListener('DOMContentLoaded', async () => {
     initChatClient();
     loadProfessionalContacts();
     loadAvailablePermissions();
+    loadSearchFilterOptions();
+
+    const profileForm = document.getElementById('formPatientProfile');
+    if (profileForm) {
+        profileForm.addEventListener('submit', handleProfileSubmit);
+    }
+
+    const resetProfileButton = document.getElementById('btnResetProfile');
+    if (resetProfileButton) {
+        // Recarrega os campos a partir do perfil em memoria, descartando o que
+        // foi digitado sem salvar.
+        resetProfileButton.addEventListener('click', () => loadPatientData());
+    }
+
+    const passwordForm = document.getElementById('formChangePassword');
+    if (passwordForm) {
+        passwordForm.addEventListener('submit', handleChangePasswordSubmit);
+    }
+
+    const profilePhoneInput = document.getElementById('profilePhone');
+    if (profilePhoneInput) {
+        profilePhoneInput.addEventListener('input', event => {
+            let v = event.target.value.replace(/\D/g, '').slice(0, 11);
+            if (v.length > 6) {
+                v = v.replace(/^(\d{2})(\d{4,5})(\d{0,4}).*/, '($1) $2-$3');
+            } else if (v.length > 2) {
+                v = v.replace(/^(\d{2})(\d*)/, '($1) $2');
+            }
+            event.target.value = v;
+        });
+    }
+
+    // Enter no campo de texto dispara a busca, em vez de exigir o clique.
+    const searchTermInput = document.getElementById('searchTerm');
+    if (searchTermInput) {
+        searchTermInput.addEventListener('keydown', event => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                filterResults();
+            }
+        });
+    }
 
     const overviewButton = document.getElementById('btnOverviewNewAppointment');
     if (overviewButton) {
@@ -1983,6 +2568,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             updateAppointmentsMonthPicker(event.target.value);
         });
     }
+
+    // O filtro comecava vazio e ninguem o inicializava (quem fazia isso era a
+    // renderAppointmentsState, que nunca chegava a ser chamada). Sem filtro,
+    // applyAppointmentsMonthFilter devolvia consultas de todos os meses, mas a
+    // grade so tem celulas do mes corrente - as demais eram agrupadas e
+    // descartadas silenciosamente. Fixar o mes atual mantem filtro e grade
+    // olhando para o mesmo periodo.
+    updateAppointmentsMonthPicker(getCurrentMonthValue());
 
     try {
         await loadUserInfo();
@@ -2152,26 +2745,55 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
+    const guardianCpfInput = document.getElementById('guardianCPF');
+    if (guardianCpfInput) {
+        guardianCpfInput.addEventListener('input', event => {
+            let digits = event.target.value.replace(/\D/g, '').slice(0, 11);
+            digits = digits.replace(/(\d{3})(\d)/, '$1.$2');
+            digits = digits.replace(/(\d{3})(\d)/, '$1.$2');
+            digits = digits.replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+            event.target.value = digits;
+        });
+    }
+
     const guardianForm = document.getElementById('formNewGuardian');
     if (guardianForm) {
         guardianForm.addEventListener('submit', async event => {
             event.preventDefault();
 
-                const name = document.getElementById('guardianName')?.value.trim();
-                const relationship = document.getElementById('guardianRelationship')?.value;
-                const email = document.getElementById('guardianEmail')?.value.trim();
-                const password = document.getElementById('guardianPassword')?.value.trim();
-                if (!password || password.length < 6) {
-                    await showPopup('A senha deve ter pelo menos 6 caracteres.');
-                    return;
-                }
+            const editId = guardianForm.dataset.editId;
+            const isEditing = Boolean(editId);
 
-                if (!name || !relationship || !email || !password) {
-                    await showPopup('Por favor, preencha todos os campos obrigatórios.');
-                    return;
-                }
-            // Os valores agora sao ids da tabela `permissoes`.
-            const permissions = Array.from(document.querySelectorAll('input[name="permissions"]:checked'))
+            const name = document.getElementById('guardianName')?.value.trim();
+            const cpf = document.getElementById('guardianCPF')?.value.trim();
+            const relationship = document.getElementById('guardianRelationship')?.value;
+            const email = document.getElementById('guardianEmail')?.value.trim();
+            const password = document.getElementById('guardianPassword')?.value.trim();
+
+            if (!name || !cpf || !relationship || !email) {
+                await showPopup('Por favor, preencha todos os campos obrigatórios.');
+                return;
+            }
+
+            if (!validarCPF(cpf)) {
+                await showPopup('CPF do responsável inválido.');
+                return;
+            }
+
+            if (String(user?.cpf || '').replace(/\D/g, '') === cpf.replace(/\D/g, '')) {
+                await showPopup('O CPF do responsável deve ser diferente do seu próprio CPF.');
+                return;
+            }
+
+            // A senha so entra no cadastro. Na edicao o campo fica oculto, porque
+            // trocar a senha e coisa do proprio responsavel.
+            if (!isEditing && !isStrongPassword(password)) {
+                await showPopup('A senha deve ter 8+ caracteres, com maiúscula, minúscula, número e caractere especial.');
+                return;
+            }
+
+            // Os valores sao ids da tabela `permissoes`.
+            const permissions = Array.from(guardianForm.querySelectorAll('input[name="permissions"]:checked'))
                 .map(checkbox => Number(checkbox.value))
                 .filter(Number.isInteger);
 
@@ -2180,103 +2802,59 @@ document.addEventListener('DOMContentLoaded', async () => {
                 return;
             }
 
-            const guardians = loadGuardians();
-            const editIndex = guardianForm.dataset.editIndex;
-
-            if (editIndex !== undefined && editIndex !== '') {
-                // Atualizar responsável existente
-                guardians[parseInt(editIndex)] = {
-                    name,
-                    relationship,
-                    password,
-                    email,
-                    permissions,
-                    dateAdded: guardians[parseInt(editIndex)].dateAdded
-                };
-                await showPopup(`Responsável ${name} atualizado com sucesso.`);
-            } else {
-                // Adicionar novo responsável
-                const today = new Date().toLocaleDateString('pt-BR');
-                const newGuardian = {
-                    name,
-                    relationship,
-                    password,
-                    email,
-                    permissions,
-                    dateAdded: today
-                };
-
-                // If user is authenticated, try to persist on server
-                const token = window.ConectaSession.getToken();
-                if (token) {
-                    try {
-                        const resp = await fetch(`${window.APP_CONFIG?.AUTH_API_URL || '/auth'}/patient/guardians`, {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${token}`
-                            },
-                            body: JSON.stringify({ name, relationship, email, password, permissions })
-                        });
-
-                        const body = await resp.json();
-                        if (!resp.ok) {
-                            await showPopup(body.message || 'Erro ao salvar responsável no servidor.');
-                        } else {
-                            // attach server id
-                            newGuardian.id = body.id;
-                        }
-                    } catch (err) {
-                        console.error('Erro ao salvar responsavel no servidor:', err);
-                        await showPopup('Erro de conexão ao salvar responsável no servidor.');
-                    }
-                }
-
-                guardians.push(newGuardian);
-                await showPopup(`Responsável ${name} adicionado com sucesso.`);
+            const token = window.ConectaSession.getToken();
+            if (!token) {
+                await showPopup('Sessão expirada. Faça login novamente.');
+                return;
             }
 
-            saveGuardians(guardians);
-            guardianForm.reset();
-            delete guardianForm.dataset.editIndex;
-            document.querySelector('.modal-header div h3').textContent = 'Adicionar Responsável';
-            document.querySelector('button[type="submit"]').textContent = 'Adicionar Responsável';
-            closeGuardianModal();
-            renderGuardians();
+            const baseUrl = `${window.APP_CONFIG?.AUTH_API_URL || '/auth'}/patient/guardians`;
+            const url = isEditing ? `${baseUrl}/${encodeURIComponent(editId)}` : baseUrl;
+            const payload = isEditing
+                ? { name, relationship, email, permissions }
+                : { name, cpf: cpf.replace(/\D/g, ''), relationship, email, password, permissions };
+
+            try {
+                const resp = await fetch(url, {
+                    method: isEditing ? 'PUT' : 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const body = await resp.json().catch(() => ({}));
+
+                if (!resp.ok) {
+                    // O backend devolve os erros de schema em body.errors.
+                    const detalhe = Array.isArray(body.errors) && body.errors.length
+                        ? body.errors.map(issue => issue.message).join(' ')
+                        : '';
+                    await showPopup(detalhe || body.message || 'Erro ao salvar responsável.');
+                    return;
+                }
+
+                if (isEditing) {
+                    await showPopup(`Responsável ${name} atualizado com sucesso.`);
+                } else if (body.reused) {
+                    await showPopup(`${name} já tinha cadastro com esse CPF e foi vinculado a você. O acesso continua com a senha que essa pessoa já usava.`);
+                } else {
+                    await showPopup(`Responsável ${name} adicionado com sucesso.`);
+                }
+
+                closeGuardianModal();
+                renderGuardians();
+            } catch (err) {
+                console.error('Erro ao salvar responsavel no servidor:', err);
+                await showPopup('Erro de conexão ao salvar responsável.');
+            }
         });
     }
 
-function renderAppointmentsState() {
-    const list = document.getElementById('appointmentsList');
-    if (!list) return;
-
-    const localCards = list.querySelectorAll('.appointment-card');
-    const hasApiAppointments = patientAppointments && patientAppointments.length > 0;
-    const emptyState = list.querySelector('.empty-state');
-
-    if (localCards.length > 0 || hasApiAppointments) {
-        if (emptyState) {
-            emptyState.remove();
-        }
-        
-        // O avatar agora e definido em loadPatientData/updatePatientAvatar, que
-        // roda independente de o paciente ter consultas.
-
-        // Atualizar responsável exibido no perfil quando disponível
-        const profilePatientResponsible = document.getElementById('profilePatientResponsible');
-        const responsible = user.responsible || localStorage.getItem('patientResponsible') || '';
-        if (profilePatientResponsible) {
-            profilePatientResponsible.textContent = responsible || '--';
-        }
-    }
-
-    loadPatientData();
-    updateAppointmentsMonthPicker(getCurrentMonthValue());
-    Promise.all([fetchPatientAppointments(), fetchAvailableProfessionals()]).finally(() => {
-        populateProfessionalOptions();
-        refreshDashboard();
-    });
-}
+// renderAppointmentsState() foi removida: nunca era chamada por ninguem. O que
+// ela fazia de util - inicializar o mes e buscar agendamentos/profissionais -
+// agora acontece no DOMContentLoaded e em loadUserInfo().
 
 window.openModal = openModal;
 window.closeModal = closeModal;

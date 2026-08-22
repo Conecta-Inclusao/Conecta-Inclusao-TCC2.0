@@ -15,7 +15,11 @@ import {
   registerClinicSchema,
   resetTemporaryPasswordSchema,
   forgotPasswordSchema,
-  resetPasswordSchema
+  resetPasswordSchema,
+  guardianCreateSchema,
+  guardianUpdateSchema,
+  updatePatientProfileSchema,
+  changePasswordSchema
 } from "../validators/auth.advanced.validators.js";
 import {
   loginUniversal,
@@ -30,7 +34,9 @@ import {
   getUserProfile,
   getResponsavelPermissions,
   setGuardianPermissions,
-  getAvailablePermissions
+  getAvailablePermissions,
+  linkGuardianToPatient,
+  requirePatientAccess
 } from "../services/auth.advanced.service.js";
 
 const router = Router();
@@ -275,13 +281,125 @@ router.get("/profile", authenticateToken, async (req, res, next) => {
   }
 });
 
+/**
+ * Edicao do proprio perfil do paciente. A aba "Meu Perfil" era somente leitura -
+ * todos os valores eram <strong> sem formulario nenhum por tras.
+ *
+ * Cada campo so entra no UPDATE se veio no corpo, para que salvar um campo nao
+ * apague os outros. String vazia vira NULL (o paciente limpou o campo);
+ * ausencia do campo mantem o valor atual.
+ */
+router.put(
+  "/profile",
+  authenticateToken,
+  requireProfile('paciente'),
+  async (req, res, next) => {
+    try {
+      const parsed = updatePatientProfileSchema.safeParse(req.body);
+      if (!parsed.success) return validationError(res, parsed);
+
+      const colunas = [];
+      const valores = [];
+
+      const vazioViraNulo = (valor) => {
+        const texto = String(valor ?? "").trim();
+        return texto === "" ? null : texto;
+      };
+
+      const mapa = [
+        ["nome_paciente", "name"],
+        ["email", "email"],
+        ["telefone", "telefone"],
+        ["tipo_deficiencia", "tipoDeficiencia"],
+        ["unidade_preferencia", "unidadePreferencia"],
+        ["data_nascimento", "dataNascimento"]
+      ];
+
+      for (const [coluna, campo] of mapa) {
+        if (parsed.data[campo] !== undefined) {
+          colunas.push(`${coluna} = ?`);
+          valores.push(vazioViraNulo(parsed.data[campo]));
+        }
+      }
+
+      if (!colunas.length) {
+        return res.status(400).json({ message: 'Nenhum campo para atualizar.' });
+      }
+
+      valores.push(Number(req.user.sub));
+
+      await pool.execute(
+        `UPDATE pacientes SET ${colunas.join(', ')} WHERE id = ?`,
+        valores
+      );
+
+      const result = await getUserProfile(req.user);
+      if (!result.ok) {
+        return res.status(result.statusCode).json({ message: result.message });
+      }
+
+      return res.status(200).json(result.data);
+    } catch (err) {
+      if (err.code === "23505") {
+        return res.status(409).json({ message: 'Esse e-mail ja esta em uso por outra conta.' });
+      }
+      return next(err);
+    }
+  }
+);
+
+/**
+ * Troca de senha do paciente logado. Exige a senha atual: sem isso, quem
+ * pegasse uma sessao aberta trocaria a senha e trancaria o dono para fora.
+ *
+ * O fluxo de "esqueci a senha" (deslogado) continua sendo /password/forgot.
+ */
+router.put(
+  "/profile/password",
+  authenticateToken,
+  requireProfile('paciente'),
+  async (req, res, next) => {
+    try {
+      const parsed = changePasswordSchema.safeParse(req.body);
+      if (!parsed.success) return validationError(res, parsed);
+
+      const [rows] = await pool.execute(
+        `SELECT senha AS password_hash FROM pacientes WHERE id = ? LIMIT 1`,
+        [Number(req.user.sub)]
+      );
+
+      if (!rows.length) {
+        return res.status(404).json({ message: 'Paciente nao encontrado.' });
+      }
+
+      const confere = await bcrypt.compare(parsed.data.currentPassword, rows[0].password_hash);
+      if (!confere) {
+        return res.status(400).json({ message: 'Senha atual incorreta.' });
+      }
+
+      const novoHash = await bcrypt.hash(parsed.data.newPassword.trim(), 10);
+      await pool.execute(
+        `UPDATE pacientes SET senha = ? WHERE id = ?`,
+        [novoHash, Number(req.user.sub)]
+      );
+
+      return res.status(200).json({ message: 'Senha alterada com sucesso.' });
+    } catch (err) {
+      return next(err);
+    }
+  }
+);
+
 // ===========================================================================
 // PERMISSOES DE RESPONSAVEIS
 // ===========================================================================
 
-// Catalogo de permissoes: exige login, mas serve a qualquer perfil (o front do
-// paciente monta o formulario de responsavel a partir daqui).
-router.get("/permissoes", authenticateToken, async (req, res, next) => {
+// Catalogo de permissoes: rota publica. O cadastro de paciente monta o mesmo
+// formulario de responsavel do dashboard, e nesse momento ainda nao existe
+// token para autenticar. O conteudo e uma tabela fixa de apoio ('Ver
+// agendamentos', 'Enviar mensagens', 'Gerenciar agendamentos') - nao ha dado de
+// usuario aqui, so os rotulos que o formulario precisa exibir.
+router.get("/permissoes", async (req, res, next) => {
   try {
     const result = await getAvailablePermissions();
 
@@ -588,6 +706,86 @@ async function listAvailableDoctors(res, next) {
 router.get("/doctors/available", (req, res, next) => listAvailableDoctors(res, next));
 router.get("/professionals", authenticateToken, (req, res, next) => listAvailableDoctors(res, next));
 
+/**
+ * Busca de atendimento com filtros. A aba "Buscar Atendimento" do paciente nao
+ * tinha endpoint: o botao Filtrar apenas exibia um popup e a lista abaixo
+ * continuava mostrando todos os profissionais, ignorando o que fora escolhido.
+ *
+ * Todos os filtros sao opcionais e se combinam. `termo` casa nome do
+ * profissional, especialidade ou unidade, para a busca livre por texto.
+ */
+router.get("/doctors/search", async (req, res, next) => {
+  try {
+    const especialidade = String(req.query.especialidade || "").trim();
+    const unidade = String(req.query.unidade || "").trim();
+    const termo = String(req.query.termo || "").trim();
+
+    const condicoes = ["LOWER(m.status) IN ('active', 'ativo', 'trabalhando')"];
+    const valores = [];
+
+    if (especialidade) {
+      condicoes.push("LOWER(m.especialidade) = LOWER(?)");
+      valores.push(especialidade);
+    }
+
+    if (unidade) {
+      condicoes.push("LOWER(m.unidade) = LOWER(?)");
+      valores.push(unidade);
+    }
+
+    if (termo) {
+      condicoes.push("(m.name ILIKE ? OR m.especialidade ILIKE ? OR m.unidade ILIKE ?)");
+      const curinga = `%${termo}%`;
+      valores.push(curinga, curinga, curinga);
+    }
+
+    const [rows] = await pool.execute(
+      `SELECT m.id, m.name, m.crm, m.especialidade, m.unidade, m.bio, m.status,
+              c.nome AS "clinicName", c.cidade, c.estado
+       FROM medicos m
+       LEFT JOIN clinicas c ON m.clinica_id = c.id
+       WHERE ${condicoes.join(" AND ")}
+       ORDER BY m.especialidade ASC, m.name ASC`,
+      valores
+    );
+
+    return res.status(200).json(rows);
+  } catch (err) {
+    return next(err);
+  }
+});
+
+/**
+ * Valores distintos para preencher os selects de filtro, sem precisar baixar a
+ * lista inteira de profissionais so para extrair especialidades e unidades.
+ */
+router.get("/doctors/filters", async (req, res, next) => {
+  try {
+    const [especialidades] = await pool.execute(
+      `SELECT DISTINCT especialidade AS valor
+       FROM medicos
+       WHERE especialidade IS NOT NULL AND TRIM(especialidade) <> ''
+         AND LOWER(status) IN ('active', 'ativo', 'trabalhando')
+       ORDER BY especialidade ASC`
+    );
+
+    const [unidades] = await pool.execute(
+      `SELECT DISTINCT unidade AS valor
+       FROM medicos
+       WHERE unidade IS NOT NULL AND TRIM(unidade) <> ''
+         AND LOWER(status) IN ('active', 'ativo', 'trabalhando')
+       ORDER BY unidade ASC`
+    );
+
+    return res.status(200).json({
+      especialidades: especialidades.map((linha) => linha.valor),
+      unidades: unidades.map((linha) => linha.valor)
+    });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 // ===========================================================================
 // AGENDAMENTOS DO PACIENTE
 // ===========================================================================
@@ -595,13 +793,19 @@ router.get("/professionals", authenticateToken, (req, res, next) => listAvailabl
 router.get(
   "/patient/appointments",
   authenticateToken,
-  requireProfile('paciente'),
+  requirePatientAccess('Ver agendamentos'),
   async (req, res, next) => {
     try {
       const [rows] = await pool.execute(
+        // data_agendamento e TIMESTAMP sem fuso: o driver pg o converte em Date
+        // usando o fuso do processo Node e o res.json() serializa em UTC, o que
+        // desloca os digitos da data/hora conforme o offset do servidor. O front
+        // le essa string textualmente (split('T')[0]), entao a consulta caia no
+        // dia errado do calendario - e, virando o mes, sumia da tela mesmo
+        // estando agendada. TO_CHAR devolve a hora de parede como foi gravada.
         `SELECT
            a.id,
-           a.data_agendamento AS "appointmentDate",
+           TO_CHAR(a.data_agendamento, 'YYYY-MM-DD"T"HH24:MI:SS') AS "appointmentDate",
            a.status,
            m.id AS "doctorId",
            m.name AS "doctorName",
@@ -614,7 +818,7 @@ router.get(
          WHERE a.paciente_id = ?
            AND a.status <> 'cancelado'
          ORDER BY a.data_agendamento ASC`,
-        [Number(req.user.sub)]
+        [req.patientId]
       );
 
       return res.status(200).json(rows);
@@ -627,7 +831,7 @@ router.get(
 router.post(
   "/patient/appointments",
   authenticateToken,
-  requireProfile('paciente'),
+  requirePatientAccess('Gerenciar agendamentos'),
   async (req, res, next) => {
     try {
       const { med_crm, date } = req.body;
@@ -653,7 +857,7 @@ router.post(
       const [insertResult] = await pool.execute(
         `INSERT INTO agendamentos (clinica_id, paciente_id, medico_id, data_agendamento, status)
          VALUES (?, ?, ?, ?, 'pendente') RETURNING id`,
-        [medico.clinica_id, Number(req.user.sub), medico.id, appointmentDate]
+        [medico.clinica_id, req.patientId, medico.id, appointmentDate]
       );
 
       const createdId = insertResult.rows?.[0]?.id ?? insertResult.insertId;
@@ -662,7 +866,9 @@ router.post(
       }
 
       const [rows] = await pool.execute(
-        `SELECT a.id, a.data_agendamento AS "appointmentDate", a.status,
+        // TO_CHAR pelo mesmo motivo do GET /patient/appointments: manter a hora
+        // de parede, sem a conversao para UTC que o pg + res.json() aplicariam.
+        `SELECT a.id, TO_CHAR(a.data_agendamento, 'YYYY-MM-DD"T"HH24:MI:SS') AS "appointmentDate", a.status,
                 m.id AS "doctorId", m.name AS "doctorName", m.especialidade AS specialty,
                 m.unidade AS unit, c.nome AS "clinicName"
          FROM agendamentos a
@@ -682,7 +888,7 @@ router.post(
 router.put(
   "/patient/appointments/:id",
   authenticateToken,
-  requireProfile('paciente'),
+  requirePatientAccess('Gerenciar agendamentos'),
   async (req, res, next) => {
     try {
       const appointmentId = Number(req.params.id);
@@ -718,7 +924,7 @@ router.put(
         return res.status(404).json({ message: 'Agendamento nao encontrado.' });
       }
 
-      if (Number(existing.paciente_id) !== Number(req.user.sub)) {
+      if (Number(existing.paciente_id) !== Number(req.patientId)) {
         return res.status(403).json({ message: 'Acesso negado. Este agendamento nao pertence ao paciente autenticado.' });
       }
 
@@ -744,7 +950,9 @@ router.put(
       }
 
       const [rows] = await pool.execute(
-        `SELECT a.id, a.data_agendamento AS "appointmentDate", a.status,
+        // TO_CHAR pelo mesmo motivo do GET /patient/appointments: manter a hora
+        // de parede, sem a conversao para UTC que o pg + res.json() aplicariam.
+        `SELECT a.id, TO_CHAR(a.data_agendamento, 'YYYY-MM-DD"T"HH24:MI:SS') AS "appointmentDate", a.status,
                 m.id AS "doctorId", m.name AS "doctorName", m.especialidade AS specialty,
                 m.unidade AS unit, c.nome AS "clinicName"
          FROM agendamentos a
@@ -764,7 +972,7 @@ router.put(
 router.delete(
   "/patient/appointments/:id",
   authenticateToken,
-  requireProfile('paciente'),
+  requirePatientAccess('Gerenciar agendamentos'),
   async (req, res, next) => {
     try {
       const appointmentId = Number(req.params.id);
@@ -781,7 +989,7 @@ router.delete(
         return res.status(404).json({ message: 'Agendamento nao encontrado.' });
       }
 
-      if (Number(existing.paciente_id) !== Number(req.user.sub)) {
+      if (Number(existing.paciente_id) !== Number(req.patientId)) {
         return res.status(403).json({ message: 'Acesso negado. Este agendamento nao pertence ao paciente autenticado.' });
       }
 
@@ -821,11 +1029,29 @@ router.get(
   requireProfile('paciente'),
   async (req, res, next) => {
     try {
+      // As permissoes vinham faltando aqui: eram gravadas no cadastro, mas a
+      // listagem nao as devolvia, entao o card do dashboard nunca tinha o que
+      // exibir. O agregado traz os ids e os nomes ja resolvidos.
       const [rows] = await pool.execute(
-        `SELECT r.id, r.nome AS name, r.email, pr.parentesco AS relationship
+        `SELECT r.id,
+                r.nome AS name,
+                r.email,
+                r.cpf,
+                pr.parentesco AS relationship,
+                COALESCE(
+                  ARRAY_AGG(p.id ORDER BY p.id) FILTER (WHERE p.id IS NOT NULL),
+                  '{}'::int[]
+                ) AS "permissionIds",
+                COALESCE(
+                  ARRAY_AGG(p.nome ORDER BY p.id) FILTER (WHERE p.id IS NOT NULL),
+                  '{}'::text[]
+                ) AS "permissionNames"
          FROM paciente_responsavel pr
          INNER JOIN responsavel r ON pr.id_responsavel = r.id
+         LEFT JOIN responsavel_permissoes rp ON rp.id_responsavel = r.id
+         LEFT JOIN permissoes p ON p.id = rp.id_permissao
          WHERE pr.id_paciente = ?
+         GROUP BY r.id, r.nome, r.email, r.cpf, pr.parentesco
          ORDER BY r.nome ASC`,
         [Number(req.user.sub)]
       );
@@ -842,54 +1068,137 @@ router.post(
   authenticateToken,
   requireProfile('paciente'),
   async (req, res, next) => {
+    // A validacao era so `if (!name || !relationship ...)`: aceitava e-mail
+    // malformado e senha de um caractere. Agora usa o mesmo schema do cadastro
+    // do paciente, com CPF verificado e senha forte.
+    const parsed = guardianCreateSchema.safeParse(req.body);
+    if (!parsed.success) return validationError(res, parsed);
+
+    const pacienteId = Number(req.user.sub);
+
+    const [patientRows] = await pool.execute(
+      `SELECT cpf FROM pacientes WHERE id = ? LIMIT 1`,
+      [pacienteId]
+    );
+
+    const soDigitos = (valor) => String(valor || "").replace(/\D/g, "");
+    if (soDigitos(patientRows[0]?.cpf) === soDigitos(parsed.data.cpf)) {
+      return res.status(400).json({ message: 'O CPF do responsavel deve ser diferente do seu proprio CPF.' });
+    }
+
     const conn = await pool.getConnection();
 
     try {
-      const { name, relationship, email, password, permissions } = req.body;
-      if (!name || !relationship || !email || !password) {
-        return res.status(400).json({ message: 'name, relationship, email e password sao obrigatorios.' });
-      }
-
       await conn.beginTransaction();
 
-      const passwordHash = await bcrypt.hash(String(password), 10);
-      const [insertResp] = await conn.execute(
-        `INSERT INTO responsavel (nome, email, senha, status) VALUES (?, ?, ?, 1) RETURNING id`,
-        [name, email, passwordHash]
-      );
-
-      const responsavelId = insertResp.rows?.[0]?.id ?? insertResp.insertId;
-      if (!responsavelId) {
+      const linkResult = await linkGuardianToPatient(conn, pacienteId, parsed.data);
+      if (!linkResult.ok) {
         await conn.rollback();
-        return res.status(500).json({ message: 'Nao foi possivel criar o responsavel no banco de dados.' });
-      }
-
-      const pacienteId = Number(req.user.sub);
-      await conn.execute(
-        `INSERT INTO paciente_responsavel (id_paciente, id_responsavel, parentesco) VALUES (?, ?, ?)`,
-        [pacienteId, responsavelId, relationship]
-      );
-
-      await conn.execute(
-        `UPDATE pacientes SET id_responsavel = ? WHERE id = ?`,
-        [responsavelId, pacienteId]
-      );
-
-      const permissionIds = (Array.isArray(permissions) ? permissions : [])
-        .map((id) => Number(id))
-        .filter((id) => Number.isInteger(id) && id > 0);
-
-      for (const permissionId of permissionIds) {
-        await conn.execute(
-          `INSERT INTO responsavel_permissoes (id_permissao, id_responsavel)
-           VALUES (?, ?) ON CONFLICT DO NOTHING`,
-          [permissionId, responsavelId]
-        );
+        return res.status(linkResult.statusCode).json({ message: linkResult.message });
       }
 
       await conn.commit();
 
-      return res.status(201).json({ id: responsavelId, name, email, relationship, permissions: permissionIds });
+      return res.status(201).json({
+        id: linkResult.responsavelId,
+        name: parsed.data.name,
+        email: parsed.data.email,
+        cpf: soDigitos(parsed.data.cpf),
+        relationship: parsed.data.relationship,
+        permissions: linkResult.permissions,
+        // Avisa o front que o CPF ja pertencia a um responsavel cadastrado e o
+        // vinculo apenas reaproveitou a conta existente.
+        reused: linkResult.reused
+      });
+    } catch (err) {
+      await conn.rollback();
+
+      if (err.code === "23505") {
+        return res.status(409).json({ message: 'Ja existe um responsavel com esse e-mail ou CPF.' });
+      }
+
+      return next(err);
+    } finally {
+      conn.release();
+    }
+  }
+);
+
+router.put(
+  "/patient/guardians/:id",
+  authenticateToken,
+  requireProfile('paciente'),
+  async (req, res, next) => {
+    const parsed = guardianUpdateSchema.safeParse(req.body);
+    if (!parsed.success) return validationError(res, parsed);
+
+    const pacienteId = Number(req.user.sub);
+    const responsavelId = Number(req.params.id);
+
+    if (!Number.isInteger(responsavelId) || responsavelId <= 0) {
+      return res.status(400).json({ message: 'Responsavel invalido.' });
+    }
+
+    const conn = await pool.getConnection();
+
+    try {
+      await conn.beginTransaction();
+
+      // So permite editar quem esta de fato vinculado a este paciente - sem
+      // isso, qualquer paciente logado alteraria o responsavel de outro.
+      const [vinculo] = await conn.execute(
+        `SELECT 1 FROM paciente_responsavel
+         WHERE id_paciente = ? AND id_responsavel = ? LIMIT 1`,
+        [pacienteId, responsavelId]
+      );
+
+      if (!vinculo.length) {
+        await conn.rollback();
+        return res.status(404).json({ message: 'Responsavel nao encontrado para este paciente.' });
+      }
+
+      if (parsed.data.name || parsed.data.email) {
+        await conn.execute(
+          `UPDATE responsavel
+           SET nome = COALESCE(?, nome),
+               email = COALESCE(?, email)
+           WHERE id = ?`,
+          [
+            parsed.data.name ?? null,
+            parsed.data.email ? String(parsed.data.email).trim().toLowerCase() : null,
+            responsavelId
+          ]
+        );
+      }
+
+      // O parentesco descreve o vinculo com ESTE paciente, entao mora na tabela
+      // de ligacao e nao no cadastro do responsavel.
+      if (parsed.data.relationship) {
+        await conn.execute(
+          `UPDATE paciente_responsavel SET parentesco = ?
+           WHERE id_paciente = ? AND id_responsavel = ?`,
+          [parsed.data.relationship, pacienteId, responsavelId]
+        );
+      }
+
+      if (Array.isArray(parsed.data.permissions)) {
+        await conn.execute(
+          `DELETE FROM responsavel_permissoes WHERE id_responsavel = ?`,
+          [responsavelId]
+        );
+
+        for (const permissionId of parsed.data.permissions) {
+          await conn.execute(
+            `INSERT INTO responsavel_permissoes (id_permissao, id_responsavel)
+             VALUES (?, ?) ON CONFLICT DO NOTHING`,
+            [permissionId, responsavelId]
+          );
+        }
+      }
+
+      await conn.commit();
+
+      return res.status(200).json({ id: responsavelId, ...parsed.data });
     } catch (err) {
       await conn.rollback();
 
@@ -900,6 +1209,129 @@ router.post(
       return next(err);
     } finally {
       conn.release();
+    }
+  }
+);
+
+router.delete(
+  "/patient/guardians/:id",
+  authenticateToken,
+  requireProfile('paciente'),
+  async (req, res, next) => {
+    const pacienteId = Number(req.user.sub);
+    const responsavelId = Number(req.params.id);
+
+    if (!Number.isInteger(responsavelId) || responsavelId <= 0) {
+      return res.status(400).json({ message: 'Responsavel invalido.' });
+    }
+
+    const conn = await pool.getConnection();
+
+    try {
+      await conn.beginTransaction();
+
+      const [removido] = await conn.execute(
+        `DELETE FROM paciente_responsavel
+         WHERE id_paciente = ? AND id_responsavel = ?`,
+        [pacienteId, responsavelId]
+      );
+
+      if (!removido.affectedRows) {
+        await conn.rollback();
+        return res.status(404).json({ message: 'Responsavel nao encontrado para este paciente.' });
+      }
+
+      // pacientes.id_responsavel aponta para um unico responsavel "principal".
+      // Se era este, promove outro vinculo remanescente (ou zera).
+      const [restantes] = await conn.execute(
+        `SELECT id_responsavel FROM paciente_responsavel
+         WHERE id_paciente = ? ORDER BY id_responsavel ASC LIMIT 1`,
+        [pacienteId]
+      );
+
+      await conn.execute(
+        `UPDATE pacientes SET id_responsavel = ? WHERE id = ? AND id_responsavel = ?`,
+        [restantes[0]?.id_responsavel ?? null, pacienteId, responsavelId]
+      );
+
+      // A conta do responsavel so e apagada se ele nao acompanhar mais ninguem.
+      // Como o mesmo CPF pode atender varios pacientes, apagar sempre tiraria o
+      // acesso dele aos demais.
+      const [outrosVinculos] = await conn.execute(
+        `SELECT 1 FROM paciente_responsavel WHERE id_responsavel = ? LIMIT 1`,
+        [responsavelId]
+      );
+
+      if (!outrosVinculos.length) {
+        await conn.execute(`DELETE FROM responsavel WHERE id = ?`, [responsavelId]);
+      }
+
+      await conn.commit();
+
+      return res.status(200).json({ id: responsavelId, removed: true });
+    } catch (err) {
+      await conn.rollback();
+      return next(err);
+    } finally {
+      conn.release();
+    }
+  }
+);
+
+// ===========================================================================
+// AREA DO RESPONSAVEL
+// ===========================================================================
+
+/**
+ * Pacientes que o responsavel logado acompanha, com as permissoes concedidas.
+ * E a primeira chamada do dashboard do responsavel: define quem ele pode ver e
+ * o que a interface deve habilitar.
+ *
+ * As permissoes sao do responsavel (tabela responsavel_permissoes) e valem para
+ * todos os pacientes vinculados a ele.
+ */
+router.get(
+  "/responsavel/pacientes",
+  authenticateToken,
+  requireProfile('responsavel'),
+  async (req, res, next) => {
+    try {
+      const responsavelId = Number(req.user.sub);
+
+      const [pacientes] = await pool.execute(
+        `SELECT p.id,
+                p.nome_paciente AS name,
+                p.cpf,
+                p.email,
+                p.telefone,
+                TO_CHAR(p.data_nascimento, 'YYYY-MM-DD') AS "dataNascimento",
+                p.tipo_deficiencia AS "tipoDeficiencia",
+                p.unidade_preferencia AS "unidadePreferencia",
+                p.status,
+                pr.parentesco AS relationship
+         FROM paciente_responsavel pr
+         INNER JOIN pacientes p ON p.id = pr.id_paciente
+         WHERE pr.id_responsavel = ?
+         ORDER BY p.nome_paciente ASC`,
+        [responsavelId]
+      );
+
+      const [permissoes] = await pool.execute(
+        `SELECT p.id, p.nome
+         FROM responsavel_permissoes rp
+         INNER JOIN permissoes p ON p.id = rp.id_permissao
+         WHERE rp.id_responsavel = ?
+         ORDER BY p.id ASC`,
+        [responsavelId]
+      );
+
+      return res.status(200).json({
+        pacientes,
+        permissions: permissoes.map((linha) => linha.nome),
+        permissionIds: permissoes.map((linha) => linha.id)
+      });
+    } catch (err) {
+      next(err);
     }
   }
 );

@@ -161,3 +161,38 @@ CREATE INDEX IF NOT EXISTS idx_agendamentos_medico ON agendamentos (medico_id);
 CREATE INDEX IF NOT EXISTS idx_agendamentos_clinica ON agendamentos (clinica_id);
 CREATE INDEX IF NOT EXISTS idx_mensagens_agendamento ON mensagens (agendamento_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_medicos_clinica ON medicos (clinica_id);
+
+-- ---------------------------------------------------------------------------
+-- Alteracoes incrementais
+--
+-- Este bloco e seguro de rodar em banco que ja tem dados: todo comando usa
+-- IF NOT EXISTS, entao reexecutar o arquivo inteiro nao quebra nada.
+-- ---------------------------------------------------------------------------
+
+-- O responsavel passa a ter CPF proprio. Serve para dois fins:
+--   1. login do responsavel por CPF (antes so era possivel por e-mail);
+--   2. identificar a mesma pessoa quando ela e responsavel por mais de um
+--      paciente - nesse caso reaproveitamos a linha existente em vez de criar
+--      um responsavel duplicado, e so acrescentamos o vinculo em
+--      paciente_responsavel.
+ALTER TABLE responsavel ADD COLUMN IF NOT EXISTS cpf VARCHAR(14);
+
+-- UNIQUE via indice parcial: as linhas antigas ficam com cpf NULL e nao podem
+-- colidir entre si. (Em Postgres varios NULL ja convivem num UNIQUE comum, mas
+-- o WHERE deixa a intencao explicita.)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_responsavel_cpf
+    ON responsavel (cpf)
+    WHERE cpf IS NOT NULL;
+
+-- A PK de paciente_responsavel e (id_paciente, id_responsavel), o que so
+-- indexa buscas que comecam pelo paciente. O login do responsavel faz o
+-- caminho inverso - "quais pacientes essa pessoa acompanha" - entao precisa
+-- de indice proprio por id_responsavel.
+CREATE INDEX IF NOT EXISTS idx_paciente_responsavel_responsavel
+    ON paciente_responsavel (id_responsavel);
+
+-- Campos novos do perfil do paciente (aba "Meu Perfil" passou a ser editavel).
+-- Nao existe coluna de plano de saude aqui e isso e proposital: o campo foi
+-- removido do cadastro.
+ALTER TABLE pacientes ADD COLUMN IF NOT EXISTS telefone VARCHAR(20);
+ALTER TABLE pacientes ADD COLUMN IF NOT EXISTS unidade_preferencia VARCHAR(120);

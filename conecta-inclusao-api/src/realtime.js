@@ -64,7 +64,12 @@ export function initRealtime(server, allowedOrigins) {
       return next(new Error("Token nao autorizado para mensagens."));
     }
 
-    const actorResult = await resolveActor({ sub: decoded.sub, profile: decoded.profile });
+    // Responsavel que acompanha mais de um paciente informa qual deles esta
+    // atendendo no proprio handshake.
+    const actorResult = await resolveActor(
+      { sub: decoded.sub, profile: decoded.profile },
+      { pacienteId: socket.handshake.auth?.pacienteId ?? null }
+    );
     if (!actorResult.ok) {
       return next(new Error(actorResult.message));
     }

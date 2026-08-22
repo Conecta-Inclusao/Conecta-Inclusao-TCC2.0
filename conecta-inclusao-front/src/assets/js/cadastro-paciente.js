@@ -129,26 +129,87 @@ async function registerPatientAPI(data) {
     }
 }
 
+/**
+ * Carrega o catalogo de permissoes (rota publica) e monta os checkboxes. Os
+ * values sao os ids da tabela `permissoes` - sao eles que o backend grava em
+ * responsavel_permissoes.
+ */
+async function loadGuardianPermissions() {
+    const grid = document.getElementById('guardianPermissionsGrid');
+    if (!grid || grid.dataset.loaded === 'true') return;
+
+    try {
+        const response = await fetch(`${window.APP_CONFIG?.AUTH_API_URL || '/auth'}/permissoes`);
+        // A rota responde { permissions: [{ id, key, label }] }.
+        const body = await response.json();
+        const permissions = Array.isArray(body?.permissions) ? body.permissions : [];
+
+        if (!response.ok || !permissions.length) {
+            grid.innerHTML = '<span class="loading-inline">Não foi possível carregar as permissões.</span>';
+            return;
+        }
+
+        grid.innerHTML = '';
+        permissions.forEach(permission => {
+            const option = document.createElement('label');
+            option.className = 'checkbox-item';
+
+            const input = document.createElement('input');
+            input.type = 'checkbox';
+            input.name = 'guardianPermission';
+            input.value = permission.id;
+
+            const text = document.createElement('span');
+            // textContent em vez de template string: o rotulo vem do banco e nao
+            // deve ser interpretado como HTML.
+            text.textContent = permission.label;
+
+            option.appendChild(input);
+            option.appendChild(text);
+            grid.appendChild(option);
+        });
+        grid.dataset.loaded = 'true';
+    } catch (error) {
+        console.error('Erro ao carregar permissões:', error);
+        grid.innerHTML = '<span class="loading-inline">Não foi possível carregar as permissões.</span>';
+    }
+}
+
+function getSelectedGuardianPermissions() {
+    return Array.from(document.querySelectorAll('input[name="guardianPermission"]:checked'))
+        .map(input => Number(input.value))
+        .filter(id => Number.isInteger(id) && id > 0);
+}
+
 function openGuardianModal() {
     const modal = document.getElementById('guardianModal');
     if (!modal) return;
 
     const guardianName = document.getElementById('guardianName');
+    const guardianCPF = document.getElementById('guardianCPF');
     const guardianRelationship = document.getElementById('guardianRelationship');
     const guardianEmail = document.getElementById('guardianEmail');
     const guardianPassword = document.getElementById('guardianPassword');
 
+    loadGuardianPermissions();
+
     if (guardianData) {
         guardianName.value = guardianData.name;
+        guardianCPF.value = guardianData.cpf;
         guardianRelationship.value = guardianData.relationship;
         guardianEmail.value = guardianData.email;
         guardianPassword.value = guardianData.password;
     } else {
         guardianName.value = '';
+        guardianCPF.value = '';
         guardianRelationship.value = '';
         guardianEmail.value = '';
         guardianPassword.value = '';
     }
+
+    document.querySelectorAll('input[name="guardianPermission"]').forEach(input => {
+        input.checked = Boolean(guardianData?.permissions?.includes(Number(input.value)));
+    });
 
     modal.classList.add('active');
     modal.setAttribute('aria-hidden', 'false');
@@ -164,17 +225,31 @@ function closeGuardianModal() {
 
 function validateGuardianModalForm() {
     const guardianName = document.getElementById('guardianName').value.trim();
+    const guardianCPF = document.getElementById('guardianCPF').value.trim();
     const guardianRelationship = document.getElementById('guardianRelationship').value.trim();
     const guardianEmail = document.getElementById('guardianEmail').value.trim();
     const guardianPassword = document.getElementById('guardianPassword').value;
 
-    if (!guardianName || !guardianRelationship || !guardianEmail || !guardianPassword) {
+    if (!guardianName || !guardianCPF || !guardianRelationship || !guardianEmail || !guardianPassword) {
         showPopup('Preencha todos os campos do responsável.');
         return false;
     }
 
-    if (guardianPassword.length < 6) {
-        showPopup('A senha do responsável deve ter ao menos 6 caracteres.');
+    if (!validarCPF(guardianCPF)) {
+        showPopup('CPF do responsável inválido.');
+        return false;
+    }
+
+    // O responsavel tem login proprio, entao a senha segue a mesma regra de
+    // forca do paciente - o backend recusa qualquer coisa mais fraca.
+    if (!isStrongPassword(guardianPassword)) {
+        showPopup('A senha do responsável deve ter 8+ caracteres, com maiúscula, minúscula, número e caractere especial.');
+        return false;
+    }
+
+    const patientCPF = document.getElementById('cpf').value.replace(/\D/g, '');
+    if (patientCPF && patientCPF === guardianCPF.replace(/\D/g, '')) {
+        showPopup('O CPF do responsável deve ser diferente do CPF do paciente.');
         return false;
     }
 
@@ -190,9 +265,11 @@ function handleGuardianModalSubmit(event) {
 
     guardianData = {
         name: document.getElementById('guardianName').value.trim(),
+        cpf: document.getElementById('guardianCPF').value.trim(),
         relationship: document.getElementById('guardianRelationship').value.trim(),
         email: document.getElementById('guardianEmail').value.trim(),
-        password: document.getElementById('guardianPassword').value
+        password: document.getElementById('guardianPassword').value,
+        permissions: getSelectedGuardianPermissions()
     };
 
     updateGuardianSummary();
@@ -231,16 +308,20 @@ async function handlePatientRegistration(event) {
             email: email || null,
             nomeResponsavel: guardianData?.name || null,
             tipoDeficiencia: tipoDeficiencia,
-            planoAtual: planoAtual || null,
             dataNascimento: dataNascimento
         };
 
         if (guardianData) {
+            // As chaves seguem o schema do backend (name/relationship/...), nao a
+            // traducao para portugues que era enviada antes e chegava vazia do
+            // outro lado.
             registrationData.responsavel = {
-                nome: guardianData.name,
-                parentesco: guardianData.relationship,
+                name: guardianData.name,
+                cpf: guardianData.cpf.replace(/\D/g, ''),
+                relationship: guardianData.relationship,
                 email: guardianData.email,
-                password: guardianData.password
+                password: guardianData.password,
+                permissions: guardianData.permissions || []
             };
         }
 
@@ -278,7 +359,10 @@ document.addEventListener('DOMContentLoaded', function() {
     const guardianForm = document.getElementById('guardianModalForm');
     const modal = document.getElementById('guardianModal');
 
+    const guardianCpfInput = document.getElementById('guardianCPF');
+
     if (cpfInput) applyMask(cpfInput, cpfMask);
+    if (guardianCpfInput) applyMask(guardianCpfInput, cpfMask);
     if (form) form.addEventListener('submit', handlePatientRegistration);
     if (birthInput) birthInput.addEventListener('change', updateGuardianSection);
     if (openModalButton) openModalButton.addEventListener('click', openGuardianModal);

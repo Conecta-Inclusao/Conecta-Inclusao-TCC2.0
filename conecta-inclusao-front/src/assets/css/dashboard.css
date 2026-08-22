@@ -194,6 +194,12 @@ body {
     min-width: 0;
 }
 
+/* Cabecalho sem titulo (dashboard do paciente): sem o .page-title sobra um
+   filho so, e o space-between jogaria o perfil para a esquerda. */
+.top-bar--titleless {
+    justify-content: flex-end;
+}
+
 .page-title h1 {
     font-size: var(--fs-3xl);
     letter-spacing: -0.025em;
@@ -318,6 +324,15 @@ body {
     margin-bottom: var(--space-5);
 }
 
+/* Agrupa mais de um botao no canto direito do cabecalho sem que o
+   space-between do .section-header os separe um do outro. */
+.section-header-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+}
+
 .section-header h2 {
     font-size: var(--fs-2xl);
 }
@@ -409,6 +424,14 @@ body {
     font-size: var(--fs-3xl);
     line-height: 1.1;
     color: var(--accent-strong);
+}
+
+/* Estado vazio ("Sem consulta agendada"): e uma frase, nao um dado em
+   destaque, entao nao carrega o tamanho nem a cor de numero do card. */
+.status-card h3.is-empty {
+    font-size: var(--fs-base);
+    font-weight: 600;
+    color: var(--text-muted);
 }
 
 .status-card > i {

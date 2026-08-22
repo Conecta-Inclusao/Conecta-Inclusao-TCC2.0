@@ -9,7 +9,8 @@ function navTo(tipo) {
     const rotas = {
         medico: 'login-medico.html',
         empresa: 'login-empresa.html',
-        paciente: 'login-paciente.html'
+        paciente: 'login-paciente.html',
+        responsavel: 'login-responsavel.html'
     };
 
     const targetUrl = rotas[tipo] || 'lndex.html';

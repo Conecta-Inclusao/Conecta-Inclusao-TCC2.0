@@ -39,6 +39,70 @@ const strongPasswordSchema = z
   .regex(/\d/, "Senha deve conter número")
   .regex(/[^A-Za-z0-9]/, "Senha deve conter caractere especial");
 
+// CPF com formato e digito verificador. Extraido para constante porque agora e
+// usado tanto pelo paciente quanto pelo responsavel.
+const cpfSchema = z
+  .string()
+  .trim()
+  .refine(
+    (value) => /^\d{3}\.\d{3}\.\d{3}-\d{2}$|^\d{11}$/.test(value) && validateCPF(value),
+    "CPF inválido"
+  );
+
+// Campos do responsavel, compartilhados entre o cadastro do paciente e o modal
+// da aba "Responsáveis" do dashboard - os dois passaram a pedir os mesmos dados.
+const guardianFields = {
+  name: z.string().trim().min(3, "Nome do responsável muito curto").max(100),
+  cpf: cpfSchema,
+  relationship: z.string().trim().min(2, "Parentesco muito curto").max(100),
+  email: z.string().trim().email("Email inválido"),
+  password: strongPasswordSchema,
+  // Ids da tabela `permissoes`. Antes eram strings livres gravadas numa
+  // coluna JSON `paciente_responsavel.permissions` que nao existe no schema.
+  permissions: z.array(z.coerce.number().int().positive()).optional()
+};
+
+export const guardianCreateSchema = z.object(guardianFields);
+
+// Edicao do proprio perfil do paciente. Todos os campos sao opcionais: a tela
+// envia apenas o que mudou. CPF fica de fora de proposito - e o identificador
+// de login e nao deve ser trocado por aqui.
+export const updatePatientProfileSchema = z.object({
+  name: z.string().trim().min(3, "Nome muito curto").max(100).optional(),
+  email: z.string().trim().email("Email inválido").nullish(),
+  telefone: z
+    .string()
+    .trim()
+    .regex(/^\(?\d{2}\)?[\s-]?\d{4,5}-?\d{4}$/, "Telefone inválido")
+    .nullish(),
+  tipoDeficiencia: z.string().trim().max(100).nullish(),
+  unidadePreferencia: z.string().trim().max(120).nullish(),
+  dataNascimento: z
+    .string()
+    .trim()
+    .refine((date) => !Number.isNaN(Date.parse(date)), "Data inválida")
+    .nullish()
+}).refine(
+  (data) => Object.values(data).some((valor) => valor !== undefined),
+  { message: "Envie ao menos um campo para atualizar." }
+);
+
+// A senha atual e exigida para que uma sessao sequestrada nao consiga trocar a
+// senha sozinha e travar o dono da conta do lado de fora.
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, "Informe a senha atual"),
+  newPassword: strongPasswordSchema
+});
+
+// Na edicao a senha nao e reenviada e o CPF identifica a pessoa, entao so os
+// dados de contato/vinculo podem mudar.
+export const guardianUpdateSchema = z.object({
+  name: guardianFields.name.optional(),
+  relationship: guardianFields.relationship.optional(),
+  email: guardianFields.email.optional(),
+  permissions: guardianFields.permissions
+});
+
 export const resetTemporaryPasswordSchema = z.object({
   resetToken: z
     .string()
@@ -67,13 +131,7 @@ export const resetPasswordSchema = z.object({
 // Schema para registro de paciente (CPF)
 export const registerPatientSchema = z.object({
   // Alem do formato, valida o digito verificador.
-  cpf: z
-    .string()
-    .trim()
-    .refine(
-      (value) => /^\d{3}\.\d{3}\.\d{3}-\d{2}$|^\d{11}$/.test(value) && validateCPF(value),
-      "CPF inválido"
-    ),
+  cpf: cpfSchema,
   password: strongPasswordSchema,
   name: z
     .string()
@@ -84,17 +142,7 @@ export const registerPatientSchema = z.object({
     .string()
     .email("Email inválido")
     .optional(),
-  responsavel: z
-    .object({
-      name: z.string().trim().min(3, "Nome do responsável muito curto").max(100),
-      relationship: z.string().trim().min(2, "Parentesco muito curto").max(100),
-      email: z.string().email("Email inválido"),
-      password: strongPasswordSchema,
-      // Ids da tabela `permissoes`. Antes eram strings livres gravadas numa
-      // coluna JSON `paciente_responsavel.permissions` que nao existe no schema.
-      permissions: z.array(z.coerce.number().int().positive()).optional()
-    })
-    .optional(),
+  responsavel: guardianCreateSchema.optional(),
   tipoDeficiencia: z
     .string()
     .trim()
@@ -107,7 +155,20 @@ export const registerPatientSchema = z.object({
       "Data inválida"
     )
     .optional()
-});
+}).refine(
+  // O responsavel e uma segunda conta, com login proprio pelo CPF. Se o CPF
+  // fosse o mesmo do paciente, o cadastro criaria duas contas disputando o
+  // mesmo documento e o login por CPF ficaria ambiguo.
+  (data) => {
+    if (!data.responsavel?.cpf) return true;
+    const soDigitos = (valor) => String(valor).replace(/\D/g, "");
+    return soDigitos(data.responsavel.cpf) !== soDigitos(data.cpf);
+  },
+  {
+    message: "O CPF do responsável deve ser diferente do CPF do paciente.",
+    path: ["responsavel", "cpf"]
+  }
+);
 
 // Schema para registro de médico (CRM)
 export const registerDoctorSchema = z.object({

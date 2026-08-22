@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#1a56b8">
+    <title>Área do Responsável | Conecta Inclusao</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <link rel="stylesheet" href="../assets/css/theme.css">
+    <link rel="stylesheet" href="../assets/css/dashboard.css">
+    <link rel="stylesheet" href="../assets/css/dash-paciente.css">
+    <link rel="stylesheet" href="../assets/css/responsive.css">
+    <script src="../assets/js/acessibilidade.js"></script>
+</head>
+<body>
+    <a class="skip-link" href="#conteudo">Pular para o conteúdo</a>
+
+    <div class="dashboard-container">
+        <aside class="sidebar" aria-label="Menu do responsável">
+            <div class="logo-section">
+                <i class="ph ph-heartbeat" aria-hidden="true"></i>
+                <span>Conecta Inclusão</span>
+            </div>
+            <nav aria-label="Navegação principal">
+                <button type="button" class="nav-link active" data-tab="overview"><i class="ph ph-house" aria-hidden="true"></i> Visão Geral</button>
+                <!-- As abas abaixo dependem de permissao; o JS remove as que o
+                     responsavel nao tem. -->
+                <button type="button" class="nav-link" data-tab="appointments" data-requires="Ver agendamentos"><i class="ph ph-calendar-check" aria-hidden="true"></i> Agendamentos</button>
+                <button type="button" class="nav-link" data-tab="messages" data-requires="Enviar mensagens"><i class="ph ph-chat-circle-text" aria-hidden="true"></i> Mensagens</button>
+                <button type="button" class="nav-link" data-tab="access"><i class="ph ph-shield-check" aria-hidden="true"></i> Meu Acesso</button>
+            </nav>
+            <div class="sidebar-footer">
+                <button class="btn-logout" type="button" onclick="handleLogout()">
+                    <i class="ph ph-sign-out" aria-hidden="true"></i> <span>Sair</span>
+                </button>
+            </div>
+        </aside>
+
+        <main class="main-content" id="conteudo">
+            <header class="top-bar">
+                <div class="guardian-patient-picker">
+                    <label for="patientPicker">Acompanhando</label>
+                    <!-- Some quando ha um unico paciente vinculado: nao ha o que
+                         escolher, e um select de uma opcao so confunde. -->
+                    <select id="patientPicker" aria-label="Selecionar paciente acompanhado"></select>
+                </div>
+                <div class="user-profile">
+                    <div class="user-info">
+                        <strong id="guardianHeaderName">Carregando...</strong>
+                        <span id="guardianHeaderSubtitle">&nbsp;</span>
+                    </div>
+                    <img id="guardianAvatar"
+                         src="https://ui-avatars.com/api/?name=Responsavel&background=0073e6&color=fff"
+                         alt="Avatar do responsável">
+                </div>
+            </header>
+
+            <section class="tab-content active" id="overview">
+                <div class="overview-header">
+                    <h2 id="overviewGreeting">Bem-vindo</h2>
+                    <p id="overviewSubtitle">Acompanhe as consultas de quem você cuida.</p>
+                </div>
+
+                <div class="overview-grid">
+                    <div class="status-card primary-card">
+                        <div>
+                            <span>Consultas agendadas</span>
+                            <h3 id="totalAppointments">--</h3>
+                        </div>
+                        <i class="ph ph-calendar-check"></i>
+                    </div>
+                    <div class="status-card success-card">
+                        <div>
+                            <span>Próxima consulta</span>
+                            <h3 id="nextAppointmentDate">--</h3>
+                        </div>
+                        <i class="ph ph-clock-countdown"></i>
+                    </div>
+                    <div class="status-card accent-card">
+                        <div>
+                            <span>Pacientes acompanhados</span>
+                            <h3 id="patientCount">--</h3>
+                        </div>
+                        <i class="ph ph-users-three"></i>
+                    </div>
+                </div>
+
+                <article class="info-card">
+                    <h3>Dados do paciente</h3>
+                    <div class="profile-readonly">
+                        <div>
+                            <span>Paciente</span>
+                            <strong id="patientName">--</strong>
+                        </div>
+                        <div>
+                            <span>Seu vínculo</span>
+                            <strong id="patientRelationship">--</strong>
+                        </div>
+                        <div>
+                            <span>CPF</span>
+                            <strong id="patientCPF">--</strong>
+                        </div>
+                        <div>
+                            <span>Data de nascimento</span>
+                            <strong id="patientBirthDate">--</strong>
+                        </div>
+                        <div>
+                            <span>Tipo de deficiência</span>
+                            <strong id="patientDisability">--</strong>
+                        </div>
+                        <div>
+                            <span>Unidade de preferência</span>
+                            <strong id="patientUnit">--</strong>
+                        </div>
+                    </div>
+                </article>
+
+                <section class="table-card" id="overviewAppointmentsCard">
+                    <div class="section-header">
+                        <div>
+                            <h3>Próximos agendamentos</h3>
+                            <p>As consultas já marcadas para este paciente.</p>
+                        </div>
+                    </div>
+                    <div class="table-scroll">
+                        <table class="appointments-table">
+                            <thead>
+                                <tr>
+                                    <th>Especialidade</th>
+                                    <th>Profissional</th>
+                                    <th>Unidade</th>
+                                    <th>Data</th>
+                                </tr>
+                            </thead>
+                            <tbody id="overviewAppointmentsTable"></tbody>
+                        </table>
+                    </div>
+                </section>
+            </section>
+
+            <section class="tab-content" id="appointments">
+                <div class="section-header">
+                    <div>
+                        <h2>Agendamentos</h2>
+                        <p id="appointmentsSubtitle">Consultas marcadas para o paciente acompanhado.</p>
+                    </div>
+                </div>
+
+                <div class="appointments-filter-bar">
+                    <div class="appointments-filter-group">
+                        <button id="appointmentsPrevMonth" class="btn-secondary" type="button" aria-label="Mês anterior">◀</button>
+                        <input id="appointmentsMonthPicker" type="month" aria-label="Selecionar mês e ano" />
+                        <button id="appointmentsNextMonth" class="btn-secondary" type="button" aria-label="Próximo mês">▶</button>
+                    </div>
+                    <div class="appointments-filter-info">
+                        <span id="appointmentsMonthLabel">Mês selecionado</span>
+                    </div>
+                </div>
+
+                <div id="appointmentsList" class="cards-container"></div>
+            </section>
+
+            <section class="tab-content" id="messages">
+                <div class="section-header">
+                    <div>
+                        <h2>Mensagens</h2>
+                        <p>Fale com os profissionais que atendem o paciente.</p>
+                    </div>
+                </div>
+
+                <!-- Aviso permanente: a mensagem e gravada em nome do paciente,
+                     porque a tabela de mensagens so conhece paciente e medico. -->
+                <p class="info-banner" id="messagesDelegationNotice">
+                    <i class="ph ph-info" aria-hidden="true"></i>
+                    <span>Suas mensagens chegam ao profissional em nome do paciente.</span>
+                </p>
+
+                <section class="table-card messages-card">
+                    <div class="chat-layout">
+                        <aside class="chat-sidebar">
+                            <div class="chat-sidebar-header">
+                                <h3>Profissionais</h3>
+                                <p>Quem atende o paciente que você acompanha.</p>
+                            </div>
+                            <div id="messageContactsList" class="chat-contacts"></div>
+                        </aside>
+
+                        <div class="chat-panel">
+                            <div class="chat-panel-header">
+                                <div>
+                                    <strong id="chatContactName">Selecione um profissional</strong>
+                                    <span id="chatContactMeta">As conversas aparecem aqui.</span>
+                                </div>
+                                <span class="chat-status-pill" id="chatStatusPill">Offline</span>
+                            </div>
+
+                            <div id="chatMessagesList" class="chat-messages"></div>
+
+                            <form id="chatForm" class="chat-form">
+                                <label class="sr-only" for="chatInput">Mensagem</label>
+                                <input type="text" id="chatInput" placeholder="Escreva sua mensagem..." autocomplete="off" maxlength="2000">
+                                <button type="submit" class="btn-primary" aria-label="Enviar mensagem">
+                                    <i class="ph ph-paper-plane-right"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </section>
+            </section>
+
+            <section class="tab-content" id="access">
+                <div class="section-header">
+                    <div>
+                        <h2>Meu Acesso</h2>
+                        <p>Seus dados e o que o paciente autorizou você a fazer.</p>
+                    </div>
+                </div>
+
+                <div class="profile-grid">
+                    <article class="info-card">
+                        <h3>Seus dados</h3>
+                        <div class="profile-readonly">
+                            <div>
+                                <span>Nome</span>
+                                <strong id="guardianName">--</strong>
+                            </div>
+                            <div>
+                                <span>CPF</span>
+                                <strong id="guardianCPF">--</strong>
+                            </div>
+                            <div>
+                                <span>E-mail</span>
+                                <strong id="guardianEmail">--</strong>
+                            </div>
+                        </div>
+                        <p class="info-card-hint">
+                            Para alterar estes dados, peça ao paciente na aba
+                            Responsáveis do portal dele.
+                        </p>
+                    </article>
+
+                    <article class="info-card">
+                        <h3>Permissões concedidas</h3>
+                        <div class="permissions-list" id="guardianPermissionsList"></div>
+                        <p class="info-card-hint">
+                            Quem define estas permissões é o paciente. Sem elas, as
+                            abas correspondentes não aparecem no seu menu.
+                        </p>
+                    </article>
+
+                    <article class="info-card">
+                        <h3>Pacientes que você acompanha</h3>
+                        <div class="guardians-list" id="linkedPatientsList"></div>
+                    </article>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="../assets/js/config.js"></script>
+    <script src="../assets/js/session.js"></script>
+    <script>window.ConectaSession.requireSession('responsavel');</script>
+    <script src="../assets/js/utils.js"></script>
+
+    <!-- socket.io-client vem do proprio backend, mantendo cliente e servidor na
+         mesma versao. Carregado em paralelo e sem bloquear: se a API estiver
+         dormindo, a pagina continua util e o chat cai para REST. -->
+    <script>
+        (function () {
+            const base = window.APP_CONFIG?.API_BASE_URL || '';
+            const socketScript = document.createElement('script');
+            socketScript.src = base + '/socket.io/socket.io.js';
+            socketScript.async = true;
+            socketScript.onerror = function () {
+                console.warn('socket.io indisponivel; o chat usara apenas requisicoes REST.');
+            };
+            document.head.appendChild(socketScript);
+        })();
+    </script>
+    <script type="module" src="../assets/js/dash-responsavel.js"></script>
+</body>
+</html>

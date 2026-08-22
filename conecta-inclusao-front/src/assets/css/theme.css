@@ -587,6 +587,55 @@ input[type="radio"] {
 }
 
 /* ---------------------------------------------------------------------------
+   Grade de permissoes do responsavel
+
+   Vive aqui, e nao em dash-paciente.css, porque o mesmo formulario aparece em
+   duas paginas: o modal da aba "Responsáveis" e o do cadastro de paciente. A
+   pagina de cadastro nao carrega o CSS do dashboard.
+   --------------------------------------------------------------------------- */
+.permissions-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-3);
+}
+
+.checkbox-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-height: var(--tap);
+    padding: 0 var(--space-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-muted);
+    cursor: pointer;
+    transition: border-color var(--speed) var(--ease), background-color var(--speed) var(--ease);
+}
+
+.checkbox-item:hover {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+}
+
+.checkbox-item span {
+    color: var(--text-soft);
+    font-size: var(--fs-sm);
+    user-select: none;
+}
+
+.permissions-empty,
+.loading-inline {
+    color: var(--text-muted);
+    font-size: var(--fs-sm);
+}
+
+@media (max-width: 640px) {
+    .permissions-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ---------------------------------------------------------------------------
    Selos e etiquetas
    --------------------------------------------------------------------------- */
 .badge,

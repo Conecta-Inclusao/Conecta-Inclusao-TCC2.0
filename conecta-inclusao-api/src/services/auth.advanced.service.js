@@ -187,10 +187,27 @@ export async function getUserProfile(user) {
     let query, params;
 
     if (user.profile === 'paciente') {
+      // O front exibia "--" no campo Responsavel porque lia user.responsible, um
+      // campo que esta consulta nunca devolveu. Agora ele vem do vinculo real em
+      // paciente_responsavel (o primeiro, quando ha mais de um).
       query = `
-        SELECT p.id, p.nome_paciente AS name, p.email, p.cpf, p.data_nascimento, p.tipo_deficiencia, p.status
+        SELECT p.id,
+               p.nome_paciente AS name,
+               p.email,
+               p.cpf,
+               TO_CHAR(p.data_nascimento, 'YYYY-MM-DD') AS data_nascimento,
+               p.tipo_deficiencia,
+               p.telefone,
+               p.unidade_preferencia,
+               p.status,
+               r.nome AS responsible,
+               r.id AS "responsibleId"
         FROM pacientes p
+        LEFT JOIN paciente_responsavel pr ON pr.id_paciente = p.id
+        LEFT JOIN responsavel r ON r.id = pr.id_responsavel
         WHERE p.id = ?
+        ORDER BY r.nome ASC
+        LIMIT 1
       `;
       params = [user.sub];
     } else if (user.profile === 'medico') {
@@ -210,7 +227,7 @@ export async function getUserProfile(user) {
       params = [user.sub];
     } else if (user.profile === 'responsavel') {
       query = `
-        SELECT id, nome AS name, email, status
+        SELECT id, nome AS name, email, cpf, status
         FROM responsavel
         WHERE id = ?
       `;
@@ -234,11 +251,22 @@ export async function getUserProfile(user) {
 
 async function findAuthRecord(identifierInfo, expectedProfile = null) {
   if (expectedProfile === 'responsavel') {
+    // O responsavel agora tem CPF proprio e entra por ele ou pelo e-mail.
+    if (identifierInfo.type === 'cpf') {
+      const [rows] = await pool.execute(
+        `SELECT id, nome AS name, email, cpf, senha AS password_hash, status, 'responsavel' AS profile
+         FROM responsavel
+         WHERE cpf = ? LIMIT 1`,
+        [identifierInfo.value]
+      );
+      return rows[0] || null;
+    }
+
     if (identifierInfo.type !== 'email') {
       return null;
     }
     const [rows] = await pool.execute(
-      `SELECT id, nome AS name, email, senha AS password_hash, status, 'responsavel' AS profile
+      `SELECT id, nome AS name, email, cpf, senha AS password_hash, status, 'responsavel' AS profile
        FROM responsavel
        WHERE email = ? LIMIT 1`,
       [identifierInfo.value]
@@ -254,7 +282,18 @@ async function findAuthRecord(identifierInfo, expectedProfile = null) {
        WHERE cpf = ? LIMIT 1`,
       [identifierInfo.value]
     );
-    return rows[0] || null;
+    if (rows[0]) return rows[0];
+
+    // Sem perfil esperado (login universal), um CPF que nao e de paciente ainda
+    // pode ser de responsavel. O paciente tem prioridade para nao mudar o
+    // comportamento de quem ja logava por aqui.
+    const [guardians] = await pool.execute(
+      `SELECT id, nome AS name, email, cpf, senha AS password_hash, status, 'responsavel' AS profile
+       FROM responsavel
+       WHERE cpf = ? LIMIT 1`,
+      [identifierInfo.value]
+    );
+    return guardians[0] || null;
   }
 
   if (identifierInfo.type === "cnpj") {
@@ -310,7 +349,7 @@ async function findAuthRecord(identifierInfo, expectedProfile = null) {
     if (clinics[0]) return clinics[0];
 
     const [responsavels] = await pool.execute(
-      `SELECT id, nome AS name, email, senha AS password_hash, status, 'responsavel' AS profile
+      `SELECT id, nome AS name, email, cpf, senha AS password_hash, status, 'responsavel' AS profile
        FROM responsavel
        WHERE email = ? LIMIT 1`,
       [identifierInfo.value]
@@ -803,6 +842,79 @@ export async function resetPasswordWithToken({ token, newPassword }) {
   }
 }
 
+/**
+ * Cria (ou reaproveita) o responsavel e o vincula ao paciente. Usado tanto pelo
+ * cadastro do paciente quanto pelo POST /auth/patient/guardians, para que os
+ * dois caminhos gravem exatamente a mesma coisa.
+ *
+ * Quando o CPF ja existe, a linha do responsavel e reaproveitada e **nada nela e
+ * sobrescrito**: nome, e-mail e senha continuam sendo os que a propria pessoa
+ * cadastrou. Isso e deliberado - se aceitassemos os dados enviados aqui,
+ * qualquer paciente que soubesse o CPF de um responsavel existente conseguiria
+ * trocar a senha dele so por "adiciona-lo".
+ *
+ * Recebe uma conexao ja em transacao; quem chama controla commit/rollback.
+ */
+export async function linkGuardianToPatient(connection, pacienteId, guardian) {
+  const cpfDigits = String(guardian.cpf || "").replace(/\D/g, "");
+
+  if (!cpfDigits) {
+    return { ok: false, statusCode: 400, message: "CPF do responsavel e obrigatorio." };
+  }
+
+  const [existing] = await connection.execute(
+    `SELECT id FROM responsavel WHERE cpf = ? LIMIT 1`,
+    [cpfDigits]
+  );
+
+  let responsavelId = existing[0]?.id ?? null;
+  const reused = Boolean(responsavelId);
+
+  if (!responsavelId) {
+    const guardianPasswordHash = await bcrypt.hash(String(guardian.password).trim(), SALT_ROUNDS);
+    // responsavel.status e SMALLINT (1 = ativo). Antes era gravado 'ACTIVE'.
+    const [inserted] = await connection.execute(
+      `INSERT INTO responsavel (nome, email, cpf, senha, status)
+       VALUES (?, ?, ?, ?, 1) RETURNING id`,
+      [guardian.name, String(guardian.email).trim().toLowerCase(), cpfDigits, guardianPasswordHash]
+    );
+    responsavelId = inserted.rows?.[0]?.id ?? inserted.insertId ?? null;
+  }
+
+  if (!responsavelId) {
+    return { ok: false, statusCode: 500, message: "Nao foi possivel criar o responsavel no banco de dados." };
+  }
+
+  // O mesmo responsavel pode acompanhar varios pacientes; refazer o vinculo so
+  // atualiza o parentesco em vez de estourar a chave primaria composta.
+  await connection.execute(
+    `INSERT INTO paciente_responsavel (id_paciente, id_responsavel, parentesco)
+     VALUES (?, ?, ?)
+     ON CONFLICT (id_paciente, id_responsavel)
+     DO UPDATE SET parentesco = EXCLUDED.parentesco`,
+    [pacienteId, responsavelId, guardian.relationship]
+  );
+
+  await connection.execute(
+    `UPDATE pacientes SET id_responsavel = ? WHERE id = ?`,
+    [responsavelId, pacienteId]
+  );
+
+  const permissionIds = (Array.isArray(guardian.permissions) ? guardian.permissions : [])
+    .map((id) => Number(id))
+    .filter((id) => Number.isInteger(id) && id > 0);
+
+  for (const permissionId of permissionIds) {
+    await connection.execute(
+      `INSERT INTO responsavel_permissoes (id_permissao, id_responsavel)
+       VALUES (?, ?) ON CONFLICT DO NOTHING`,
+      [permissionId, responsavelId]
+    );
+  }
+
+  return { ok: true, responsavelId, reused, permissions: permissionIds };
+}
+
 export async function registerUser({ identifier, password, name, profile, userData = null }) {
   try {
     if (!identifier || !password || !name || !profile) {
@@ -840,55 +952,27 @@ export async function registerUser({ identifier, password, name, profile, userDa
       try {
         await connection.beginTransaction();
 
-        let responsavelId = null;
-        if (userData?.responsavel) {
-          const guardianPasswordHash = await bcrypt.hash(String(userData.responsavel.password).trim(), SALT_ROUNDS);
-          // responsavel.status e SMALLINT (1 = ativo). Antes era gravado 'ACTIVE'.
-          const [insertedGuardian] = await connection.execute(
-            `INSERT INTO responsavel (nome, email, senha, status)
-             VALUES (?, ?, ?, 1) RETURNING id`,
-            [
-              userData.responsavel.name,
-              userData.responsavel.email,
-              guardianPasswordHash
-            ]
-          );
-          responsavelId = insertedGuardian.rows?.[0]?.id ?? insertedGuardian.insertId ?? null;
-        }
-
+        // O paciente entra primeiro com id_responsavel nulo: linkGuardianToPatient
+        // precisa do id dele para gravar o vinculo e depois preenche essa coluna.
         const [insertedPatient] = await connection.execute(
           `INSERT INTO pacientes (nome_paciente, cpf, email, tipo_deficiencia, data_nascimento, senha, id_responsavel, status)
-           VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE') RETURNING id`,
+           VALUES (?, ?, ?, ?, ?, ?, NULL, 'ACTIVE') RETURNING id`,
           [
             name,
             identifierInfo.value,
             userData?.email || null,
             userData?.tipoDeficiencia || null,
             userData?.dataNascimento || null,
-            passwordHash,
-            responsavelId
+            passwordHash
           ]
         );
         const patientId = insertedPatient.rows?.[0]?.id ?? insertedPatient.insertId ?? null;
 
-        if (responsavelId) {
-          await connection.execute(
-            `INSERT INTO paciente_responsavel (id_paciente, id_responsavel, parentesco)
-             VALUES (?, ?, ?)`,
-            [patientId, responsavelId, userData.responsavel.relationship]
-          );
-
-          // Permissoes vivem em responsavel_permissoes, nao numa coluna JSON.
-          const permissionIds = (userData.responsavel.permissions || [])
-            .map((id) => Number(id))
-            .filter((id) => Number.isInteger(id) && id > 0);
-
-          for (const permissionId of permissionIds) {
-            await connection.execute(
-              `INSERT INTO responsavel_permissoes (id_permissao, id_responsavel)
-               VALUES (?, ?) ON CONFLICT DO NOTHING`,
-              [permissionId, responsavelId]
-            );
+        if (userData?.responsavel) {
+          const linkResult = await linkGuardianToPatient(connection, patientId, userData.responsavel);
+          if (!linkResult.ok) {
+            await connection.rollback();
+            return { ok: false, statusCode: linkResult.statusCode, message: linkResult.message };
           }
         }
 
@@ -996,4 +1080,105 @@ export async function registerProfessional({ crm, name, especialidade, clinicaId
 
     return { ok: false, statusCode: 500, message: "Erro ao registrar profissional." };
   }
+}
+
+// ===========================================================================
+// ACESSO DO RESPONSAVEL AOS DADOS DO PACIENTE
+//
+// As permissoes de responsavel_permissoes eram gravadas no cadastro mas nenhuma
+// rota as consultava - na pratica eram decorativas. O par abaixo passa a
+// aplica-las de fato.
+// ===========================================================================
+
+/**
+ * Resolve para qual paciente o responsavel esta agindo e quais permissoes ele
+ * tem sobre esse paciente.
+ *
+ * Como a mesma pessoa pode acompanhar varios pacientes, quem chama pode indicar
+ * o paciente desejado. Se nao indicar e houver so um vinculo, usa esse; com mais
+ * de um, exige a escolha explicita em vez de adivinhar.
+ */
+export async function getGuardianPatientAccess(responsavelId, requestedPatientId = null) {
+  const [vinculos] = await pool.execute(
+    `SELECT pr.id_paciente AS "patientId"
+     FROM paciente_responsavel pr
+     WHERE pr.id_responsavel = ?
+     ORDER BY pr.id_paciente ASC`,
+    [Number(responsavelId)]
+  );
+
+  if (!vinculos.length) {
+    return { ok: false, statusCode: 403, message: "Voce nao esta vinculado a nenhum paciente." };
+  }
+
+  let patientId;
+  if (requestedPatientId !== null && requestedPatientId !== undefined && requestedPatientId !== "") {
+    patientId = Number(requestedPatientId);
+    if (!vinculos.some((vinculo) => Number(vinculo.patientId) === patientId)) {
+      return { ok: false, statusCode: 403, message: "Voce nao e responsavel por esse paciente." };
+    }
+  } else if (vinculos.length === 1) {
+    patientId = Number(vinculos[0].patientId);
+  } else {
+    return {
+      ok: false,
+      statusCode: 400,
+      message: "Informe o paciente (pacienteId): voce e responsavel por mais de um."
+    };
+  }
+
+  const [permissoes] = await pool.execute(
+    `SELECT p.nome
+     FROM responsavel_permissoes rp
+     INNER JOIN permissoes p ON p.id = rp.id_permissao
+     WHERE rp.id_responsavel = ?`,
+    [Number(responsavelId)]
+  );
+
+  return {
+    ok: true,
+    patientId,
+    permissions: permissoes.map((linha) => String(linha.nome))
+  };
+}
+
+/**
+ * Middleware que define req.patientId - o paciente cujos dados a rota vai
+ * manipular - e cobra a permissao indicada quando quem chama e um responsavel.
+ *
+ * Paciente logado passa direto (esta acessando os proprios dados). Responsavel
+ * precisa do vinculo e da permissao. Qualquer outro perfil e barrado.
+ */
+export function requirePatientAccess(permissionName = null) {
+  return async (req, res, next) => {
+    try {
+      if (req.user?.profile === "paciente") {
+        req.patientId = Number(req.user.sub);
+        return next();
+      }
+
+      if (req.user?.profile === "responsavel") {
+        const requested = req.query?.pacienteId ?? req.body?.pacienteId ?? null;
+        const access = await getGuardianPatientAccess(Number(req.user.sub), requested);
+
+        if (!access.ok) {
+          return res.status(access.statusCode).json({ message: access.message });
+        }
+
+        if (permissionName && !access.permissions.includes(permissionName)) {
+          return res.status(403).json({
+            message: `Seu acesso nao inclui a permissao "${permissionName}".`
+          });
+        }
+
+        req.patientId = access.patientId;
+        req.guardianPermissions = access.permissions;
+        return next();
+      }
+
+      return res.status(403).json({ message: "Perfil sem acesso a dados de paciente." });
+    } catch (err) {
+      return next(err);
+    }
+  };
 }

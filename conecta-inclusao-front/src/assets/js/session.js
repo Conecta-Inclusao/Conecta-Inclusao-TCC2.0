@@ -31,7 +31,7 @@
         paciente: 'login-paciente.html',
         medico: 'login-medico.html',
         clinica: 'login-empresa.html',
-        responsavel: 'login-paciente.html'
+        responsavel: 'login-responsavel.html'
     };
 
     var LOGIN_PADRAO = 'lndex.html';

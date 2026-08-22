@@ -17,8 +17,14 @@ const sendMessageSchema = z.object({
     .max(2000, "Mensagem muito longa")
 });
 
+// pacienteId so e usado quando quem chama e um responsavel que acompanha mais
+// de um paciente; nos demais perfis o valor e ignorado.
+function pacienteAlvo(req) {
+  return { pacienteId: req.query?.pacienteId ?? req.body?.pacienteId ?? null };
+}
+
 router.get("/contacts", authenticateToken, async (req, res) => {
-  const result = await listAllowedMessageContacts(req.user);
+  const result = await listAllowedMessageContacts(req.user, pacienteAlvo(req));
 
   if (!result.ok) {
     return res.status(result.statusCode).json({ message: result.message });
@@ -28,7 +34,7 @@ router.get("/contacts", authenticateToken, async (req, res) => {
 });
 
 router.get("/thread/:targetProfileId", authenticateToken, async (req, res) => {
-  const result = await getConversationWithUser(req.user, req.params.targetProfileId);
+  const result = await getConversationWithUser(req.user, req.params.targetProfileId, pacienteAlvo(req));
 
   if (!result.ok) {
     return res.status(result.statusCode).json({ message: result.message });
@@ -47,7 +53,7 @@ router.post("/thread/:targetProfileId", authenticateToken, async (req, res) => {
     });
   }
 
-  const result = await sendMessageToUser(req.user, req.params.targetProfileId, parsed.data.content);
+  const result = await sendMessageToUser(req.user, req.params.targetProfileId, parsed.data.content, pacienteAlvo(req));
 
   if (!result.ok) {
     return res.status(result.statusCode).json({ message: result.message });

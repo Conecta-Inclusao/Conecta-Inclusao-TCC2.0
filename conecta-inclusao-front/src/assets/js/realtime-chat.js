@@ -15,6 +15,24 @@ function getToken() {
     return window.ConectaSession.getToken();
 }
 
+// Paciente que o responsavel esta acompanhando no momento.
+//
+// Paciente e medico conversam em nome proprio e nunca definem isto (fica null,
+// e o backend ignora). Ja o responsavel pode acompanhar mais de um paciente:
+// nesse caso o servidor precisa saber por qual deles ele esta falando, senao
+// responde 400 pedindo a escolha.
+let pacienteEmContexto = null;
+
+export function setChatPatientContext(pacienteId) {
+    pacienteEmContexto = pacienteId ? Number(pacienteId) : null;
+}
+
+function comContexto(url) {
+    if (!pacienteEmContexto) return url;
+    const separador = url.includes('?') ? '&' : '?';
+    return `${url}${separador}pacienteId=${encodeURIComponent(pacienteEmContexto)}`;
+}
+
 async function requestJSON(url, options = {}) {
     const token = getToken();
 
@@ -39,7 +57,7 @@ async function requestJSON(url, options = {}) {
 
 /** Contatos com quem o usuario logado pode conversar (vinculo por atendimento). */
 export async function fetchContacts() {
-    const result = await requestJSON(`${MESSAGES_URL}/contacts`);
+    const result = await requestJSON(comContexto(`${MESSAGES_URL}/contacts`));
     return result.ok && Array.isArray(result.data) ? result.data : [];
 }
 
@@ -53,7 +71,7 @@ export async function fetchContacts() {
  * apagado ao trocar de contato.
  */
 export async function fetchConversation(targetProfileId) {
-    const result = await requestJSON(`${MESSAGES_URL}/thread/${targetProfileId}`);
+    const result = await requestJSON(comContexto(`${MESSAGES_URL}/thread/${targetProfileId}`));
 
     if (result.ok) {
         return {
@@ -72,7 +90,7 @@ export async function fetchConversation(targetProfileId) {
 
 /** Fallback REST para enviar mensagem quando o socket estiver indisponivel. */
 export async function sendMessageViaRest(targetProfileId, content) {
-    return requestJSON(`${MESSAGES_URL}/thread/${targetProfileId}`, {
+    return requestJSON(comContexto(`${MESSAGES_URL}/thread/${targetProfileId}`), {
         method: 'POST',
         body: JSON.stringify({ content })
     });
@@ -137,7 +155,9 @@ export function createChatClient({ onMessage, onNotification, onStatus } = {}) {
 
         socket = window.io(API_BASE_URL, {
             // O token vai no handshake: sem ele o servidor recusa a conexao.
-            auth: { token },
+            // pacienteId acompanha o token para o caso do responsavel (ver
+            // setChatPatientContext); nos outros perfis vai null e e ignorado.
+            auth: { token, pacienteId: pacienteEmContexto },
             transports: ['websocket', 'polling'],
             reconnectionAttempts: 5,
             reconnectionDelay: 1000

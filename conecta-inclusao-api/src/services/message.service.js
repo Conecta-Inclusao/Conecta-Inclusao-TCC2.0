@@ -1,4 +1,5 @@
 import { pool } from "../db.js";
+import { getGuardianPatientAccess } from "./auth.advanced.service.js";
 
 // A tabela `mensagens` do schema real nao tem colunas de destinatario: uma
 // mensagem pertence a um agendamento, e o destinatario e sempre "a outra parte"
@@ -11,15 +12,75 @@ import { pool } from "../db.js";
 
 const MESSAGE_PROFILES = ["paciente", "medico"];
 
-export async function resolveActor(reqUser) {
+// Permissao exigida do responsavel para usar o chat em nome do paciente.
+const PERMISSAO_MENSAGENS = "Enviar mensagens";
+
+/**
+ * Identifica quem esta agindo na conversa.
+ *
+ * O responsavel nao e uma das partes do atendimento - a tabela mensagens so
+ * conhece paciente e medico. Entao ele atua **em nome do paciente**: resolvemos
+ * o vinculo, conferimos a permissao "Enviar mensagens" e devolvemos o ator ja
+ * como o proprio paciente. Assim findLinkBetweenProfiles, a sala do socket e o
+ * INSERT continuam funcionando sem nenhuma mudanca de schema.
+ *
+ * Efeito colateral conhecido: a mensagem fica gravada como enviada pelo
+ * paciente, sem distinguir que quem digitou foi o responsavel. Registrar essa
+ * autoria exigiria uma coluna nova na tabela mensagens.
+ *
+ * @param {object} reqUser  payload do JWT ({ sub, profile })
+ * @param {object} opcoes   { pacienteId } - necessario quando o responsavel
+ *                          acompanha mais de um paciente.
+ */
+export async function resolveActor(reqUser, opcoes = {}) {
   const profileId = Number(reqUser?.sub);
   const profile = reqUser?.profile;
+
+  if (profile === "responsavel") {
+    if (!profileId) {
+      return { ok: false, statusCode: 403, message: "Sessao invalida." };
+    }
+
+    const acesso = await getGuardianPatientAccess(profileId, opcoes.pacienteId ?? null);
+    if (!acesso.ok) {
+      return { ok: false, statusCode: acesso.statusCode, message: acesso.message };
+    }
+
+    if (!acesso.permissions.includes(PERMISSAO_MENSAGENS)) {
+      return {
+        ok: false,
+        statusCode: 403,
+        message: `Seu acesso nao inclui a permissao "${PERMISSAO_MENSAGENS}".`
+      };
+    }
+
+    const [pacientes] = await pool.execute(
+      `SELECT id, nome_paciente AS name FROM pacientes WHERE id = ? LIMIT 1`,
+      [acesso.patientId]
+    );
+
+    if (!pacientes[0]) {
+      return { ok: false, statusCode: 404, message: "Paciente nao encontrado." };
+    }
+
+    return {
+      ok: true,
+      data: {
+        profile: "paciente",
+        profileId: acesso.patientId,
+        name: pacientes[0].name,
+        // Marcadores para quem quiser diferenciar o acesso delegado.
+        viaResponsavel: true,
+        responsavelId: profileId
+      }
+    };
+  }
 
   if (!profileId || !MESSAGE_PROFILES.includes(profile)) {
     return {
       ok: false,
       statusCode: 403,
-      message: "Acesso negado. Apenas pacientes e medicos podem usar mensagens."
+      message: "Acesso negado. Apenas pacientes, responsaveis e medicos podem usar mensagens."
     };
   }
 
@@ -115,9 +176,9 @@ export function conversationRoom(actor, link) {
   return `conversa:paciente:${pacienteId}:medico:${medicoId}`;
 }
 
-export async function listAllowedMessageContacts(reqUser) {
+export async function listAllowedMessageContacts(reqUser, opcoes = {}) {
   try {
-    const actorResult = await resolveActor(reqUser);
+    const actorResult = await resolveActor(reqUser, opcoes);
     if (!actorResult.ok) return actorResult;
 
     const actor = actorResult.data;
@@ -196,9 +257,9 @@ async function markIncomingAsRead(actor, appointmentIds) {
   );
 }
 
-export async function getConversationWithUser(reqUser, targetProfileId) {
+export async function getConversationWithUser(reqUser, targetProfileId, opcoes = {}) {
   try {
-    const actorResult = await resolveActor(reqUser);
+    const actorResult = await resolveActor(reqUser, opcoes);
     if (!actorResult.ok) return actorResult;
 
     const actor = actorResult.data;
@@ -307,9 +368,9 @@ export async function saveMessageForConversation(actor, targetProfileId, content
   }
 }
 
-export async function sendMessageToUser(reqUser, targetProfileId, content) {
+export async function sendMessageToUser(reqUser, targetProfileId, content, opcoes = {}) {
   try {
-    const actorResult = await resolveActor(reqUser);
+    const actorResult = await resolveActor(reqUser, opcoes);
     if (!actorResult.ok) return actorResult;
 
     const result = await saveMessageForConversation(actorResult.data, targetProfileId, content);

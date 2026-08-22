@@ -510,35 +510,140 @@ body {
     gap: var(--space-2);
 }
 
-.permissions-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--space-3);
+/* ---------------------------------------------------------------------------
+   Area do responsavel
+   --------------------------------------------------------------------------- */
+
+/* Seletor de paciente no topo. Ocupa o lugar do titulo da pagina, entao usa o
+   mesmo espaco que o .page-title dos outros dashboards. */
+.guardian-patient-picker {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    min-width: 0;
+    flex: 1;
 }
 
-.checkbox-item {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
+.guardian-patient-picker[hidden] {
+    display: none;
+}
+
+.guardian-patient-picker label {
+    color: var(--text-muted);
+    font-size: var(--fs-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.guardian-patient-picker select {
+    max-width: 22rem;
     min-height: var(--tap);
-    padding: 0 var(--space-2);
+    padding: 0 var(--space-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--text);
+    font-size: var(--fs-base);
+    font-weight: 600;
+}
+
+/* Aviso persistente no topo de uma secao (nao e erro, e contexto). */
+.info-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-2);
+    margin-bottom: var(--space-5);
+    padding: var(--space-3) var(--space-4);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: var(--radius-sm);
+    background: var(--surface-muted);
+    color: var(--text-soft);
+    font-size: var(--fs-sm);
+}
+
+.info-banner i {
+    flex-shrink: 0;
+    margin-top: 0.1em;
+    color: var(--accent);
+}
+
+@media (max-width: 640px) {
+    .guardian-patient-picker select {
+        max-width: 100%;
+    }
+}
+
+/* ---------------------------------------------------------------------------
+   Meu Perfil - a aba virou formulario e nao mais uma lista de leitura.
+   --------------------------------------------------------------------------- */
+#formPatientProfile,
+#formChangePassword {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+/* CPF e Responsavel continuam so de leitura, entao ganham um bloco proprio
+   destacado do restante do formulario. */
+.profile-readonly {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-4);
+    padding: var(--space-4);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     background: var(--surface-muted);
-    cursor: pointer;
-    transition: border-color var(--speed) var(--ease), background-color var(--speed) var(--ease);
 }
 
-.checkbox-item:hover {
-    border-color: var(--accent);
-    background: var(--accent-soft);
+.profile-readonly > div {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    min-width: 0;
 }
 
-.checkbox-item span {
-    color: var(--text-soft);
+.profile-readonly span {
+    color: var(--text-muted);
+    font-size: var(--fs-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.profile-readonly strong {
+    color: var(--text);
     font-size: var(--fs-sm);
-    user-select: none;
+    overflow-wrap: anywhere;
 }
+
+.info-card-hint {
+    margin-top: calc(var(--space-2) * -1);
+    color: var(--text-muted);
+    font-size: var(--fs-sm);
+}
+
+.profile-form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+    margin-top: var(--space-2);
+}
+
+@media (max-width: 640px) {
+    .profile-readonly {
+        grid-template-columns: 1fr;
+    }
+
+    .profile-form-actions {
+        flex-direction: column-reverse;
+    }
+
+    .profile-form-actions button {
+        width: 100%;
+    }
+}
+
 
 /* ---------------------------------------------------------------------------
    Modal de agendamento
@@ -588,10 +693,6 @@ body {
         flex-direction: row;
         justify-content: center;
         gap: var(--space-3);
-    }
-
-    .permissions-grid {
-        grid-template-columns: 1fr;
     }
 
     .input-group.split-row,
