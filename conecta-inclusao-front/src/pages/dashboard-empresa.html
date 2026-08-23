@@ -163,36 +163,20 @@
                             <p class="field-hint">Usado para indicar qual unidade da clínica fica mais perto dele e para validar a UF do CRM.</p>
                         </div>
 
-                        <div class="input-group" id="professionalCepField">
+                        <div class="input-group">
                             <label for="professionalCep">CEP <span class="required" aria-hidden="true">*</span></label>
-                            <input type="text" id="professionalCep" placeholder="00000-000" maxlength="9" inputmode="numeric" autocomplete="postal-code">
+                            <input type="text" id="professionalCep" placeholder="00000-000" maxlength="9" inputmode="numeric" autocomplete="postal-code" required>
                             <small class="field-hint" id="professionalCepHint">Digite o CEP para localizar o endereço.</small>
                         </div>
 
-                        <div class="input-group full-width">
-                            <label class="switch-field" for="unknownCep">
-                                <span class="switch-field-text">
-                                    <strong>Não sei meu CEP</strong>
-                                    <small>Ligue para digitar o endereço manualmente, sem o CEP.</small>
-                                </span>
-                                <span class="switch-control">
-                                    <input type="checkbox" id="unknownCep" aria-controls="manualAddressFields">
-                                    <span class="switch-track" aria-hidden="true"></span>
-                                </span>
-                            </label>
-                        </div>
-
-                        <!-- Campos que SUBSTITUEM o CEP quando o toggle está
-                             ligado. Ficam ocultos enquanto o CEP for usado. -->
-                        <div class="input-group full-width" id="manualAddressFields" data-switch-target hidden>
+                        <!-- Preenchidos pelo CEP e editáveis: CEP geral de
+                             cidade volta do ViaCEP sem logradouro, e é aqui que
+                             a clínica completa o que faltou. -->
+                        <div class="input-group full-width" id="professionalAddressFields">
                             <div class="address-grid">
                                 <div class="input-group">
-                                    <label for="professionalStreet">Rua / Avenida <span class="required" aria-hidden="true">*</span></label>
-                                    <input type="text" id="professionalStreet" placeholder="Rua das Acácias">
-                                </div>
-                                <div class="input-group">
-                                    <label for="professionalNumber">Número</label>
-                                    <input type="text" id="professionalNumber" placeholder="Ex: 120" maxlength="10">
+                                    <label for="professionalStreet">Rua / Avenida</label>
+                                    <input type="text" id="professionalStreet" placeholder="Rua das Acácias" autocomplete="address-line1">
                                 </div>
                                 <div class="input-group">
                                     <label for="professionalNeighborhood">Bairro</label>
@@ -200,13 +184,32 @@
                                 </div>
                                 <div class="input-group">
                                     <label for="professionalCity">Cidade <span class="required" aria-hidden="true">*</span></label>
-                                    <input type="text" id="professionalCity" placeholder="São Paulo">
+                                    <input type="text" id="professionalCity" placeholder="São Paulo" autocomplete="address-level2" required>
                                 </div>
                                 <div class="input-group">
                                     <label for="professionalState">UF <span class="required" aria-hidden="true">*</span></label>
-                                    <input type="text" id="professionalState" placeholder="SP" maxlength="2">
+                                    <input type="text" id="professionalState" placeholder="SP" maxlength="2" autocomplete="address-level1" required>
                                 </div>
                             </div>
+                        </div>
+
+                        <div class="input-group full-width">
+                            <label class="switch-field" for="professionalHasNumber">
+                                <span class="switch-field-text">
+                                    <strong>O endereço possui número?</strong>
+                                    <small>Desligue para endereços sem número (registrado como “s/n”).</small>
+                                </span>
+                                <span class="switch-control">
+                                    <input type="checkbox" id="professionalHasNumber" checked
+                                           aria-controls="professionalNumberField">
+                                    <span class="switch-track" aria-hidden="true"></span>
+                                </span>
+                            </label>
+                        </div>
+
+                        <div class="input-group" id="professionalNumberField" data-switch-target>
+                            <label for="professionalNumber">Número</label>
+                            <input type="text" id="professionalNumber" placeholder="Ex: 120" maxlength="10" inputmode="numeric" autocomplete="address-line2">
                         </div>
 
                         <!-- ---- Registro profissional --------------------- -->

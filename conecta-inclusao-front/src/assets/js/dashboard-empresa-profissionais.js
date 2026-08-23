@@ -35,32 +35,51 @@ function applyCRMMask(value) {
 // medico (e permitir reordenar unidades no futuro sem geocodificar de novo).
 let enderecoDoProfissional = null;
 let buscaDeUnidadesEmAndamento = false;
+// Endereco ja usado na ultima ordenacao. Sem isto, sair do campo de cidade
+// depois da busca por CEP dispararia a mesma geocodificacao de novo.
+let ultimaOrdenacaoPorEndereco = '';
 
-function usandoEnderecoManual() {
-    return Boolean(document.getElementById('unknownCep')?.checked);
+/**
+ * O toggle do endereco pergunta se a rua tem numero - a mesma funcao do
+ * cadastro de clinica. Desligado, o endereco e gravado como "s/n", que e como
+ * um endereco sem numero se escreve; deixar o campo vazio nao diz se o numero
+ * nao existe ou se so nao foi informado.
+ */
+function enderecoPossuiNumero() {
+    const toggle = document.getElementById('professionalHasNumber');
+    return toggle ? toggle.checked : true;
 }
 
-/** Corpo do endereco conforme o modo escolhido (CEP ou manual). */
+function numeroDoEndereco() {
+    if (!enderecoPossuiNumero()) return 's/n';
+    return document.getElementById('professionalNumber')?.value.trim() || undefined;
+}
+
+/**
+ * Corpo do endereco enviado ao servidor. O CEP e a base, mas os campos abaixo
+ * dele vao junto porque podem ter sido corrigidos: o ViaCEP devolve logradouro
+ * em branco para CEP geral de cidade. No servidor, o que esta preenchido aqui
+ * tem prioridade sobre o que o ViaCEP respondeu.
+ */
 function lerEnderecoDoFormulario() {
-    if (usandoEnderecoManual()) {
-        const estado = document.getElementById('professionalState')?.value.trim().toUpperCase() || '';
-        const cidade = document.getElementById('professionalCity')?.value.trim() || '';
+    const cep = window.ConectaEndereco.apenasDigitos(document.getElementById('professionalCep')?.value || '');
+    const cidade = document.getElementById('professionalCity')?.value.trim() || '';
+    const estado = document.getElementById('professionalState')?.value.trim().toUpperCase() || '';
 
-        if (!cidade || estado.length !== 2) return null;
+    // Sem CEP completo e sem cidade/UF nao ha endereco nenhum para resolver.
+    if (cep.length !== 8 && !(cidade && estado.length === 2)) return null;
 
-        return {
-            logradouro: document.getElementById('professionalStreet')?.value.trim() || undefined,
-            numero: document.getElementById('professionalNumber')?.value.trim() || undefined,
-            bairro: document.getElementById('professionalNeighborhood')?.value.trim() || undefined,
-            cidade,
-            estado
-        };
-    }
+    const endereco = {
+        logradouro: document.getElementById('professionalStreet')?.value.trim() || undefined,
+        numero: numeroDoEndereco(),
+        bairro: document.getElementById('professionalNeighborhood')?.value.trim() || undefined,
+        cidade: cidade || undefined,
+        estado: estado.length === 2 ? estado : undefined
+    };
 
-    const cep = document.getElementById('professionalCep')?.value || '';
-    if (window.ConectaEndereco.apenasDigitos(cep).length !== 8) return null;
+    if (cep.length === 8) endereco.cep = cep;
 
-    return { cep: window.ConectaEndereco.apenasDigitos(cep) };
+    return endereco;
 }
 
 /** Preenche a combobox de unidades, com a distancia quando ela existe. */
@@ -132,6 +151,7 @@ async function ordenarUnidadesPelaProximidade() {
     const dica = 'professionalUnitHint';
 
     if (!endereco) {
+        ultimaOrdenacaoPorEndereco = '';
         window.ConectaEndereco.definirDica(
             dica,
             'Informe o endereço acima para ordenar as unidades da mais próxima para a mais distante.'
@@ -139,8 +159,15 @@ async function ordenarUnidadesPelaProximidade() {
         return;
     }
 
+    // Cada ordenacao custa uma geocodificacao no Nominatim, que roda em fila de
+    // 1 requisicao por segundo. Repetir a consulta do mesmo endereco so faria a
+    // tela esperar de graca.
+    const chaveDoEndereco = JSON.stringify(endereco);
+    if (chaveDoEndereco === ultimaOrdenacaoPorEndereco) return;
+
     if (buscaDeUnidadesEmAndamento) return;
     buscaDeUnidadesEmAndamento = true;
+    ultimaOrdenacaoPorEndereco = chaveDoEndereco;
 
     window.ConectaEndereco.definirDica(dica, 'Calculando a unidade mais próxima...');
 
@@ -157,6 +184,9 @@ async function ordenarUnidadesPelaProximidade() {
         const corpo = await resposta.json().catch(() => ({}));
 
         if (!resposta.ok) {
+            // Libera a chave para o usuario poder tentar de novo sem mexer no
+            // endereco (falha de rede, ViaCEP fora do ar).
+            ultimaOrdenacaoPorEndereco = '';
             window.ConectaEndereco.definirDica(dica, corpo.message || 'Não foi possível ordenar as unidades.', 'erro');
             return;
         }
@@ -167,7 +197,7 @@ async function ordenarUnidadesPelaProximidade() {
         // A UF do CRM acompanha o estado do endereco: e a "validacao dinamica"
         // pedida. Continua editavel para quem tem registro em outro estado.
         aplicarUfDoEndereco(enderecoDoProfissional?.estado);
-        preencherCamposManuais(enderecoDoProfissional);
+        preencherCamposDeEndereco(enderecoDoProfissional);
 
         renderizarOpcoesDeUnidade(unidades, { comDistancia: true });
 
@@ -186,14 +216,20 @@ async function ordenarUnidadesPelaProximidade() {
         );
     } catch (erro) {
         console.error('Erro ao ordenar unidades:', erro);
+        ultimaOrdenacaoPorEndereco = '';
         window.ConectaEndereco.definirDica(dica, 'Erro de conexão ao calcular as distâncias.', 'erro');
     } finally {
         buscaDeUnidadesEmAndamento = false;
     }
 }
 
-/** Reflete no formulario o endereco que o servidor resolveu a partir do CEP. */
-function preencherCamposManuais(endereco) {
+/**
+ * Reflete no formulario o endereco que veio do CEP. Sobrescreve o que estiver
+ * la: so e chamada quando o CEP acabou de responder, e nesse momento a resposta
+ * do CEP e a informacao mais recente. Correcoes feitas depois disso permanecem,
+ * porque o servidor devolve os campos manuais de volta com prioridade.
+ */
+function preencherCamposDeEndereco(endereco) {
     if (!endereco) return;
 
     const mapa = {
@@ -205,7 +241,7 @@ function preencherCamposManuais(endereco) {
 
     Object.entries(mapa).forEach(([id, valor]) => {
         const campo = document.getElementById(id);
-        if (campo && valor && !campo.value) campo.value = valor;
+        if (campo && valor) campo.value = valor;
     });
 }
 
@@ -262,9 +298,12 @@ async function handleRegisterProfessional(event) {
     }
 
     if (!endereco) {
-        showPopup(usandoEnderecoManual()
-            ? 'Informe pelo menos cidade e UF do endereço do profissional.'
-            : 'Informe um CEP válido ou ligue a opção "Não sei meu CEP".');
+        showPopup('Informe o CEP do profissional (ou, ao menos, cidade e UF).');
+        return;
+    }
+
+    if (enderecoPossuiNumero() && !document.getElementById('professionalNumber')?.value.trim()) {
+        showPopup('Informe o número do endereço ou desligue a opção "O endereço possui número?".');
         return;
     }
 
@@ -358,7 +397,8 @@ async function handleRegisterProfessional(event) {
 
         form.reset();
         enderecoDoProfissional = null;
-        sincronizarModoDeEndereco();
+        ultimaOrdenacaoPorEndereco = '';
+        sincronizarCampoDeNumero();
         carregarUnidadesParaCadastro();
         loadProfessionalsList();
     } catch (error) {
@@ -371,24 +411,20 @@ async function handleRegisterProfessional(event) {
 }
 
 /**
- * Alterna entre CEP e endereco manual. O toggle "Não sei meu CEP" TROCA o campo
- * de CEP pelos campos de endereco, em vez de mostrar os dois - pedir as duas
- * coisas ao mesmo tempo e o que fazia o formulario parecer longo demais.
+ * Mostra ou esconde o campo de numero conforme o toggle. Mesma regra do
+ * cadastro de clinica: desligado, o campo some e o endereco vai como "s/n".
  */
-function sincronizarModoDeEndereco() {
-    const manual = usandoEnderecoManual();
-    const campoCep = document.getElementById('professionalCepField');
-    const camposManuais = document.getElementById('manualAddressFields');
-    const inputCep = document.getElementById('professionalCep');
+function sincronizarCampoDeNumero() {
+    const campo = document.getElementById('professionalNumberField');
+    const numero = document.getElementById('professionalNumber');
+    const possuiNumero = enderecoPossuiNumero();
 
-    if (campoCep) campoCep.hidden = manual;
-    if (camposManuais) camposManuais.hidden = !manual;
-    if (inputCep) inputCep.required = !manual;
+    if (campo) campo.hidden = !possuiNumero;
 
-    ['professionalStreet', 'professionalCity', 'professionalState'].forEach((id) => {
-        const campo = document.getElementById(id);
-        if (campo) campo.required = manual;
-    });
+    if (numero) {
+        numero.required = possuiNumero;
+        if (!possuiNumero) numero.value = '';
+    }
 }
 
 // Carregar lista de profissionais
@@ -782,7 +818,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // ---- Endereco do medico, UF do CRM e unidades por distancia ----------
     const ufSelect = document.getElementById('professionalCrmUf');
     const cepInput = document.getElementById('professionalCep');
-    const unknownCepToggle = document.getElementById('unknownCep');
+    const numeroToggle = document.getElementById('professionalHasNumber');
     const stateInput = document.getElementById('professionalState');
 
     if (ufSelect) {
@@ -805,6 +841,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     `${[endereco.logradouro, endereco.bairro].filter(Boolean).join(', ')} — ${endereco.cidade}/${endereco.estado}`,
                     'ok'
                 );
+                // Os campos sao preenchidos ANTES de ordenar: assim o endereco
+                // enviado ja e o completo, e sair depois do campo de cidade nao
+                // dispara uma segunda geocodificacao do mesmo endereco.
+                preencherCamposDeEndereco(endereco);
                 aplicarUfDoEndereco(endereco.estado);
                 // A ordenacao das unidades depende da geocodificacao, que roda
                 // no servidor a partir do mesmo CEP.
@@ -812,6 +852,7 @@ document.addEventListener('DOMContentLoaded', function() {
             },
             aoLimpar() {
                 enderecoDoProfissional = null;
+                ultimaOrdenacaoPorEndereco = '';
             }
         });
     }
@@ -820,27 +861,19 @@ document.addEventListener('DOMContentLoaded', function() {
         window.ConectaEndereco.ligarMascaraDeUf(stateInput);
     }
 
-    // No modo manual nao ha CEP para disparar a busca: o gatilho e sair do
-    // campo de cidade ou de UF com os dois preenchidos.
+    // Quando a clinica corrige cidade ou UF a mao (CEP geral, endereco que o
+    // ViaCEP devolveu incompleto), a ordenacao precisa ser refeita - sair do
+    // campo e o gatilho. Endereco repetido nao dispara nada.
     ['professionalCity', 'professionalState'].forEach((id) => {
         const campo = document.getElementById(id);
         if (!campo) return;
-        campo.addEventListener('blur', () => {
-            if (usandoEnderecoManual()) ordenarUnidadesPelaProximidade();
-        });
+        campo.addEventListener('blur', () => ordenarUnidadesPelaProximidade());
     });
 
-    if (unknownCepToggle) {
-        unknownCepToggle.addEventListener('change', () => {
-            sincronizarModoDeEndereco();
-            enderecoDoProfissional = null;
-            window.ConectaEndereco.definirDica(
-                'professionalUnitHint',
-                'Informe o endereço acima para ordenar as unidades da mais próxima para a mais distante.'
-            );
-        });
-        sincronizarModoDeEndereco();
+    if (numeroToggle) {
+        numeroToggle.addEventListener('change', sincronizarCampoDeNumero);
     }
+    sincronizarCampoDeNumero();
 
     carregarUnidadesParaCadastro();
 

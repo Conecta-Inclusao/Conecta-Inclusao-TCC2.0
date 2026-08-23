@@ -119,11 +119,12 @@ body {
     font-size: 1.15rem;
 }
 
-/* Endereco manual ("nao sei meu CEP"): grade propria porque sao cinco campos
-   de larguras bem diferentes dentro de um unico .input-group full-width. */
+/* Endereco do profissional (rua, bairro, cidade, UF): grade propria porque sao
+   quatro campos de larguras bem diferentes dentro de um unico .input-group
+   full-width. O numero fica fora dela, junto do toggle que o controla. */
 .address-grid {
     display: grid;
-    grid-template-columns: 2fr 1fr 1.5fr 1.5fr 0.6fr;
+    grid-template-columns: 2fr 1.5fr 1.5fr 0.6fr;
     gap: var(--space-4);
 }
 

@@ -166,7 +166,11 @@ export async function geocodificarEndereco(endereco) {
   }
 
   const cidadeEstado = [endereco.cidade, endereco.estado].filter(Boolean).join(", ");
-  const ruaComNumero = [endereco.logradouro, endereco.numero].filter(Boolean).join(", ");
+
+  // "s/n" e um endereco sem numero, nao um numero: mandado ao Nominatim so faz
+  // a primeira tentativa falhar e gastar um lugar na fila de 1 req/s.
+  const numero = /\d/.test(String(endereco.numero ?? "")) ? endereco.numero : "";
+  const ruaComNumero = [endereco.logradouro, numero].filter(Boolean).join(", ");
 
   const tentativas = [
     [ruaComNumero, endereco.bairro, cidadeEstado, "Brasil"],
